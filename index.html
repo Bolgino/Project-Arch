@@ -3,132 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Punto ArchiQuadro - Magazzino & Memoria</title>
+    <title>Punto ArchiQuadro</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --scout-green: #1b5e20; --scout-yellow: #fbc02d; --bg: #f8f9fa; }
-        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg); margin: 0; color: #333; }
-        .container { max-width: 1100px; margin: auto; padding: 20px; }
-        .login-card { background: white; max-width: 380px; margin: 100px auto; padding: 40px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; border-bottom: 8px solid var(--scout-green); }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 3px solid var(--scout-green); margin-bottom: 30px; }
-        .nav-bar { display: flex; gap: 10px; margin-bottom: 30px; overflow-x: auto; }
-        .btn { background: var(--scout-green); color: white; border: none; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn:hover { opacity: 0.9; transform: translateY(-2px); }
-        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; }
-        .card { background: white; border-radius: 15px; padding: 15px; text-align: center; border: 1px solid #eee; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .card img { width: 100%; height: 160px; object-fit: contain; }
-        .admin-only { background: #fff3e0; border: 2px dashed #ff9800; padding: 20px; border-radius: 15px; margin-bottom: 30px; display: none; }
+        :root { --green: #1b5e20; --orange: #ff9800; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; color: var(--green); }
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .btn { background: var(--green); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-archivio { background: #388e3c; }
+        .admin-box { background: #fff3e0; border: 2px dashed var(--orange); padding: 20px; border-radius: 15px; margin-bottom: 30px; display: none; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; }
+        .card img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; background: #eee; }
         input, textarea { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        #auth-section { display: block; } #main-content { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="auth-section" class="login-card">
+    <div id="auth-section" style="text-align:center; margin-top:100px;">
         <h1>⚜️ Punto ArchiQuadro</h1>
-        <p>Inserisci le tue credenziali</p>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Password">
-        <button class="btn" style="width:100%" onclick="handleLogin()">Entra nel Punto Quadro</button>
+        <input type="email" id="email" placeholder="Email" style="max-width:300px;"><br>
+        <input type="password" id="password" placeholder="Password" style="max-width:300px;"><br>
+        <button class="btn" onclick="handleLogin()">Entra</button>
     </div>
 
-    <div id="main-content" style="display:none;">
+    <div id="main-content">
         <div class="header">
-            <h1 style="margin:0; color: var(--scout-green);">⚜️ Punto ArchiQuadro</h1>
+            <h1>⚜️ Punto ArchiQuadro</h1>
             <button onclick="handleLogout()" style="color:red; background:none; border:none; cursor:pointer;">Esci</button>
         </div>
 
-        <div class="nav-bar">
+        <div class="nav-tabs">
             <button class="btn" onclick="showTab('magazzino')">📦 Magazzino</button>
-            <button class="btn" onclick="alert('Arriverà l\'archivio!')">📜 Archivio Storico</button>
+            <button class="btn btn-archivio" onclick="showTab('archivio')">📜 Archivio Storico</button>
         </div>
 
-        <div id="admin-panel" class="admin-only">
-            <h3>🛠️ Pannello Admin: Aggiungi Materiale</h3>
-            <input type="text" id="new-nome" placeholder="Nome Oggetto (es. Distintivo)">
-            <input type="number" id="new-qty" placeholder="Quantità iniziale">
-            <input type="text" id="new-foto" placeholder="URL Foto (opzionale)">
-            <button class="btn" style="background:#ff9800" onclick="aggiungiOggetto()">Salva nel Magazzino</button>
+        <div id="admin-magazzino" class="admin-box">
+            <h3>🛠️ Admin: Nuovo Oggetto</h3>
+            <input type="text" id="m-nome" placeholder="Nome (es. Distintivo)">
+            <input type="number" id="m-qty" placeholder="Quantità">
+            <button class="btn" style="background:var(--orange)" onclick="addMagazzino()">Salva</button>
         </div>
 
-        <div id="oggetti-lista" class="card-grid"></div>
+        <div id="admin-archivio" class="admin-box">
+            <h3>📜 Admin: Nuovo Ricordo</h3>
+            <input type="text" id="a-anno" placeholder="Anno (es. 2024)">
+            <input type="text" id="a-campo" placeholder="Nome Campo (es. Campo Estivo - Val di Mello)">
+            <textarea id="a-cronaca" placeholder="Breve racconto..."></textarea>
+            <button class="btn" style="background:var(--orange)" onclick="addArchivio()">Pubblica Storia</button>
+        </div>
+
+        <div id="tab-magazzino" class="card-grid"></div>
+        <div id="tab-archivio" class="card-grid" style="display:none;"></div>
     </div>
 </div>
 
 <script>
-    // Configurazione corretta per evitare conflitti
-    const URL_DB = localStorage.getItem('sb-url') || "[[TUO_URL]]";
-    const KEY_DB = localStorage.getItem('sb-key') || "[[TUA_KEY]]";
-
-    if (URL_DB === "[[TUO_URL]]") {
-        const u = prompt("Configurazione: Inserisci URL Supabase");
-        const k = prompt("Configurazione: Inserisci API Key");
-        localStorage.setItem('sb-url', u);
-        localStorage.setItem('sb-key', k);
-        location.reload();
-    }
-
-    // Inizializziamo il client con un nome diverso dalla libreria
-    const _supabase = supabase.createClient(URL_DB, KEY_DB);
+    const _supabase = supabase.createClient(localStorage.getItem('sb-url'), localStorage.getItem('sb-key'));
+    let isAdmin = false;
 
     async function handleLogin() {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const { error } = await _supabase.auth.signInWithPassword({ email, password });
-        if (error) alert("Errore: " + error.message);
-        else location.reload();
+        const { error } = await _supabase.auth.signInWithPassword({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value
+        });
+        if (error) alert(error.message); else location.reload();
     }
 
     async function handleLogout() { await _supabase.auth.signOut(); location.reload(); }
+
+    function showTab(tab) {
+        document.getElementById('tab-magazzino').style.display = tab === 'magazzino' ? 'grid' : 'none';
+        document.getElementById('tab-archivio').style.display = tab === 'archivio' ? 'grid' : 'none';
+        if(isAdmin) {
+            document.getElementById('admin-magazzino').style.display = tab === 'magazzino' ? 'block' : 'none';
+            document.getElementById('admin-archivio').style.display = tab === 'archivio' ? 'block' : 'none';
+        }
+    }
 
     async function checkUser() {
         const { data: { user } } = await _supabase.auth.getUser();
         if (user) {
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('main-content').style.display = 'block';
-            
-            // Controlliamo se è Admin
-            const { data: profilo } = await _supabase.from('profili').select('ruolo').eq('id', user.id).single();
-            if (profilo && profilo.ruolo === 'admin') {
-                document.getElementById('admin-panel').style.display = 'block';
-            }
-            caricaOggetti();
+            const { data } = await _supabase.from('profili').select('ruolo').eq('id', user.id).single();
+            if (data?.ruolo === 'admin') { isAdmin = true; showTab('magazzino'); }
+            loadData();
         }
     }
 
-    async function caricaOggetti() {
-        const { data: oggetti } = await _supabase.from('oggetti').select('*').order('nome');
-        const container = document.getElementById('oggetti-lista');
-        container.innerHTML = oggetti.map(item => `
+    async function loadData() {
+        const { data: m } = await _supabase.from('oggetti').select('*').order('nome');
+        document.getElementById('tab-magazzino').innerHTML = m.map(i => `
             <div class="card">
-                <img src="${item.foto_url || 'https://via.placeholder.com/150?text=No+Foto'}" alt="${item.nome}">
-                <h3>${item.nome}</h3>
-                <p>Disponibili: <strong>${item.quantita_disponibile}</strong></p>
-                <button class="btn" style="width:100%" ${item.quantita_disponibile <= 0 ? 'disabled' : ''} 
-                    onclick="preleva('${item.id}', ${item.quantita_disponibile})">
-                    ${item.quantita_disponibile > 0 ? 'Preleva' : 'Esaurito'}
-                </button>
+                <h3>${i.nome}</h3>
+                <p>Disponibili: ${i.quantita_disponibile}</p>
+                <button class="btn" onclick="updateQty('${i.id}', ${i.quantita_disponibile-1})">Preleva</button>
+            </div>
+        `).join('');
+
+        const { data: a } = await _supabase.from('archivio').select('*').order('anno', {ascending: false});
+        document.getElementById('tab-archivio').innerHTML = a.map(i => `
+            <div class="card">
+                <span style="font-weight:bold; color:var(--green)">${i.anno}</span>
+                <h3>${i.nome_campo}</h3>
+                <p style="font-size:14px italic">${i.cronaca || ''}</p>
             </div>
         `).join('');
     }
 
-    async function preleva(id, attuale) {
-        if (!confirm("Confermi il prelievo?")) return;
-        await _supabase.from('oggetti').update({ quantita_disponibile: attuale - 1 }).eq('id', id);
-        caricaOggetti();
+    async function updateQty(id, val) { await _supabase.from('oggetti').update({quantita_disponibile: val}).eq('id', id); loadData(); }
+
+    async function addMagazzino() {
+        await _supabase.from('oggetti').insert([{ nome: document.getElementById('m-nome').value, quantita_disponibile: document.getElementById('m-qty').value }]);
+        loadData();
     }
 
-    async function aggiungiOggetto() {
-        const nome = document.getElementById('new-nome').value;
-        const qty = document.getElementById('new-qty').value;
-        const foto = document.getElementById('new-foto').value;
-        
-        const { error } = await _supabase.from('oggetti').insert([{ nome, quantita_disponibile: qty, foto_url: foto }]);
-        if (error) alert("Errore salvataggio");
-        else {
-            alert("Oggetto aggiunto!");
-            location.reload();
-        }
+    async function addArchivio() {
+        await _supabase.from('archivio').insert([{ anno: document.getElementById('a-anno').value, nome_campo: document.getElementById('a-campo').value, cronaca: document.getElementById('a-cronaca').value }]);
+        loadData();
     }
 
     checkUser();
