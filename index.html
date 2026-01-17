@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oslo - Magazzino Scout</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary: #2e7d32; --secondary: #fbc02d; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 15px; text-align: center; }
+        .card img { width: 100%; height: 150px; object-fit: contain; border-radius: 8px; }
+        .stock-tag { font-size: 0.9em; color: #666; margin: 10px 0; }
+        .btn { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .login-box { background: white; padding: 30px; border-radius: 12px; max-width: 400px; margin: 100px auto; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="auth-section" class="login-box">
+        <h2>⚜️ Oslo Login</h2>
+        <input type="email" id="email" placeholder="Email del Capo">
+        <input type="password" id="password" placeholder="Password">
+        <button class="btn" onclick="login()">Accedi al Magazzino</button>
+    </div>
+
+    <div id="main-content" style="display:none;">
+        <div class="header">
+            <h1>📦 Magazzino Gruppo</h1>
+            <button onclick="logout()" style="background:none; border:none; color:red; cursor:pointer;">Esci</button>
+        </div>
+        <div id="oggetti-lista" class="card-grid"></div>
+    </div>
+</div>
+
+<script>
+    // Recuperiamo le chiavi dalle variabili d'ambiente di Vercel (le imposteremo tra poco)
+    const supabaseUrl = window.location.hostname === 'localhost' ? '' : 'https://' + window.location.hostname.split('.')[0] + '.supabase.co'; 
+    // Nota: Per semplicità in questo file HTML useremo le chiavi che inserirai su Vercel.
+    
+    // Configurazione Supabase (usata poi da Vercel)
+    const SUPABASE_URL = localStorage.getItem('sb-url');
+    const SUPABASE_KEY = localStorage.getItem('sb-key');
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) alert("Errore: " + error.message);
+        else location.reload();
+    }
+
+    async function logout() { await supabase.auth.signOut(); location.reload(); }
+
+    async function checkUser() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('main-content').style.display = 'block';
+            caricaOggetti();
+        }
+    }
+
+    async function caricaOggetti() {
+        const { data: oggetti } = await supabase.from('oggetti').select('*').order('nome');
+        const container = document.getElementById('oggetti-lista');
+        container.innerHTML = oggetti.map(item => `
+            <div class="card">
+                <img src="${item.foto_url || 'https://via.placeholder.com/150?text=No+Foto'}" alt="${item.nome}">
+                <h3>${item.nome}</h3>
+                <p class="stock-tag">Disponibili: <strong>${item.quantita_disponibile}</strong></p>
+                <button class="btn" ${item.quantita_disponibile <= 0 ? 'disabled' : ''} 
+                    onclick="preleva('${item.id}', ${item.quantita_disponibile})">
+                    ${item.quantita_disponibile > 0 ? 'Preleva' : 'Esaurito'}
+                </button>
+            </div>
+        `).join('');
+    }
+
+    async function preleva(id, attuale) {
+        if (!confirm("Confermi di voler prendere questo oggetto?")) return;
+        const { error } = await supabase.from('oggetti').update({ quantita_disponibile: attuale - 1 }).eq('id', id);
+        if (error) alert("Errore nel prelievo");
+        else caricaOggetti();
+    }
+
+    // Inizializzazione
+    if(!SUPABASE_URL) {
+        const url = prompt("Inserisci il tuo URL Supabase (Project URL):");
+        const key = prompt("Inserisci la tua API Key (anon public):");
+        localStorage.setItem('sb-url', url);
+        localStorage.setItem('sb-key', key);
+        location.reload();
+    }
+    checkUser();
+</script>
+</body>
+</html>
