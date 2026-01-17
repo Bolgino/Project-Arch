@@ -40,13 +40,19 @@
 </div>
 
 <script>
-    // Recuperiamo le chiavi dalle variabili d'ambiente di Vercel (le imposteremo tra poco)
-    const supabaseUrl = window.location.hostname === 'localhost' ? '' : 'https://' + window.location.hostname.split('.')[0] + '.supabase.co'; 
-    // Nota: Per semplicità in questo file HTML useremo le chiavi che inserirai su Vercel.
-    
-    // Configurazione Supabase (usata poi da Vercel)
-    const SUPABASE_URL = localStorage.getItem('sb-url');
-    const SUPABASE_KEY = localStorage.getItem('sb-key');
+    // Questo codice cerca le chiavi prima su Vercel, poi nel browser
+    const SUPABASE_URL = "[[TUO_URL_QUI]]" || localStorage.getItem('sb-url');
+    const SUPABASE_KEY = "[[TUA_KEY_QUI]]" || localStorage.getItem('sb-key');
+
+    // Se non le trova (come ora), le chiede una volta sola
+    if (!SUPABASE_URL || SUPABASE_URL === "[[TUO_URL_QUI]]") {
+        const url = prompt("Inserisci l'URL di Supabase:");
+        const key = prompt("Inserisci la API Key:");
+        localStorage.setItem('sb-url', url);
+        localStorage.setItem('sb-key', key);
+        location.reload();
+    }
+
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     async function login() {
@@ -56,8 +62,6 @@
         if (error) alert("Errore: " + error.message);
         else location.reload();
     }
-
-    async function logout() { await supabase.auth.signOut(); location.reload(); }
 
     async function checkUser() {
         const { data: { user } } = await supabase.auth.getUser();
@@ -71,34 +75,28 @@
     async function caricaOggetti() {
         const { data: oggetti } = await supabase.from('oggetti').select('*').order('nome');
         const container = document.getElementById('oggetti-lista');
-        container.innerHTML = oggetti.map(item => `
-            <div class="card">
-                <img src="${item.foto_url || 'https://via.placeholder.com/150?text=No+Foto'}" alt="${item.nome}">
-                <h3>${item.nome}</h3>
-                <p class="stock-tag">Disponibili: <strong>${item.quantita_disponibile}</strong></p>
-                <button class="btn" ${item.quantita_disponibile <= 0 ? 'disabled' : ''} 
-                    onclick="preleva('${item.id}', ${item.quantita_disponibile})">
-                    ${item.quantita_disponibile > 0 ? 'Preleva' : 'Esaurito'}
-                </button>
-            </div>
-        `).join('');
+        if (oggetti) {
+            container.innerHTML = oggetti.map(item => `
+                <div class="card">
+                    <img src="${item.foto_url || 'https://via.placeholder.com/150?text=No+Foto'}" alt="${item.nome}">
+                    <h3>${item.nome}</h3>
+                    <p class="stock-tag">Disponibili: <strong>${item.quantita_disponibile}</strong></p>
+                    <button class="btn" ${item.quantita_disponibile <= 0 ? 'disabled' : ''} 
+                        onclick="preleva('${item.id}', ${item.quantita_disponibile})">
+                        ${item.quantita_disponibile > 0 ? 'Preleva' : 'Esaurito'}
+                    </button>
+                </div>
+            `).join('');
+        }
     }
 
     async function preleva(id, attuale) {
-        if (!confirm("Confermi di voler prendere questo oggetto?")) return;
+        if (!confirm("Confermi il prelievo?")) return;
         const { error } = await supabase.from('oggetti').update({ quantita_disponibile: attuale - 1 }).eq('id', id);
         if (error) alert("Errore nel prelievo");
         else caricaOggetti();
     }
 
-    // Inizializzazione
-    if(!SUPABASE_URL) {
-        const url = prompt("Inserisci il tuo URL Supabase (Project URL):");
-        const key = prompt("Inserisci la tua API Key (anon public):");
-        localStorage.setItem('sb-url', url);
-        localStorage.setItem('sb-key', key);
-        location.reload();
-    }
     checkUser();
 </script>
 </body>
