@@ -3,54 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oslo - Magazzino Scout</title>
+    <title>Punto ArchiQuadro - Magazzino & Memoria</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --primary: #2e7d32; --secondary: #fbc02d; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: auto; }
-        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
-        .card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 15px; text-align: center; }
-        .card img { width: 100%; height: 150px; object-fit: contain; border-radius: 8px; }
-        .stock-tag { font-size: 0.9em; color: #666; margin: 10px 0; }
-        .btn { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
-        .btn:disabled { background: #ccc; cursor: not-allowed; }
-        .login-box { background: white; padding: 30px; border-radius: 12px; max-width: 400px; margin: 100px auto; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        :root { --scout-green: #1b5e20; --scout-yellow: #fbc02d; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg); margin: 0; color: #333; }
+        .container { max-width: 1100px; margin: auto; padding: 20px; }
+        
+        /* Login Card */
+        .login-card { background: white; max-width: 380px; margin: 100px auto; padding: 40px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; border-bottom: 8px solid var(--scout-green); }
+        .login-card h1 { color: var(--scout-green); margin-bottom: 10px; font-size: 24px; }
+        
+        /* Layout Principale */
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 3px solid var(--scout-green); margin-bottom: 30px; }
+        .nav-bar { display: flex; gap: 10px; margin-bottom: 30px; overflow-x: auto; padding-bottom: 10px; }
+        
+        /* Pulsanti */
+        .btn { background: var(--scout-green); color: white; border: none; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.3s; white-space: nowrap; }
+        .btn:hover { opacity: 0.9; transform: translateY(-2px); }
+        .btn-outline { background: white; color: var(--scout-green); border: 2px solid var(--scout-green); }
+        .btn-disabled { background: #ccc; cursor: not-allowed; }
+
+        /* Magazzino Grid */
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; }
+        .card { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.05); transition: 0.3s; border: 1px solid #eee; padding: 15px; text-align: center; }
+        .card:hover { transform: translateY(-5px); }
+        .card img { width: 100%; height: 160px; object-fit: contain; margin-bottom: 15px; }
+        .card h3 { margin: 10px 0; font-size: 18px; }
+        .stock { font-size: 14px; color: #666; margin-bottom: 15px; }
+        
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="auth-section" class="login-box">
-        <h2>⚜️ Oslo Login</h2>
+    <div id="auth-section" class="login-card">
+        <h1>⚜️ Punto ArchiQuadro</h1>
+        <p>Magazzino, Archivio e Campi</p>
         <input type="email" id="email" placeholder="Email del Capo">
         <input type="password" id="password" placeholder="Password">
-        <button class="btn" onclick="login()">Accedi al Magazzino</button>
+        <button class="btn" onclick="login()" style="width:100%">Entra nel Punto Quadro</button>
     </div>
 
     <div id="main-content" style="display:none;">
         <div class="header">
-            <h1>📦 Magazzino Gruppo</h1>
-            <button onclick="logout()" style="background:none; border:none; color:red; cursor:pointer;">Esci</button>
+            <h1 style="margin:0; color: var(--scout-green);">⚜️ Punto ArchiQuadro</h1>
+            <button onclick="logout()" style="color:red; background:none; border:none; cursor:pointer; font-weight:bold;">Esci</button>
         </div>
-        <div id="oggetti-lista" class="card-grid"></div>
+
+        <div class="nav-bar">
+            <button class="btn" onclick="showTab('magazzino')">📦 Magazzino</button>
+            <button class="btn btn-outline" onclick="alert('In arrivo: Lista Campi!')">🏕️ Campi</button>
+            <button class="btn btn-outline" onclick="alert('In arrivo: Archivio Storico!')">📜 Archivio</button>
+        </div>
+
+        <div id="magazzino-tab">
+            <div id="oggetti-lista" class="card-grid"></div>
+        </div>
     </div>
 </div>
 
 <script>
-    // Questo codice cerca le chiavi prima su Vercel, poi nel browser
+    // Recupero chiavi salvate nel browser (messe al primo avvio)
     const SUPABASE_URL = "[[TUO_URL_QUI]]" || localStorage.getItem('sb-url');
     const SUPABASE_KEY = "[[TUA_KEY_QUI]]" || localStorage.getItem('sb-key');
 
-    // Se non le trova (come ora), le chiede una volta sola
     if (!SUPABASE_URL || SUPABASE_URL === "[[TUO_URL_QUI]]") {
-        const url = prompt("Inserisci l'URL di Supabase:");
-        const key = prompt("Inserisci la API Key:");
-        localStorage.setItem('sb-url', url);
-        localStorage.setItem('sb-key', key);
-        location.reload();
+        const url = prompt("Configurazione Iniziale:\nInserisci il tuo URL Supabase:");
+        const key = prompt("Inserisci la tua API Key (anon public):");
+        if(url && key) {
+            localStorage.setItem('sb-url', url);
+            localStorage.setItem('sb-key', key);
+            location.reload();
+        }
     }
 
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -62,6 +88,8 @@
         if (error) alert("Errore: " + error.message);
         else location.reload();
     }
+
+    async function logout() { await supabase.auth.signOut(); location.reload(); }
 
     async function checkUser() {
         const { data: { user } } = await supabase.auth.getUser();
@@ -80,8 +108,9 @@
                 <div class="card">
                     <img src="${item.foto_url || 'https://via.placeholder.com/150?text=No+Foto'}" alt="${item.nome}">
                     <h3>${item.nome}</h3>
-                    <p class="stock-tag">Disponibili: <strong>${item.quantita_disponibile}</strong></p>
-                    <button class="btn" ${item.quantita_disponibile <= 0 ? 'disabled' : ''} 
+                    <p class="stock">Disponibili: <strong>${item.quantita_disponibile}</strong></p>
+                    <button class="btn" ${item.quantita_disponibile <= 0 ? 'btn-disabled' : ''} 
+                        style="width:100%"
                         onclick="preleva('${item.id}', ${item.quantita_disponibile})">
                         ${item.quantita_disponibile > 0 ? 'Preleva' : 'Esaurito'}
                     </button>
@@ -91,9 +120,9 @@
     }
 
     async function preleva(id, attuale) {
-        if (!confirm("Confermi il prelievo?")) return;
+        if (!confirm("Confermi il prelievo dal magazzino?")) return;
         const { error } = await supabase.from('oggetti').update({ quantita_disponibile: attuale - 1 }).eq('id', id);
-        if (error) alert("Errore nel prelievo");
+        if (error) alert("Errore nel prelievo!");
         else caricaOggetti();
     }
 
