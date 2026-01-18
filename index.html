@@ -74,7 +74,16 @@
             </div>
 
             <div id="shop-packs" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10"></div>
-
+            <div class="mb-6">
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span class="text-gray-500 text-lg">🔍</span>
+                    </div>
+                    <input type="text" id="search-bar" onkeyup="app.filterProducts()" 
+                           placeholder="Cerca accetta, tenda, cordino..." 
+                           class="w-full pl-10 p-3 border-2 border-gray-200 rounded-xl focus:border-green-500 outline-none transition shadow-sm">
+                </div>
+            </div>
             <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">📦 Materiale Sfuso <span class="h-px bg-gray-300 flex-grow"></span></h3>
             <div id="shop-products" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
         </section>
