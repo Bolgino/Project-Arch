@@ -3,31 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Punto ArchiQuadro</title>
+    <title>Punto ArchiQuadro - Magazzino & Memoria</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root { --green: #1b5e20; --gold: #fbc02d; --red: #d32f2f; --bg: #f4f4f4; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: auto; }
         .header { background: var(--green); color: white; padding: 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* Griglia Prodotti */
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border: 1px solid #ddd; }
         .card img { height: 120px; object-fit: contain; margin-bottom: 10px; }
-        
-        /* Selettore Quantità */
         .qty-box { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 15px 0; }
         .qty-input { width: 50px; text-align: center; font-weight: bold; padding: 5px; border-radius: 5px; border: 1px solid #ccc; }
-        
         .btn { background: var(--green); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; }
-        .btn-pack { background: var(--gold); color: #333; margin-bottom: 10px; }
+        .btn-pack { background: var(--gold); color: #333; margin-bottom: 10px; border: 2px solid #b8860b; }
         .out-of-stock { color: var(--red); font-weight: bold; padding: 10px; border: 2px solid var(--red); border-radius: 8px; }
-
-        /* Admin */
         #admin-panel { display: none; background: #fff3e0; padding: 30px; border-radius: 20px; margin-top: 40px; border: 2px dashed #ff9800; }
-        .admin-nav { margin-bottom: 20px; }
-        .admin-nav button { margin-right: 10px; padding: 10px; }
+        .admin-nav { margin-bottom: 20px; display: flex; gap: 10px; }
+        input, textarea { width: 100%; padding: 10px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -36,60 +29,150 @@
     <div class="header">
         <h1>⚜️ Punto ArchiQuadro</h1>
         <div id="auth-buttons">
-            <button onclick="loginAdmin()" id="btn-login" style="padding:10px;">Login Admin</button>
-            <button onclick="logoutAdmin()" id="btn-logout" style="display:none; padding:10px;">Esci</button>
+            <button onclick="loginAdmin()" id="btn-login" style="padding:10px; cursor:pointer;">Login Admin</button>
+            <button onclick="logoutAdmin()" id="btn-logout" style="display:none; padding:10px; cursor:pointer;">Esci</button>
         </div>
     </div>
 
     <div id="public-view">
-        <h2 style="color:var(--green)">📦 Magazzino Capi</h2>
+        <h2 style="color:var(--green)">🎁 Pacchetti Veloci</h2>
         <div id="pacchetti-lista" class="grid"></div>
+        
+        <h2 style="color:var(--green); margin-top:40px;">📦 Magazzino Singolo</h2>
         <div id="oggetti-lista" class="grid"></div>
     </div>
 
     <div id="admin-panel">
         <h2>🛠️ Gestione Super-Admin</h2>
         <div class="admin-nav">
-            <button onclick="showSection('prodotti')">Prodotti</button>
-            <button onclick="showSection('archivio')">Archivio</button>
+            <button class="btn" onclick="showSection('prodotti')" style="width:auto">Aggiungi Prodotto</button>
+            <button class="btn" onclick="showSection('archivio')" style="width:auto">Nuova Memoria</button>
         </div>
-        <div id="admin-content">
-            <p>Seleziona una sezione sopra per iniziare.</p>
+        <div id="admin-content" style="background:white; padding:20px; border-radius:10px;">
+            <p>Seleziona un'azione sopra.</p>
         </div>
     </div>
 </div>
 
 <script>
+    const PROJECT_ID = "jmildwxjaviqkrkhjzhl"; // Il tuo ID progetto
     const _supabase = supabase.createClient(localStorage.getItem('sb-url'), localStorage.getItem('sb-key'));
+    const ADMIN_EMAIL = "TUA_EMAIL_QUI@GMAIL.COM"; // <--- CAMBIA QUESTA!
 
     async function init() {
         checkAdmin();
         loadInventory();
+        loadPacks();
     }
 
-    // --- FUNZIONI MAGAZZINO ---
+    // --- CARICAMENTO DATI ---
     async function loadInventory() {
         const { data: oggetti } = await _supabase.from('oggetti').select('*').order('nome');
         const container = document.getElementById('oggetti-lista');
-        
         container.innerHTML = oggetti.map(o => {
             const isOut = o.quantita_disponibile <= 0;
             return `
                 <div class="card">
                     <img src="${o.foto_url || 'https://via.placeholder.com/150?text=Senza+Foto'}" alt="${o.nome}">
                     <h3>${o.nome}</h3>
-                    ${isOut ? 
-                        `<div class="out-of-stock">ESAURITO (In ordine)</div>` : 
-                        `<p>Disponibili: <strong>${o.quantita_disponibile}</strong></p>
-                         <div class="qty-box">
-                            <button onclick="changeQtyValue('${o.id}', -1)">-</button>
-                            <input type="number" id="qty-${o.id}" class="qty-input" value="1" min="1" max="${o.quantita_disponibile}">
-                            <button onclick="changeQtyValue('${o.id}', 1)">+</button>
-                         </div>
-                         <button class="btn" onclick="confermaPrelievo('${o.id}', '${o.nome}', ${o.quantita_disponibile}, ${o.soglia_minima})">Conferma Prelievo</button>`
-                    }
+                    ${isOut ? `<div class="out-of-stock">ESAURITO</div>` : 
+                    `<p>Disp: <strong>${o.quantita_disponibile}</strong></p>
+                     <div class="qty-box">
+                        <button onclick="changeQtyValue('${o.id}', -1)">-</button>
+                        <input type="number" id="qty-${o.id}" class="qty-input" value="1" min="1" max="${o.quantita_disponibile}">
+                        <button onclick="changeQtyValue('${o.id}', 1)">+</button>
+                     </div>
+                     <button class="btn" onclick="confermaPrelievo('${o.id}', '${o.nome}', ${o.quantita_disponibile})">Conferma</button>`}
                 </div>`;
         }).join('');
+    }
+
+    async function loadPacks() {
+        const { data: pacchetti } = await _supabase.from('pacchetti').select('*');
+        const container = document.getElementById('pacchetti-lista');
+        container.innerHTML = pacchetti.map(p => `
+            <div class="card" style="border: 2px solid var(--gold)">
+                <h3>${p.nome}</h3>
+                <p>${p.descrizione || 'Kit completo'}</p>
+                <button class="btn btn-pack" onclick="prelevaPacchetto('${p.id}', '${p.nome}')">Preleva Kit</button>
+            </div>
+        `).join('');
+    }
+
+    // --- LOGICA PRELIEVI ---
+    async function confermaPrelievo(id, nome, attuale) {
+        const qty = parseInt(document.getElementById(`qty-${id}`).value);
+        if(!confirm(`Prelevare ${qty}x ${nome}?`)) return;
+
+        const { error } = await _supabase.from('oggetti').update({ quantita_disponibile: attuale - qty }).eq('id', id);
+        if(!error) {
+            callEmailFunction(`Prelievo effettuato: ${qty}x ${nome}. Rimanenti: ${attuale - qty}`);
+            alert("Fatto! Email inviata all'admin.");
+            loadInventory();
+        }
+    }
+
+    async function prelevaPacchetto(packId, packNome) {
+        if(!confirm(`Vuoi scaricare tutti i componenti del ${packNome}?`)) return;
+        
+        // Recupera i componenti del pacchetto
+        const { data: componenti } = await _supabase.from('componenti_pacchetto').select('oggetto_id, quantita_necessaria, oggetti(nome, quantita_disponibile)').eq('pacchetto_id', packId);
+        
+        for (const comp of componenti) {
+            const nuovaQty = comp.oggetti.quantita_disponibile - comp.quantita_necessaria;
+            await _supabase.from('oggetti').update({ quantita_disponibile: nuovaQty }).eq('id', comp.oggetto_id);
+        }
+        
+        callEmailFunction(`È stato prelevato un intero "${packNome}". Tutti i componenti sono stati scalati.`);
+        alert("Pacchetto scalato con successo!");
+        loadInventory();
+    }
+
+    // --- FUNZIONE EMAIL (EDGE FUNCTION) ---
+    async function callEmailFunction(messaggio) {
+        const url = `https://${PROJECT_ID}.supabase.co/functions/v1/notify-admin`;
+        await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('sb-key')}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ details: messaggio, admin_email: ADMIN_EMAIL })
+        });
+    }
+
+    // --- SEZIONE ADMIN ---
+    function showSection(type) {
+        const content = document.getElementById('admin-content');
+        if(type === 'prodotti') {
+            content.innerHTML = `
+                <h3>Nuovo Prodotto</h3>
+                <input type="text" id="p-nome" placeholder="Nome">
+                <input type="number" id="p-qty" placeholder="Quantità iniziale">
+                <input type="text" id="p-foto" placeholder="URL Foto">
+                <button class="btn" onclick="salvaProdotto()">Salva</button>`;
+        } else {
+            content.innerHTML = `
+                <h3>Nuova Memoria Storica</h3>
+                <input type="text" id="a-evento" placeholder="Evento/Campo">
+                <input type="text" id="a-luogo" placeholder="Luogo">
+                <textarea id="a-aneddoto" placeholder="Racconta cosa è successo..."></textarea>
+                <button class="btn" onclick="salvaMemoria()">Archivia</button>`;
+        }
+    }
+
+    async function salvaProdotto() {
+        const nome = document.getElementById('p-nome').value;
+        const qty = document.getElementById('p-qty').value;
+        const foto = document.getElementById('p-foto').value;
+        await _supabase.from('oggetti').insert([{ nome, quantita_disponibile: qty, foto_url: foto }]);
+        alert("Prodotto aggiunto!");
+        loadInventory();
+    }
+
+    async function salvaMemoria() {
+        const evento = document.getElementById('a-evento').value;
+        const luogo = document.getElementById('a-luogo').value;
+        const aneddoto = document.getElementById('a-aneddoto').value;
+        await _supabase.from('archivio').insert([{ evento, luogo, aneddoto }]);
+        alert("Memoria salvata in archivio!");
     }
 
     function changeQtyValue(id, delta) {
@@ -98,24 +181,6 @@
         if(newVal >= 1 && newVal <= input.max) input.value = newVal;
     }
 
-    async function confermaPrelievo(id, nome, attuale, soglia) {
-        const qty = parseInt(document.getElementById(`qty-${id}`).value);
-        if(!confirm(`Confermi di prelevare ${qty} pezzi di "${nome}"?`)) return;
-
-        const nuovaQty = attuale - qty;
-        const { error } = await _supabase.from('oggetti').update({ quantita_disponibile: nuovaQty }).eq('id', id);
-
-        if(!error) {
-            alert("Magazzino aggiornato! Riepilogo inviato all'admin.");
-            if(nuovaQty <= soglia) {
-                // Qui scatta la Edge Function per la mail di allerta
-                console.log("ALERT: Sotto soglia!");
-            }
-            loadInventory();
-        }
-    }
-
-    // --- ADMIN ---
     async function checkAdmin() {
         const { data: { user } } = await _supabase.auth.getUser();
         if(user) {
