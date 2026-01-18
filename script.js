@@ -49,11 +49,9 @@ const app = {
 
     setCategory(cat) {
         state.currentCategory = cat;
-        // Aggiorna stile bottoni
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'bg-opacity-100', 'text-white'));
         const btn = document.getElementById(`btn-cat-${cat}`);
         if(btn) btn.classList.add('active');
-        
         this.filterProducts();
     },
 
@@ -64,9 +62,7 @@ const app = {
 
         cards.forEach(card => {
             const title = card.querySelector('h4').innerText.toLowerCase();
-            const cat = card.dataset.category || 'Generale'; // Legge la categoria dal data attribute
-            
-            // Logica Filtro: Testo AND Categoria
+            const cat = card.dataset.category || 'Generale';
             const matchesText = title.includes(term);
             const matchesCat = state.currentCategory === 'all' || cat === state.currentCategory;
 
@@ -81,15 +77,11 @@ const app = {
         });
 
         const noRes = document.getElementById('no-results');
-        if(noRes) {
-            (visibleCount === 0) ? noRes.classList.remove('hidden') : noRes.classList.add('hidden');
-        }
+        if(noRes) { (visibleCount === 0) ? noRes.classList.remove('hidden') : noRes.classList.add('hidden'); }
     },
 
     renderShop() {
         document.getElementById('nav-public').classList.remove('hidden');
-        
-        // Aggiungo data-category al div per il filtro
         document.getElementById('shop-products').innerHTML = state.products.map(p => `
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition flex flex-col h-full group" data-category="${p.categoria || 'Generale'}">
                 <div class="h-28 md:h-32 bg-gray-50 p-4 relative flex items-center justify-center">
@@ -104,9 +96,7 @@ const app = {
                     <p class="text-[10px] md:text-xs text-gray-500 mb-2 font-mono">Disp: <span class="text-green-700 font-bold text-sm">${p.quantita_disponibile}</span></p>
                     <div class="mt-auto flex items-center gap-1">
                         <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" class="w-8 md:w-10 p-1 text-center border-2 border-gray-200 rounded text-xs md:text-sm font-bold">
-                        <button onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 bg-green-600 text-white text-[10px] md:text-xs font-bold py-2 rounded hover:bg-green-700 active:scale-95 transition">
-                            +
-                        </button>
+                        <button onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 bg-green-600 text-white text-[10px] md:text-xs font-bold py-2 rounded hover:bg-green-700 active:scale-95 transition">+</button>
                     </div>
                 </div>
             </div>
@@ -126,10 +116,8 @@ const app = {
     async checkout() {
         const name = document.getElementById('checkout-name').value;
         if (!name || state.cart.length === 0) return ui.toast("Manca nome o zaino vuoto!", "error");
-
         loader.show(); 
         let details = `<h3>Prelievo di: ${name}</h3><ul>`;
-
         for (let i of state.cart) {
             if (i.type === 'item') {
                 const nQ = i.max - i.qty;
@@ -137,42 +125,23 @@ const app = {
                 details += `<li>${i.name} <b>(${i.qty})</b></li>`;
             } else {
                 const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
-                for (let c of comps) {
-                    await _sb.from('oggetti').update({ quantita_disponibile: c.oggetti.quantita_disponibile - c.quantita_necessaria }).eq('id', c.oggetto_id);
-                }
+                for (let c of comps) { await _sb.from('oggetti').update({ quantita_disponibile: c.oggetti.quantita_disponibile - c.quantita_necessaria }).eq('id', c.oggetto_id); }
                 details += `<li>KIT ${i.name}</li>`;
             }
         }
         details += `</ul>`;
-
-        try {
-            await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ details, admin_email: CONFIG.adminEmail })
-            });
-        } catch(e) {}
-
-        cart.empty();
-        ui.toggleCart();
-        loader.hide();
-        ui.toast("Materiale Prelevato!", "success");
-        setTimeout(() => location.reload(), 1500);
+        try { await fetch(`${CONFIG.url}/functions/v1/notify-admin`, { method: 'POST', headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ details, admin_email: CONFIG.adminEmail }) }); } catch(e) {}
+        cart.empty(); ui.toggleCart(); loader.hide(); ui.toast("Prelevato!", "success"); setTimeout(() => location.reload(), 1500);
     }
 };
 
 const cart = {
     add(id, name, type, qty, max) {
-        if(isNaN(qty) || qty < 1) return ui.toast("Quantità errata", "error");
+        if(isNaN(qty) || qty < 1) return ui.toast("Qta errata", "error");
         const exists = state.cart.find(x => x.id === id);
-        if (exists) {
-            if (exists.qty + qty > max) return ui.toast("Non bastano le scorte!", "error");
-            exists.qty += qty;
-        } else {
-            state.cart.push({ id, name, type, qty, max });
-        }
-        this.render();
-        ui.toast("Aggiunto", "success");
+        if (exists) { if (exists.qty + qty > max) return ui.toast("Scorte insufficienti!", "error"); exists.qty += qty; } 
+        else { state.cart.push({ id, name, type, qty, max }); }
+        this.render(); ui.toast("Aggiunto", "success");
     },
     remove(idx) { state.cart.splice(idx, 1); this.render(); },
     empty() { state.cart = []; this.render(); },
@@ -213,7 +182,7 @@ const archive = {
         const ev = document.getElementById('mem-ev').value;
         const pl = document.getElementById('mem-pl').value;
         const tx = document.getElementById('mem-tx').value;
-        if (!ev || !tx) return ui.toast("Compila i campi", "error");
+        if (!ev || !tx) return ui.toast("Compila tutto", "error");
         await _sb.from('archivio').insert([{ evento: ev, luogo: pl, aneddoto: tx, status: 'pending' }]);
         ui.toast("Inviato!", "success"); ui.closeModals();
     }
@@ -264,20 +233,19 @@ const admin = {
         inputs.forEach(i => i.value = ''); ui.toast("Fatto", "success"); app.loadData(); loader.hide();
     },
     
-    // EDIT PRODOTTO (CORRETTO BUG IMMAGINE)
     openEdit(id) {
         const p = state.products.find(x => x.id === id);
         document.getElementById('modal-prod-title').innerText = "Modifica";
         document.getElementById('prod-id').value = id;
         document.getElementById('prod-name').value = p.nome;
-        document.getElementById('prod-cat').value = p.categoria || 'Generale'; // Carica categoria
+        document.getElementById('prod-cat').value = p.categoria || 'Generale'; 
         document.getElementById('prod-qty').value = p.quantita_disponibile;
         document.getElementById('prod-min').value = p.soglia_minima;
         
-        // Gestione Immagine: Salva quella vecchia nell'input text e svuota il file input
+        // FIX IMMAGINE: Salvo URL corrente nell'input nascosto e resetto file input
         document.getElementById('prod-img').value = p.foto_url || '';
         document.getElementById('prod-img-preview').src = p.foto_url || 'https://placehold.co/200?text=No+Img';
-        document.getElementById('prod-file').value = ""; // RESET FONDAMENTALE DEL FILE INPUT
+        document.getElementById('prod-file').value = ""; 
         
         document.getElementById('btn-del').classList.remove('hidden');
         ui.modal('modal-prod');
@@ -294,7 +262,6 @@ const admin = {
     async saveProd() {
         const id = document.getElementById('prod-id').value;
         const file = document.getElementById('prod-file').files[0];
-        // PRENDO IL VALORE VECCHIO DI DEFAULT
         let imgUrl = document.getElementById('prod-img').value; 
 
         if (file) {
@@ -303,7 +270,7 @@ const admin = {
             const { error } = await _sb.storage.from(CONFIG.bucket).upload(fileName, file);
             if (!error) {
                 const { data } = _sb.storage.from(CONFIG.bucket).getPublicUrl(fileName);
-                imgUrl = data.publicUrl; // SOVRASCRIVO SOLO SE C'È UN NUOVO FILE
+                imgUrl = data.publicUrl; 
             }
             document.getElementById('upload-loader').classList.add('hidden');
         }
@@ -313,7 +280,7 @@ const admin = {
             categoria: document.getElementById('prod-cat').value,
             quantita_disponibile: document.getElementById('prod-qty').value,
             soglia_minima: document.getElementById('prod-min').value,
-            foto_url: imgUrl // Uso la variabile corretta
+            foto_url: imgUrl 
         };
 
         if (id) await _sb.from('oggetti').update(data).eq('id', id);
@@ -327,7 +294,6 @@ const admin = {
         ui.closeModals(); app.loadData();
     },
 
-    // PACKS
     renderPackBuilder() {
         document.getElementById('pack-items').innerHTML = state.products.map(p => `
             <label class="flex items-center gap-2 text-xs p-2 border rounded cursor-pointer">
