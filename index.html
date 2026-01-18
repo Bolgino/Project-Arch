@@ -12,8 +12,7 @@
         body { 
             font-family: 'Outfit', sans-serif; 
             background-color: #f8fafc;
-            /* Pattern Topografico leggero */
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23166534' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23166534' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
         
         .fade-in { animation: fadeIn 0.5s ease-out; }
@@ -99,7 +98,7 @@
                     </div>
                     <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-green-600 transition">📦 Inventario</button>
                     <button onclick="admin.tab('restock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-blue-500 transition">🚛 Rifornimento</button>
-                    <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-yellow-500 transition">🎁 Crea Kit</button>
+                    <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-yellow-500 transition">🎁 Gestione Kit</button>
                     <button onclick="admin.tab('mod')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-red-500 transition flex justify-between">
                         🛡 Moderazione <span id="mod-badge" class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full hidden animate-pulse">0</span>
                     </button>
@@ -128,12 +127,19 @@
                     </div>
 
                     <div id="admin-tab-packs" class="admin-tab hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-yellow-500">
-                        <h3 class="font-bold text-xl text-yellow-900 mb-4">Crea Kit (Es. Promessa, Uscita Squadriglia)</h3>
-                        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                        <h3 class="font-bold text-xl text-yellow-900 mb-4">Gestione Kit (Pacchetti)</h3>
+                        
+                        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100 mb-6">
+                            <h4 class="font-bold text-yellow-800 text-sm mb-2 uppercase">Nuovo Kit</h4>
                             <input type="text" id="pack-name" placeholder="Nome Kit (es. Kit Cucina)" class="w-full p-3 border rounded mb-4 font-bold">
                             <p class="text-xs font-bold text-gray-500 mb-2 uppercase">Seleziona contenuto:</p>
-                            <div id="pack-items" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto mb-6 border p-2 rounded bg-white"></div>
+                            <div id="pack-items" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto mb-4 border p-2 rounded bg-white"></div>
                             <button onclick="admin.createPack()" class="w-full bg-yellow-400 font-bold py-3 rounded text-yellow-900 hover:bg-yellow-500 shadow">Salva Kit</button>
+                        </div>
+
+                        <div>
+                            <h4 class="font-bold text-gray-800 text-sm mb-3 uppercase border-b pb-1">Kit Esistenti</h4>
+                            <div id="admin-packs-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
                         </div>
                     </div>
 
