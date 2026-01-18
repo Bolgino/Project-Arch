@@ -13,7 +13,7 @@
         body { 
             font-family: 'Outfit', sans-serif; 
             background-color: #f8fafc;
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23166534' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2V6h4V4H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23166534' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
         .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -42,13 +42,13 @@
                     <button onclick="app.nav('shop')" class="hover:text-yellow-400 transition text-xs md:text-sm font-medium uppercase tracking-wide">Magazzino</button>
                     <button onclick="app.nav('archive')" class="hover:text-yellow-400 transition text-xs md:text-sm font-medium uppercase tracking-wide">Ricordi</button>
                     <button onclick="ui.toggleCart()" class="bg-white text-green-900 px-2 py-1 md:px-3 md:py-1 rounded-full hover:bg-yellow-300 transition flex items-center gap-2 shadow-sm text-xs md:text-sm font-bold border-2 border-transparent hover:border-green-800">
-                        🎒 <span id="cart-count">0</span>
+                        🛒 <span id="cart-count">0</span>
                     </button>
                     <button onclick="ui.modal('login-modal')" class="bg-green-800 hover:bg-green-700 px-2 py-1 md:px-3 rounded text-[10px] md:text-xs font-bold uppercase tracking-wider border border-green-700">Login</button>
                 </div>
 
                 <div id="nav-admin" class="hidden flex items-center gap-4">
-                    <span class="bg-yellow-500 text-black px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider">ADMIN</span>
+                    <span class="bg-yellow-500 text-black px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider">CAPI</span>
                     <button onclick="auth.logout()" class="text-xs hover:text-red-300 font-bold uppercase">Esci</button>
                 </div>
             </div>
@@ -108,11 +108,12 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div class="lg:col-span-1 grid grid-cols-2 lg:flex lg:flex-col gap-2 h-fit">
                     <div class="col-span-2 lg:col-auto bg-white p-3 rounded-lg shadow text-center border-l-4 border-green-600 mb-0 lg:mb-2">
-                        <h2 class="font-bold text-gray-800">Q.G.</h2>
+                        <h2 class="font-bold text-gray-800">Q.G. Capi</h2>
                     </div>
                     <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-green-600 transition">📦 Inventario</button>
                     <button onclick="admin.tab('restock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-blue-500 transition">🚛 Rifornimento</button>
                     <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-yellow-500 transition">🎁 Gestione Kit</button>
+                    <button onclick="admin.tab('movements')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-teal-500 transition">📊 Movimenti</button>
                     <button onclick="admin.tab('mod')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-red-500 transition flex justify-between">
                         🛡 Moderazione <span id="mod-badge" class="bg-red-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
                     </button>
@@ -165,6 +166,12 @@
                         <div id="admin-packs-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
                     </div>
 
+                    <div id="admin-tab-movements" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-teal-500">
+                        <h3 class="font-bold text-xl text-teal-900 mb-2">Registro Movimenti</h3>
+                        <p class="text-xs text-gray-500 mb-4">Storico di chi ha preso cosa.</p>
+                        <div id="movements-list" class="space-y-2 max-h-[70vh] overflow-y-auto"></div>
+                    </div>
+
                     <div id="admin-tab-mod" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-red-500">
                         <h3 class="font-bold text-xl text-red-900 mb-4">Ricordi in Attesa</h3>
                         <div id="mod-list" class="space-y-4"></div>
@@ -181,7 +188,7 @@
     </main>
 
     <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-full md:w-96 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-[60] flex flex-col">
-        <div class="p-6 border-b flex justify-between items-center bg-green-900 text-white shadow-md relative overflow-hidden">
+        <div class="p-4 border-b flex justify-between items-center bg-green-900 text-white shadow-md relative overflow-hidden">
             <svg class="absolute bottom-0 right-0 text-green-800 w-24 h-24 opacity-50 transform translate-y-4 translate-x-4" fill="currentColor" viewBox="0 0 24 24"><path d="M14 6l-3.75 5 2.85 3.8-1.6 1.2C9.81 13.55 8.26 9 8.26 9L4 18h16l-6-12z"/></svg>
             <div class="flex items-center gap-3 z-10">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8 text-yellow-400">
@@ -194,29 +201,27 @@
                     <p class="text-[10px] text-green-300 font-mono">EQUIPAGGIAMENTO</p>
                 </div>
             </div>
-            <button onclick="ui.toggleCart()" class="text-2xl text-green-200 hover:text-white transition transform hover:rotate-90 z-10">&times;</button>
+            <button onclick="ui.toggleCart()" class="text-2xl text-green-200 p-2">&times;</button>
         </div>
         <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 pb-20"></div>
-        <div class="p-6 border-t bg-white shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
-            <button onclick="cart.empty()" class="w-full text-red-400 text-xs font-bold mb-4 hover:text-red-600 transition flex justify-center gap-1">
-                <span>🗑</span> SVUOTA TUTTO
-            </button>
-            <input type="text" id="checkout-name" placeholder="Chi sei-Branca? " class="w-full p-3 border-2 border-gray-200 rounded-lg mb-3 text-sm focus:border-green-500 outline-none transition font-bold text-gray-700">
-            <button onclick="app.checkout()" class="w-full bg-green-700 text-white font-bold py-4 rounded-lg hover:bg-green-800 shadow-lg transition transform hover:-translate-y-1">CONFERMA PRELIEVO</button>
+        <div class="p-4 border-t bg-white absolute bottom-0 w-full">
+            <button onclick="cart.empty()" class="w-full text-red-400 text-xs font-bold mb-2 text-center">SVUOTA</button>
+            <input type="text" id="checkout-name" placeholder="Chi sei-Branca? " class="w-full p-3 border-2 border-gray-200 rounded-lg mb-2 text-sm font-bold">
+            <button onclick="app.checkout()" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">PRELEVA</button>
         </div>
     </div>
 
     <div id="modal-kit" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md relative max-h-[90vh] overflow-y-auto">
-            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300 hover:text-gray-500">&times;</button>
-            <h3 class="font-bold text-lg mb-4 text-yellow-900 border-b pb-2">Modifica Kit</h3>
+        <div class="bg-white p-5 rounded-xl shadow-2xl w-full max-w-md relative max-h-[80vh] flex flex-col">
+            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-400">&times;</button>
+            <h3 class="font-bold text-lg mb-3 text-yellow-900">Modifica Kit</h3>
             <input type="hidden" id="edit-kit-id">
             
             <label class="text-xs font-bold text-gray-500 uppercase">Nome Kit</label>
             <input type="text" id="edit-kit-name" class="w-full p-3 border rounded mb-4 font-bold">
             
             <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Contenuto Kit</label>
-            <div id="edit-kit-items" class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto mb-4 border p-2 rounded bg-gray-50"></div>
+            <div id="edit-kit-items" class="grid grid-cols-2 gap-2 overflow-y-auto border p-2 rounded bg-gray-50 flex-grow"></div>
 
             <button onclick="admin.saveEditPack()" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg shadow hover:bg-green-800">Salva Modifiche</button>
         </div>
@@ -224,7 +229,7 @@
 
     <div id="modal-prod" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md relative max-h-[90vh] overflow-y-auto">
-            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
+            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-400">&times;</button>
             <h3 class="font-bold text-lg mb-4" id="modal-prod-title">Prodotto</h3>
             <input type="hidden" id="prod-id">
             
@@ -267,8 +272,8 @@
     <div id="login-modal" class="hidden fixed inset-0 bg-green-900/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm relative">
             <button onclick="ui.closeModals()" class="absolute top-4 right-4 text-2xl text-gray-300 hover:text-gray-500">&times;</button>
-            <h2 class="text-center font-extrabold text-2xl mb-2 text-green-900">Area Admin</h2>
-            <p class="text-center text-gray-400 text-xs mb-6">Accesso riservato alla gestione</p>
+            <h2 class="text-center font-extrabold text-2xl mb-2 text-green-900">Area Capi</h2>
+            <p class="text-center text-gray-400 text-xs mb-6">Accesso riservato alla Co.Ca.</p>
             <input type="email" id="log-mail" placeholder="Email" class="w-full p-3 border rounded-lg mb-3 bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-green-500">
             <input type="password" id="log-pass" placeholder="Password" class="w-full p-3 border rounded-lg mb-6 bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-green-500">
             <button onclick="auth.login()" class="w-full bg-green-800 text-white font-bold py-3 rounded-lg hover:bg-green-900 shadow-md">Entra</button>
