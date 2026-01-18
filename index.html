@@ -3,104 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Punto ArchiQuadro | System</title>
+    <title>Punto ArchiQuadro | Scout Warehouse</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: 'Outfit', sans-serif; background-color: #f8fafc; }
-        .fade-in { animation: fadeIn 0.4s ease-out; }
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background-color: #f8fafc;
+            /* Pattern Topografico leggero */
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23166534' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        
+        .fade-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Nascondi scrollbar carrello */
+
+        /* Loader Animation */
+        .compass-spin { animation: compassSpin 2s infinite ease-in-out; }
+        @keyframes compassSpin { 
+            0% { transform: rotate(0deg); } 
+            40% { transform: rotate(30deg); } 
+            60% { transform: rotate(-30deg); } 
+            100% { transform: rotate(0deg); } 
+        }
+
         .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #16a34a; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="text-gray-800 h-screen flex flex-col">
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
 
-    <nav class="bg-green-900 text-white sticky top-0 z-40 shadow-xl">
+    <div id="scout-loader" class="fixed inset-0 bg-green-900 z-[100] flex flex-col items-center justify-center text-white transition-opacity duration-500">
+        <div class="text-6xl mb-4 compass-spin">🧭</div>
+        <h2 class="text-2xl font-bold tracking-widest mb-2">ARCHIQUADRO</h2>
+        <p id="loader-text" class="text-green-200 font-mono text-sm animate-pulse">Sto orientando la cartina...</p>
+    </div>
+
+    <nav class="bg-green-900 text-white sticky top-0 z-40 shadow-xl border-b-4 border-yellow-500">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-2 font-bold text-xl tracking-wider cursor-pointer" onclick="location.reload()">
-                    <span>⚜️ ARCHIQUADRO</span>
+                <div class="flex items-center gap-2 font-bold text-xl tracking-wider cursor-pointer select-none" onclick="location.reload()">
+                    <span class="text-yellow-400 text-2xl">⚜️</span> ARCHIQUADRO
                 </div>
                 
-                <div id="nav-public" class="flex items-center gap-4">
-                    <button onclick="app.nav('shop')" class="hover:text-yellow-400 transition text-sm font-medium">Magazzino</button>
-                    <button onclick="app.nav('archive')" class="hover:text-yellow-400 transition text-sm font-medium">Memoria</button>
-                    <button onclick="ui.toggleCart()" class="bg-white text-green-900 px-3 py-1 rounded-full hover:bg-yellow-300 transition flex items-center gap-2 shadow-sm text-sm font-bold">
+                <div id="nav-public" class="flex items-center gap-4 hidden">
+                    <button onclick="app.nav('shop')" class="hover:text-yellow-400 transition text-sm font-medium uppercase tracking-wide">Magazzino</button>
+                    <button onclick="app.nav('archive')" class="hover:text-yellow-400 transition text-sm font-medium uppercase tracking-wide">Ricordi</button>
+                    <button onclick="ui.toggleCart()" class="bg-white text-green-900 px-3 py-1 rounded-full hover:bg-yellow-300 transition flex items-center gap-2 shadow-sm text-sm font-bold border-2 border-transparent hover:border-green-800">
                         🛒 <span id="cart-count">0</span>
                     </button>
-                    <button onclick="ui.modal('login-modal')" class="opacity-60 hover:opacity-100 text-xs">🔒</button>
+                    <button onclick="ui.modal('login-modal')" class="bg-green-800 hover:bg-green-700 px-3 py-1 rounded text-xs font-bold uppercase tracking-wider border border-green-700">Login</button>
                 </div>
 
                 <div id="nav-admin" class="hidden flex items-center gap-4">
-                    <span class="bg-yellow-500 text-black px-2 py-0.5 rounded text-xs font-bold">ADMIN</span>
-                    <button onclick="auth.logout()" class="text-sm hover:text-red-300">Esci</button>
+                    <span class="bg-yellow-500 text-black px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider">CAPI</span>
+                    <button onclick="auth.logout()" class="text-xs hover:text-red-300 font-bold uppercase">Esci</button>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="flex-grow max-w-7xl mx-auto w-full px-4 py-6">
+    <main class="flex-grow max-w-7xl mx-auto w-full px-4 py-6 overflow-y-auto scrollbar-hide">
 
-        <section id="view-shop" class="fade-in">
-            <div class="flex justify-between items-end mb-6 border-b pb-4">
+        <section id="view-shop" class="hidden fade-in pb-20">
+            <div class="flex justify-between items-end mb-6 border-b border-gray-300 pb-4">
                 <div>
-                    <h1 class="text-3xl font-extrabold text-green-900">Magazzino</h1>
-                    <p class="text-gray-500 text-sm">Seleziona i prodotti da prelevare.</p>
+                    <h1 class="text-4xl font-extrabold text-green-900">Magazzino</h1>
+                    <p class="text-gray-500 text-sm mt-1">Prendi solo ciò che serve, lascia meglio di come hai trovato.</p>
                 </div>
             </div>
 
             <div id="shop-packs" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10"></div>
 
-            <h3 class="font-bold text-gray-700 mb-4">📦 Articoli Singoli</h3>
+            <h3 class="font-bold text-gray-700 mb-4 flex items-center gap-2">📦 Materiale Sfuso <span class="h-px bg-gray-300 flex-grow"></span></h3>
             <div id="shop-products" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
         </section>
 
         <section id="view-archive" class="hidden fade-in max-w-4xl mx-auto">
-            <div class="text-center mb-8">
-                <h2 class="text-3xl font-bold text-green-900">Il Muretto dei Ricordi</h2>
-                <button onclick="ui.modal('modal-add-memory')" class="mt-4 bg-green-700 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-green-800 transition transform hover:scale-105">
+            <div class="text-center mb-10 bg-white p-8 rounded-2xl shadow-lg border-b-4 border-green-600">
+                <h2 class="text-3xl font-bold text-green-900 mb-2">Il Muretto dei Ricordi</h2>
+                <p class="text-gray-500 mb-6 text-sm">"La felicità non è reale se non è condivisa."</p>
+                <button onclick="ui.modal('modal-add-memory')" class="bg-green-700 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-green-800 transition transform hover:scale-105 hover:-rotate-1">
                     ✏️ Scrivi un Ricordo
                 </button>
             </div>
-            <div id="archive-list" class="space-y-6"></div>
+            <div id="archive-list" class="grid gap-6 md:grid-cols-2"></div>
         </section>
 
         <section id="view-admin" class="hidden fade-in">
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div class="lg:col-span-1 space-y-2">
-                    <div class="bg-white p-4 rounded-lg shadow text-center mb-4">
-                        <div class="text-3xl">🛠</div>
-                        <h2 class="font-bold">Dashboard</h2>
+                    <div class="bg-white p-4 rounded-lg shadow-md text-center mb-4 border-t-4 border-green-600">
+                        <div class="text-3xl mb-1">🛠</div>
+                        <h2 class="font-bold text-gray-800">Q.G.</h2>
                     </div>
-                    <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-medium shadow-sm border-l-4 border-transparent hover:border-green-600">📦 Gestione Prodotti</button>
-                    <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-medium shadow-sm border-l-4 border-transparent hover:border-yellow-500">🎁 Crea Pacchetti</button>
-                    <button onclick="admin.tab('mod')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-medium shadow-sm border-l-4 border-transparent hover:border-red-500 flex justify-between">
-                        🛡 Moderazione <span id="mod-badge" class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+                    <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-green-600 transition">📦 Inventario</button>
+                    <button onclick="admin.tab('restock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-blue-500 transition">🚛 Rifornimento</button>
+                    <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-yellow-500 transition">🎁 Crea Kit</button>
+                    <button onclick="admin.tab('mod')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-red-500 transition flex justify-between">
+                        🛡 Moderazione <span id="mod-badge" class="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full hidden animate-pulse">0</span>
                     </button>
                 </div>
 
-                <div class="lg:col-span-3">
-                    <div id="admin-tab-stock" class="admin-tab bg-white p-6 rounded-xl shadow">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-lg">Inventario & Foto</h3>
-                            <button onclick="admin.openNewProd()" class="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700">+ Nuovo</button>
+                <div class="lg:col-span-4">
+                    
+                    <div id="admin-tab-stock" class="admin-tab bg-white p-6 rounded-xl shadow-md border-t-4 border-green-600">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-xl text-green-900">Gestione Inventario</h3>
+                            <button onclick="admin.openNewProd()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-700 shadow">+ Nuovo Oggetto</button>
                         </div>
-                        <div id="admin-stock-list" class="divide-y text-sm"></div>
+                        <div id="admin-stock-list" class="divide-y text-sm max-h-[60vh] overflow-y-auto"></div>
                     </div>
 
-                    <div id="admin-tab-packs" class="admin-tab hidden bg-white p-6 rounded-xl shadow">
-                        <h3 class="font-bold text-lg mb-4">Crea Kit</h3>
-                        <input type="text" id="pack-name" placeholder="Nome Kit (es. Promessa)" class="w-full p-2 border rounded mb-4">
-                        <div id="pack-items" class="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto mb-4 border p-2 rounded"></div>
-                        <button onclick="admin.createPack()" class="w-full bg-yellow-400 font-bold py-2 rounded">Salva Kit</button>
+                    <div id="admin-tab-restock" class="admin-tab hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                        <h3 class="font-bold text-xl text-blue-900 mb-2">Rifornimento Veloce</h3>
+                        <p class="text-sm text-gray-500 mb-6">Aggiungi quantità alle scorte esistenti.</p>
+                        
+                        <div class="bg-blue-50 p-4 rounded-lg mb-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+                            <span class="font-bold text-blue-800 text-sm">Totale modifiche:</span>
+                            <button onclick="admin.processRestock()" class="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 shadow transition transform active:scale-95">CONFERMA CARICO 🚛</button>
+                        </div>
+
+                        <div id="admin-restock-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto"></div>
                     </div>
 
-                    <div id="admin-tab-mod" class="admin-tab hidden bg-white p-6 rounded-xl shadow">
-                        <h3 class="font-bold text-lg mb-4">Ricordi in Attesa</h3>
+                    <div id="admin-tab-packs" class="admin-tab hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-yellow-500">
+                        <h3 class="font-bold text-xl text-yellow-900 mb-4">Crea Kit (Es. Promessa, Uscita Squadriglia)</h3>
+                        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                            <input type="text" id="pack-name" placeholder="Nome Kit (es. Kit Cucina)" class="w-full p-3 border rounded mb-4 font-bold">
+                            <p class="text-xs font-bold text-gray-500 mb-2 uppercase">Seleziona contenuto:</p>
+                            <div id="pack-items" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto mb-6 border p-2 rounded bg-white"></div>
+                            <button onclick="admin.createPack()" class="w-full bg-yellow-400 font-bold py-3 rounded text-yellow-900 hover:bg-yellow-500 shadow">Salva Kit</button>
+                        </div>
+                    </div>
+
+                    <div id="admin-tab-mod" class="admin-tab hidden bg-white p-6 rounded-xl shadow-md border-t-4 border-red-500">
+                        <h3 class="font-bold text-xl text-red-900 mb-4">Ricordi in Attesa</h3>
                         <div id="mod-list" class="space-y-4"></div>
                     </div>
                 </div>
@@ -109,73 +147,77 @@
 
     </main>
 
-    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 flex flex-col">
-        <div class="p-4 border-b flex justify-between items-center bg-green-50">
-            <h2 class="font-bold text-green-900">Il tuo Ordine</h2>
-            <button onclick="ui.toggleCart()" class="text-2xl text-gray-400 hover:text-red-500">&times;</button>
+    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-full md:w-96 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 flex flex-col">
+        <div class="p-6 border-b flex justify-between items-center bg-green-900 text-white">
+            <h2 class="font-bold text-xl">Il tuo Zaino</h2>
+            <button onclick="ui.toggleCart()" class="text-2xl hover:text-yellow-400">&times;</button>
         </div>
-        <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
-        <div class="p-4 border-t bg-gray-50">
-            <button onclick="cart.empty()" class="w-full text-red-500 text-xs font-bold mb-4 hover:underline text-center">SVUOTA CARRELLO 🗑</button>
-            <input type="text" id="checkout-name" placeholder="Tuo Nome e Branca" class="w-full p-3 border rounded mb-3 text-sm">
-            <button onclick="app.checkout()" class="w-full bg-green-700 text-white font-bold py-3 rounded hover:bg-green-800 shadow-lg">CONFERMA PRELIEVO</button>
+        <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50"></div>
+        <div class="p-6 border-t bg-white shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
+            <button onclick="cart.empty()" class="w-full text-red-400 text-xs font-bold mb-4 hover:text-red-600 transition flex justify-center gap-1">
+                <span>🗑</span> SVUOTA TUTTO
+            </button>
+            <input type="text" id="checkout-name" placeholder="Nome e Squadriglia/Branca" class="w-full p-3 border-2 border-gray-200 rounded-lg mb-3 text-sm focus:border-green-500 outline-none transition font-bold text-gray-700">
+            <button onclick="app.checkout()" class="w-full bg-green-700 text-white font-bold py-4 rounded-lg hover:bg-green-800 shadow-lg transition transform hover:-translate-y-1">CONFERMA PRELIEVO</button>
         </div>
     </div>
 
-    <div id="login-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white p-8 rounded-xl shadow-2xl w-80 relative">
+    <div id="login-modal" class="hidden fixed inset-0 bg-green-900/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm relative">
+            <button onclick="ui.closeModals()" class="absolute top-4 right-4 text-2xl text-gray-300 hover:text-gray-500">&times;</button>
+            <h2 class="text-center font-extrabold text-2xl mb-2 text-green-900">Area Capi</h2>
+            <p class="text-center text-gray-400 text-xs mb-6">Accesso riservato alla Co.Ca.</p>
+            <input type="email" id="log-mail" placeholder="Email" class="w-full p-3 border rounded-lg mb-3 bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-green-500">
+            <input type="password" id="log-pass" placeholder="Password" class="w-full p-3 border rounded-lg mb-6 bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-green-500">
+            <button onclick="auth.login()" class="w-full bg-green-800 text-white font-bold py-3 rounded-lg hover:bg-green-900 shadow-md">Entra</button>
+        </div>
+    </div>
+
+    <div id="modal-add-memory" class="hidden fixed inset-0 bg-green-900/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md relative border-t-8 border-green-600">
             <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
-            <h2 class="text-center font-bold text-xl mb-6">Area Capi</h2>
-            <input type="email" id="log-mail" placeholder="Email" class="w-full p-2 border rounded mb-3">
-            <input type="password" id="log-pass" placeholder="Password" class="w-full p-2 border rounded mb-6">
-            <button onclick="auth.login()" class="w-full bg-green-700 text-white font-bold py-2 rounded">Entra</button>
+            <h3 class="font-bold text-xl mb-1 text-green-800">Nuovo Ricordo</h3>
+            <p class="text-xs text-gray-500 mb-4">Condividi un momento speciale.</p>
+            <input type="text" id="mem-ev" placeholder="Evento (es. Campo Estivo 2024)" class="w-full p-3 border rounded-lg mb-3 text-sm font-bold">
+            <input type="text" id="mem-pl" placeholder="Luogo (es. Base Brownsea)" class="w-full p-3 border rounded-lg mb-3 text-sm">
+            <textarea id="mem-tx" rows="4" placeholder="Cosa è successo? Racconta..." class="w-full p-3 border rounded-lg mb-4 text-sm"></textarea>
+            <button onclick="archive.submit()" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">Invia alla Staff</button>
         </div>
     </div>
 
-    <div id="modal-add-memory" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md relative">
-            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
-            <h3 class="font-bold text-lg mb-4 text-green-800">Nuovo Ricordo</h3>
-            <input type="text" id="mem-ev" placeholder="Evento (es. Campo 2024)" class="w-full p-2 border rounded mb-3">
-            <input type="text" id="mem-pl" placeholder="Luogo" class="w-full p-2 border rounded mb-3">
-            <textarea id="mem-tx" rows="4" placeholder="Scrivi qui il tuo aneddoto..." class="w-full p-2 border rounded mb-4"></textarea>
-            <button onclick="archive.submit()" class="w-full bg-green-600 text-white font-bold py-2 rounded">Invia per Approvazione</button>
-        </div>
-    </div>
-
-    <div id="modal-prod" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md relative max-h-screen overflow-y-auto">
+    <div id="modal-prod" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md relative max-h-[90vh] overflow-y-auto">
             <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
             <h3 class="font-bold text-lg mb-4" id="modal-prod-title">Prodotto</h3>
             <input type="hidden" id="prod-id">
             
-            <label class="text-xs font-bold text-gray-500">Nome</label>
-            <input type="text" id="prod-name" class="w-full p-2 border rounded mb-3">
+            <label class="text-xs font-bold text-gray-500 uppercase">Nome Oggetto</label>
+            <input type="text" id="prod-name" class="w-full p-2 border rounded mb-3 font-bold text-gray-800">
             
             <div class="flex gap-2 mb-3">
                 <div class="w-1/2">
-                    <label class="text-xs font-bold text-gray-500">Quantità</label>
-                    <input type="number" id="prod-qty" class="w-full p-2 border rounded">
+                    <label class="text-xs font-bold text-gray-500 uppercase">Quantità Attuale</label>
+                    <input type="number" id="prod-qty" class="w-full p-2 border rounded font-mono">
                 </div>
                 <div class="w-1/2">
-                    <label class="text-xs font-bold text-gray-500">Soglia Min</label>
-                    <input type="number" id="prod-min" class="w-full p-2 border rounded">
+                    <label class="text-xs font-bold text-gray-500 uppercase">Soglia Allerta</label>
+                    <input type="number" id="prod-min" class="w-full p-2 border rounded font-mono">
                 </div>
             </div>
 
-            <label class="text-xs font-bold text-gray-500">Foto</label>
-            <div class="flex gap-2 items-center mb-2">
-                <input type="file" id="prod-file" class="text-xs w-full" accept="image/*">
-                <span id="upload-loader" class="loader hidden"></span>
+            <label class="text-xs font-bold text-gray-500 uppercase">Immagine</label>
+            <div class="flex gap-2 items-center mb-2 mt-1">
+                <input type="file" id="prod-file" class="text-xs w-full text-gray-500" accept="image/*">
+                <span id="upload-loader" class="loader hidden">⌛</span>
             </div>
             <input type="text" id="prod-img" placeholder="URL Immagine (o carica sopra)" class="w-full p-2 border rounded text-xs text-gray-500 mb-4 bg-gray-50">
 
-            <button onclick="admin.saveProd()" class="w-full bg-green-700 text-white font-bold py-2 rounded mb-2">Salva Prodotto</button>
-            <button onclick="admin.deleteProd()" id="btn-del" class="w-full text-red-500 text-xs hover:underline">Elimina</button>
+            <button onclick="admin.saveProd()" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg mb-3 shadow hover:bg-green-800">Salva Modifiche</button>
+            <button onclick="admin.deleteProd()" id="btn-del" class="w-full text-red-500 text-xs hover:underline py-2">Elimina Definitivamente</button>
         </div>
     </div>
 
-    <div id="toast-container" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-[100]"></div>
+    <div id="toast-container" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-[150] w-max max-w-sm text-center"></div>
 
     <script src="script.js"></script>
 </body>
