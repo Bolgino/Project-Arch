@@ -38,7 +38,7 @@
                         <span class="bg-yellow-400 text-black px-2 py-0.5 rounded text-xs font-bold">ADMIN MODE</span>
                         <button onclick="auth.logout()" class="hover:text-red-300 transition">Esci</button>
                     </div>
-                    <button id="login-btn" onclick="ui.modal('login-modal')" class="opacity-50 hover:opacity-100 text-xs">🔒</button>
+                    <button id="login-btn" onclick="ui.modal('login-modal')" class="opacity-50 hover:opacity-100 text-xs">🔒Login</button>
                 </div>
             </div>
         </div>
@@ -49,7 +49,7 @@
         <section id="view-shop" class="fade-in">
             <div class="text-center mb-10">
                 <h1 class="text-4xl font-extrabold text-green-900 mb-2">Magazzino Distintivi</h1>
-                <p class="text-gray-500">Seleziona il materiale. L'ordine verrà notificato ai Capi Gruppo.</p>
+                <p class="text-gray-500">Seleziona il materiale. L'ordine verrà notificato all'amministratore.</p>
             </div>
 
             <div class="mb-12">
@@ -88,7 +88,7 @@
                 <div class="lg:col-span-1 space-y-4">
                     <div class="bg-white p-6 rounded-xl shadow-sm text-center">
                         <div class="text-4xl">🛠</div>
-                        <h2 class="font-bold text-xl mt-2">Pannello Capi</h2>
+                        <h2 class="font-bold text-xl mt-2">Pannello Admin</h2>
                         <p class="text-xs text-gray-400">v2.0 Enterprise</p>
                     </div>
                     <nav class="space-y-2">
@@ -159,7 +159,7 @@
     <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white p-8 rounded-2xl w-96 shadow-2xl relative">
             <button onclick="ui.closeModals()" class="absolute top-4 right-4 text-gray-400 hover:text-black">&times;</button>
-            <h2 class="text-2xl font-bold text-green-800 mb-2 text-center">Area Capi</h2>
+            <h2 class="text-2xl font-bold text-green-800 mb-2 text-center">Area Admin</h2>
             <p class="text-center text-gray-500 mb-6 text-sm">Accesso riservato alla gestione</p>
             <input type="email" id="login-email" placeholder="Email" class="w-full p-3 border rounded-lg mb-3">
             <input type="password" id="login-pass" placeholder="Password" class="w-full p-3 border rounded-lg mb-6">
