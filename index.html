@@ -69,7 +69,7 @@
             <div class="flex justify-between items-end mb-6 border-b border-gray-300 pb-4">
                 <div>
                     <h1 class="text-4xl font-extrabold text-green-900">Magazzino</h1>
-                    <p class="text-gray-500 text-sm mt-1">Prendi solo ciò che serve, lascia meglio di come hai trovato.</p>
+                    <p class="text-gray-500 text-sm mt-1">Prendi solo ciò che serve, lascia il magazzino un po' migliore di come lo hai trovato.</p>
                 </div>
             </div>
 
@@ -80,7 +80,7 @@
                         <span class="text-gray-400 group-focus-within:text-green-600 transition text-lg">🔎</span>
                     </div>
                     <input type="text" id="search-bar" onkeyup="app.filterProducts()" 
-                           placeholder="Cerca equipaggiamento (es. Tenda, Accetta...)" 
+                           placeholder="Cerca equipaggiamento (es. Promessa,Scoperta...)" 
                            class="w-full pl-12 p-4 border-2 border-gray-200 rounded-2xl focus:border-green-600 focus:ring-4 focus:ring-green-100 outline-none transition shadow-sm bg-white text-gray-700 font-bold text-lg placeholder-gray-400">
                     
                     <button onclick="document.getElementById('search-bar').value = ''; app.filterProducts()" class="absolute inset-y-0 right-0 pr-4 text-gray-300 hover:text-red-500 font-bold cursor-pointer transition">✕</button>
@@ -181,7 +181,7 @@
             <button onclick="cart.empty()" class="w-full text-red-400 text-xs font-bold mb-4 hover:text-red-600 transition flex justify-center gap-1">
                 <span>🗑</span> SVUOTA TUTTO
             </button>
-            <input type="text" id="checkout-name" placeholder="Nome e Squadriglia/Branca" class="w-full p-3 border-2 border-gray-200 rounded-lg mb-3 text-sm focus:border-green-500 outline-none transition font-bold text-gray-700">
+            <input type="text" id="checkout-name" placeholder="Nome e Branca" class="w-full p-3 border-2 border-gray-200 rounded-lg mb-3 text-sm focus:border-green-500 outline-none transition font-bold text-gray-700">
             <button onclick="app.checkout()" class="w-full bg-green-700 text-white font-bold py-4 rounded-lg hover:bg-green-800 shadow-lg transition transform hover:-translate-y-1">CONFERMA PRELIEVO</button>
         </div>
     </div>
