@@ -100,7 +100,7 @@ const app = {
         document.getElementById('nav-public').classList.remove('hidden');
         document.getElementById('shop-products').innerHTML = state.products.map(p => `
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition flex flex-col h-full group" data-category="${p.categoria || 'Generale'}">
-                <div class="h-32 bg-gray-50 p-4 relative flex items-center justify-center">
+                <div class="h-28 md:h-32 bg-gray-50 p-4 relative flex items-center justify-center">
                     <img src="${p.foto_url || 'https://placehold.co/200?text=📦'}" class="max-h-full max-w-full object-contain mix-blend-multiply transition group-hover:scale-110 duration-300">
                     ${p.quantita_disponibile <= p.soglia_minima ? '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 shadow-sm animate-pulse">SCORTA BASSA</span>' : ''}
                 </div>
@@ -257,7 +257,7 @@ const admin = {
     
     // --- STOCK & RESTOCK ---
     renderStock() {
-        // AGGIORNAMENTO CONTATORE
+        // AGGIORNAMENTO CONTATORE (NUMERO DI TIPI/RIGHE)
         document.getElementById('admin-total-count').innerText = state.products.length;
 
         document.getElementById('admin-stock-list').innerHTML = state.products.map(p => `
@@ -273,18 +273,22 @@ const admin = {
             </div>
         `).join('');
     },
-    
-    // NUOVA FUNZIONE RICERCA ADMIN
+
+    // --- FUNZIONE DI FILTRO PER ADMIN (AGGIUNTA) ---
     filterStock() {
         const term = document.getElementById('admin-search-bar').value.toLowerCase().trim();
         const rows = document.querySelectorAll('#admin-stock-list > div');
         
         rows.forEach(row => {
+            // Cerchiamo il nome dell'oggetto all'interno del div
             const text = row.innerText.toLowerCase();
-            row.classList.toggle('hidden', !text.includes(term) && term !== '');
-            // Ripristina flex se visibile perché toggle 'hidden' potrebbe rompere il layout flex
-            if (!row.classList.contains('hidden')) row.classList.add('flex');
-            else row.classList.remove('flex');
+            if (text.includes(term)) {
+                row.classList.remove('hidden');
+                row.classList.add('flex'); // Ripristina layout flex
+            } else {
+                row.classList.add('hidden');
+                row.classList.remove('flex');
+            }
         });
     },
 
