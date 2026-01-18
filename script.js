@@ -11,16 +11,9 @@ const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
 // --- STATO ---
 const state = { cart: [], products: [], packs: [], user: null };
 
-// --- LOADER UTILS ---
+// --- LOADER ---
 const loader = {
-    phrases: [
-        "Sto calcolando l'azimut...",
-        "Sto orientando la cartina...",
-        "Accendo il fuoco...",
-        "Conto le scorte...",
-        "Monto la tenda...",
-        "Controllo i nodi..."
-    ],
+    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Accendo il fuoco...", "Conto le scorte...", "Controllo i nodi..."],
     show() {
         const el = document.getElementById('scout-loader');
         const txt = document.getElementById('loader-text');
@@ -55,6 +48,7 @@ const app = {
             admin.renderRestock();
             admin.renderPackBuilder();
             admin.checkMod();
+            admin.renderHistory(); // NUOVA FUNZIONE
         } else {
             this.renderShop();
             archive.load();
@@ -67,7 +61,6 @@ const app = {
         document.getElementById(`view-${view}`).classList.remove('hidden');
     },
 
-    // --- FUNZIONE DI RICERCA POTENZIATA ---
     filterProducts() {
         const term = document.getElementById('search-bar').value.toLowerCase().trim();
         const cards = document.querySelectorAll('#shop-products > div');
@@ -75,11 +68,9 @@ const app = {
 
         cards.forEach(card => {
             const title = card.querySelector('h4').innerText.toLowerCase();
-            
-            // Logica di ricerca
             if (title.includes(term)) {
                 card.classList.remove('hidden');
-                card.classList.add('flex'); // Mantiene il layout flex della card
+                card.classList.add('flex');
                 visibleCount++;
             } else {
                 card.classList.add('hidden');
@@ -87,7 +78,6 @@ const app = {
             }
         });
 
-        // Gestione messaggio "Nessun Risultato"
         const noRes = document.getElementById('no-results');
         if (noRes) {
             if (visibleCount === 0 && term !== '') {
@@ -96,32 +86,22 @@ const app = {
                 noRes.classList.add('hidden');
             }
         }
-    }, // <--- ECCO LA VIRGOLA CHE MANCAVA!
+    },
 
     renderShop() {
         document.getElementById('nav-public').classList.remove('hidden');
-        
         document.getElementById('shop-products').innerHTML = state.products.map(p => `
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition flex flex-col h-full group">
                 <div class="h-32 bg-gray-50 p-4 relative flex items-center justify-center">
                     <img src="${p.foto_url || 'https://placehold.co/200?text=📦'}" class="max-h-full max-w-full object-contain mix-blend-multiply transition group-hover:scale-110 duration-300">
-                    ${p.quantita_disponibile <= p.soglia_minima ? 
-                        '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 shadow-sm animate-pulse">SCORTA BASSA</span>' 
-                        : ''}
+                    ${p.quantita_disponibile <= p.soglia_minima ? '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 shadow-sm animate-pulse">SCORTA BASSA</span>' : ''}
                 </div>
-                
                 <div class="p-3 flex flex-col flex-grow">
                     <h4 class="font-bold text-sm leading-tight mb-1 text-gray-800 line-clamp-2 uppercase tracking-wide">${p.nome}</h4>
                     <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: <span class="text-green-700 font-bold text-lg">${p.quantita_disponibile}</span></p>
-                    
                     <div class="mt-auto flex items-center gap-1">
-                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" 
-                               class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-green-500 outline-none bg-gray-50 font-bold">
-                        
-                        <button onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" 
-                                class="flex-1 bg-green-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-green-700 transition shadow-sm active:transform active:scale-95">
-                            AGGIUNGI
-                        </button>
+                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-green-500 outline-none bg-gray-50 font-bold">
+                        <button onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 bg-green-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-green-700 transition shadow-sm active:transform active:scale-95">AGGIUNGI</button>
                     </div>
                 </div>
             </div>
@@ -133,17 +113,14 @@ const app = {
                     <h4 class="font-bold text-yellow-900 leading-tight text-lg">🎁 ${p.nome}</h4>
                     <span class="text-[10px] uppercase tracking-wide text-yellow-700 font-bold bg-yellow-100 px-1 rounded">Kit Pronto</span>
                 </div>
-                <button onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, 999)" 
-                        class="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-lg text-xs font-bold hover:bg-yellow-500 shadow-sm transform active:scale-95">
-                    PRENDI
-                </button>
+                <button onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, 999)" class="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-lg text-xs font-bold hover:bg-yellow-500 shadow-sm transform active:scale-95">PRENDI</button>
             </div>
         `).join('');
     },
 
     async checkout() {
         const name = document.getElementById('checkout-name').value;
-        if (!name || state.cart.length === 0) return ui.toast("Inserisci il tuo nome e riempi il carrello!", "error");
+        if (!name || state.cart.length === 0) return ui.toast("Inserisci nome e riempi zaino!", "error");
 
         loader.show(); 
         let details = `<h3>Prelievo di: ${name}</h3><ul>`;
@@ -179,7 +156,7 @@ const app = {
     }
 };
 
-// --- CART LOGIC ---
+// --- CART ---
 const cart = {
     add(id, name, type, qty, max) {
         if(isNaN(qty) || qty < 1) return ui.toast("Quantità non valida", "error");
@@ -213,7 +190,6 @@ const cart = {
 const archive = {
     async load() {
         const { data, error } = await _sb.from('archivio').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-        
         if (error) {
             const { data: dataBack } = await _sb.from('archivio').select('*').eq('status', 'approved');
             this.render(dataBack, 'archive-list');
@@ -249,18 +225,13 @@ const archive = {
         const ev = document.getElementById('mem-ev').value;
         const pl = document.getElementById('mem-pl').value;
         const tx = document.getElementById('mem-tx').value;
-        if (!ev || !tx) return ui.toast("Scrivi almeno evento e aneddoto!", "error");
+        if (!ev || !tx) return ui.toast("Compila tutto!", "error");
         
         const { error } = await _sb.from('archivio').insert([{ evento: ev, luogo: pl, aneddoto: tx, status: 'pending' }]);
         
-        if(error) {
-            console.error(error);
-            ui.toast("Errore invio (Controlla permessi RLS)", "error");
-        } else {
-            ui.toast("Ricordo inviato ai Capi per approvazione!", "success");
-            document.getElementById('mem-ev').value = "";
-            document.getElementById('mem-pl').value = "";
-            document.getElementById('mem-tx').value = "";
+        if(error) { ui.toast("Errore invio", "error"); }
+        else {
+            ui.toast("Inviato ai Capi!", "success");
             ui.closeModals();
         }
     }
@@ -272,6 +243,8 @@ const admin = {
         document.querySelectorAll('.admin-tab').forEach(e => e.classList.add('hidden'));
         document.getElementById(`admin-tab-${t}`).classList.remove('hidden');
     },
+    
+    // --- STOCK & RESTOCK ---
     renderStock() {
         document.getElementById('admin-stock-list').innerHTML = state.products.map(p => `
             <div class="flex justify-between items-center py-3 hover:bg-gray-50 px-2 transition border-b border-gray-100 last:border-0">
@@ -279,10 +252,7 @@ const admin = {
                     <img src="${p.foto_url || ''}" class="w-10 h-10 object-contain bg-white border rounded p-0.5">
                     <div>
                         <div class="font-bold text-gray-800">${p.nome}</div>
-                        <div class="text-xs text-gray-500 font-mono">
-                            Qty: <span class="${p.quantita_disponibile <= p.soglia_minima ? 'text-red-600 font-extrabold' : 'text-green-600 font-bold'}">${p.quantita_disponibile}</span> 
-                            | Min: ${p.soglia_minima}
-                        </div>
+                        <div class="text-xs text-gray-500 font-mono">Qty: ${p.quantita_disponibile} | Min: ${p.soglia_minima}</div>
                     </div>
                 </div>
                 <button onclick="admin.openEdit('${p.id}')" class="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1.5 rounded hover:bg-blue-100 transition">MODIFICA</button>
@@ -294,7 +264,7 @@ const admin = {
             <div class="bg-white border rounded-lg p-3 flex justify-between items-center shadow-sm hover:shadow-md transition">
                 <div class="truncate pr-2">
                     <div class="font-bold text-sm text-gray-700 truncate">${p.nome}</div>
-                    <div class="text-xs text-gray-400">Attuali: <span class="font-mono text-gray-600">${p.quantita_disponibile}</span></div>
+                    <div class="text-xs text-gray-400">Attuali: ${p.quantita_disponibile}</div>
                 </div>
                 <div class="flex items-center bg-blue-50 rounded-lg px-2 py-1 border border-blue-100">
                     <span class="text-blue-600 text-xs font-bold mr-2">+</span>
@@ -306,7 +276,6 @@ const admin = {
     async processRestock() {
         const inputs = document.querySelectorAll('.restock-input');
         let updates = [];
-        
         inputs.forEach(inp => {
             const val = parseInt(inp.value);
             if(val > 0) {
@@ -315,17 +284,16 @@ const admin = {
                 updates.push(_sb.from('oggetti').update({ quantita_disponibile: current + val }).eq('id', id));
             }
         });
-
-        if(updates.length === 0) return ui.toast("Nessuna quantità inserita", "error");
-
+        if(updates.length === 0) return ui.toast("Nessuna quantità", "error");
         loader.show();
         await Promise.all(updates);
         inputs.forEach(i => i.value = '');
-        ui.toast("Magazzino Rifornito!", "success");
+        ui.toast("Rifornito!", "success");
         await app.loadData();
         loader.hide();
     },
     
+    // --- PRODOTTO ---
     openEdit(id) {
         const p = state.products.find(x => x.id === id);
         document.getElementById('modal-prod-title').innerText = "Modifica Prodotto";
@@ -356,8 +324,6 @@ const admin = {
             if (!error) {
                 const { data } = _sb.storage.from(CONFIG.bucket).getPublicUrl(fileName);
                 imgUrl = data.publicUrl;
-            } else {
-                alert("Errore Upload: " + error.message);
             }
             document.getElementById('upload-loader').classList.add('hidden');
         }
@@ -375,13 +341,14 @@ const admin = {
         ui.toast("Salvato!", "success"); ui.closeModals(); app.loadData();
     },
     async deleteProd() {
-        if (!confirm("Eliminare definitivamente?")) return;
+        if (!confirm("Eliminare?")) return;
         await _sb.from('oggetti').delete().eq('id', document.getElementById('prod-id').value);
         ui.closeModals(); app.loadData();
     },
     
-    // --- PACKS & KITS ---
+    // --- KIT (MODIFICATO) ---
     renderPackBuilder() {
+        // Renderizza la lista di checkbox per la creazione (quella inline)
         document.getElementById('pack-items').innerHTML = state.products.map(p => `
             <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" value="${p.id}" class="pack-chk accent-yellow-500 w-4 h-4"> 
@@ -389,6 +356,7 @@ const admin = {
             </label>
         `).join('');
 
+        // Renderizza la lista dei kit esistenti con tasto MODIFICA
         const listEl = document.getElementById('admin-packs-list');
         if(state.packs.length === 0) {
             listEl.innerHTML = '<p class="text-xs text-gray-400 italic">Nessun kit creato.</p>';
@@ -396,7 +364,10 @@ const admin = {
             listEl.innerHTML = state.packs.map(k => `
                 <div class="flex justify-between items-center bg-white p-3 border rounded-lg shadow-sm hover:shadow-md transition">
                     <span class="font-bold text-sm text-gray-700 flex items-center gap-2">🎁 ${k.nome}</span>
-                    <button onclick="admin.deletePack('${k.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-3 py-1.5 rounded hover:bg-red-50 transition">ELIMINA</button>
+                    <div class="flex gap-2">
+                        <button onclick="admin.openEditPack('${k.id}')" class="text-blue-500 hover:text-blue-700 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-50 transition">MODIFICA</button>
+                        <button onclick="admin.deletePack('${k.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-3 py-1.5 rounded hover:bg-red-50 transition">ELIMINA</button>
+                    </div>
                 </div>
             `).join('');
         }
@@ -404,32 +375,66 @@ const admin = {
     async createPack() {
         const name = document.getElementById('pack-name').value;
         const chks = document.querySelectorAll('.pack-chk:checked');
-        if (!name || !chks.length) return ui.toast("Nome o oggetti mancanti", "error");
+        if (!name || !chks.length) return ui.toast("Dati mancanti", "error");
         
-        const { data, error } = await _sb.from('pacchetti').insert([{ nome: name }]).select();
-        if(error) return ui.toast("Errore creazione kit", "error");
-
+        const { data } = await _sb.from('pacchetti').insert([{ nome: name }]).select();
         const items = Array.from(chks).map(c => ({ pacchetto_id: data[0].id, oggetto_id: c.value, quantita_necessaria: 1 }));
         await _sb.from('componenti_pacchetto').insert(items);
         
-        ui.toast("Kit Creato", "success"); 
-        document.getElementById('pack-name').value = ""; 
+        ui.toast("Creato!", "success"); document.getElementById('pack-name').value = ""; app.loadData();
+    },
+    async openEditPack(id) {
+        // 1. Trova il pacchetto
+        const pack = state.packs.find(k => k.id === id);
+        if(!pack) return;
+
+        // 2. Trova i componenti attuali
+        const { data: currentItems } = await _sb.from('componenti_pacchetto').select('oggetto_id').eq('pacchetto_id', id);
+        const currentIds = currentItems.map(i => i.oggetto_id);
+
+        // 3. Popola il Modal
+        document.getElementById('edit-kit-id').value = id;
+        document.getElementById('edit-kit-name').value = pack.nome;
+        
+        // 4. Genera Checkbox nel Modal (con quelli attivi selezionati)
+        document.getElementById('edit-kit-items').innerHTML = state.products.map(p => `
+            <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-white cursor-pointer ${currentIds.includes(p.id) ? 'bg-yellow-50 border-yellow-300' : ''}">
+                <input type="checkbox" value="${p.id}" class="edit-pack-chk accent-yellow-500 w-4 h-4" ${currentIds.includes(p.id) ? 'checked' : ''}> 
+                <span class="font-medium">${p.nome}</span>
+            </label>
+        `).join('');
+
+        ui.modal('modal-kit');
+    },
+    async saveEditPack() {
+        const id = document.getElementById('edit-kit-id').value;
+        const name = document.getElementById('edit-kit-name').value;
+        const chks = document.querySelectorAll('.edit-pack-chk:checked');
+
+        if(!name || !chks.length) return ui.toast("Serve nome e almeno un oggetto", "error");
+
+        // 1. Aggiorna Nome
+        await _sb.from('pacchetti').update({ nome: name }).eq('id', id);
+
+        // 2. Rimuovi vecchi componenti (metodo brutale ma efficace: cancella e riscrivi)
+        await _sb.from('componenti_pacchetto').delete().eq('pacchetto_id', id);
+
+        // 3. Inserisci nuovi componenti
+        const items = Array.from(chks).map(c => ({ pacchetto_id: id, oggetto_id: c.value, quantita_necessaria: 1 }));
+        await _sb.from('componenti_pacchetto').insert(items);
+
+        ui.toast("Kit Aggiornato!", "success");
+        ui.closeModals();
         app.loadData();
     },
     async deletePack(id) {
-        if(!confirm("Vuoi davvero eliminare questo Kit?")) return;
-        
+        if(!confirm("Eliminare Kit?")) return;
         await _sb.from('componenti_pacchetto').delete().eq('pacchetto_id', id);
-        const { error } = await _sb.from('pacchetti').delete().eq('id', id);
-        
-        if(error) ui.toast("Errore eliminazione", "error");
-        else {
-            ui.toast("Kit Eliminato", "success");
-            app.loadData();
-        }
+        await _sb.from('pacchetti').delete().eq('id', id);
+        ui.toast("Eliminato", "success"); app.loadData();
     },
     
-    // --- MODERAZIONE ---
+    // --- MODERAZIONE & STORICO (NUOVO) ---
     async checkMod() {
         const { data } = await _sb.from('archivio').select('*').eq('status', 'pending');
         if (data && data.length) {
@@ -438,14 +443,48 @@ const admin = {
             archive.render(data, 'mod-list', true);
         } else {
             document.getElementById('mod-badge').classList.add('hidden');
-            document.getElementById('mod-list').innerHTML = "<p class='text-gray-400 italic text-center py-4'>Tutto tranquillo, nessun ricordo da approvare.</p>";
+            document.getElementById('mod-list').innerHTML = "<p class='text-gray-400 italic text-center py-4'>Tutto tranquillo.</p>";
         }
     },
+    // Funzione per la nuova TAB DIARIO
+    async renderHistory() {
+        // Scarica TUTTI i ricordi ordinati per data
+        const { data } = await _sb.from('archivio').select('*').order('created_at', { ascending: false });
+        
+        if(!data || data.length === 0) {
+            document.getElementById('history-list').innerHTML = "<p class='text-gray-400 text-center'>Nessun ricordo nel diario.</p>";
+            return;
+        }
+
+        document.getElementById('history-list').innerHTML = data.map(m => `
+            <div class="bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-start">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-[10px] font-mono text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span>
+                        <span class="text-xs font-bold px-2 py-0.5 rounded ${m.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} uppercase">${m.status === 'approved' ? 'Pubblicato' : 'In Attesa'}</span>
+                    </div>
+                    <div class="font-bold text-gray-800 text-sm">${m.evento} <span class="font-normal text-gray-500">(${m.luogo})</span></div>
+                    <div class="text-xs text-gray-600 italic mt-1 line-clamp-1">"${m.aneddoto}"</div>
+                </div>
+                <div class="flex flex-col gap-1">
+                    ${m.status !== 'approved' ? `<button onclick="admin.memAction('${m.id}', 'approved')" class="text-green-600 text-xs font-bold hover:underline">Approva</button>` : ''}
+                    <button onclick="admin.memAction('${m.id}', 'del')" class="text-red-500 text-xs font-bold hover:underline">Elimina</button>
+                </div>
+            </div>
+        `).join('');
+    },
     async memAction(id, action) {
-        if (action === 'del') await _sb.from('archivio').delete().eq('id', id);
-        else await _sb.from('archivio').update({ status: 'approved' }).eq('id', id);
+        if (action === 'del') {
+            if(!confirm("Cancellare definitivamente questo ricordo?")) return;
+            await _sb.from('archivio').delete().eq('id', id);
+        } else {
+            await _sb.from('archivio').update({ status: 'approved' }).eq('id', id);
+        }
+        
+        // Ricarica sia la moderazione che lo storico
         this.checkMod();
-        ui.toast("Azione effettuata", "success");
+        this.renderHistory();
+        ui.toast("Fatto", "success");
     }
 };
 
@@ -465,7 +504,7 @@ const auth = {
             email: document.getElementById('log-mail').value,
             password: document.getElementById('log-pass').value
         });
-        if (!error) location.reload(); else ui.toast("Email o password errati", "error");
+        if (!error) location.reload(); else ui.toast("Dati errati", "error");
     },
     logout() { _sb.auth.signOut().then(() => location.reload()); }
 };
