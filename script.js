@@ -1,7 +1,7 @@
 // --- CONFIGURAZIONE ---
 const CONFIG = {
-    url: "https://jmildwxjaviqkrkhjzhl.supabase.co", // TUO URL
-    key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", // TUA KEY
+    url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
+    key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", 
     adminEmail: "marcobolge@gmail.com",
     bucket: "immagini-oggetti"
 };
@@ -30,28 +30,31 @@ const loader = {
     hide() {
         setTimeout(() => {
             document.getElementById('scout-loader').classList.add('opacity-0', 'pointer-events-none');
-        }, 2000); // MINIMO 2 SECONDI DI LOADER
+        }, 2000); 
     }
 };
 
 // --- APP CONTROLLER ---
 const app = {
     async init() {
-        loader.show(); // Mostra loader
+        loader.show(); 
         await auth.check();
         await this.loadData();
-        loader.hide(); // Nascondi dopo caricamento
+        loader.hide(); 
     },
 
     async loadData() {
+        // Carico prodotti
         const { data: p } = await _sb.from('oggetti').select('*').order('nome');
-        const { data: k } = await _sb.from('pacchetti').select('*');
         state.products = p || [];
+        
+        // Carico pacchetti
+        const { data: k } = await _sb.from('pacchetti').select('*');
         state.packs = k || [];
         
         if (state.user) {
             admin.renderStock();
-            admin.renderRestock(); // Renderizza scheda rifornimento
+            admin.renderRestock();
             admin.renderPackBuilder();
             admin.checkMod();
         } else {
@@ -63,11 +66,6 @@ const app = {
     nav(view) {
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
-        
-        // Aggiorna visibilità navbar pubblica
-        if(view === 'shop' || view === 'archive') {
-           // Logica nav attiva
-        }
     },
 
     renderShop() {
@@ -119,7 +117,7 @@ const app = {
         const name = document.getElementById('checkout-name').value;
         if (!name || state.cart.length === 0) return ui.toast("Inserisci il tuo nome e riempi il carrello!", "error");
 
-        loader.show(); // Mostra loader durante checkout
+        loader.show(); 
         let details = `<h3>Prelievo di: ${name}</h3><ul>`;
 
         for (let i of state.cart) {
@@ -137,7 +135,6 @@ const app = {
         }
         details += `</ul>`;
 
-        // Notifica Admin (Opzionale se hai la funzione configurata)
         try {
             await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
                 method: 'POST',
@@ -187,9 +184,18 @@ const cart = {
 // --- ARCHIVE ---
 const archive = {
     async load() {
-        // Carica solo approvati
-        const { data } = await _sb.from('archivio').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-        this.render(data, 'archive-list');
+        // Fix per l'errore 400: Assicurarsi che la tabella archivio abbia la colonna created_at.
+        // Se non ce l'ha, lanciare lo script SQL fornito.
+        const { data, error } = await _sb.from('archivio').select('*').eq('status', 'approved').order('created_at', { ascending: false });
+        
+        if (error) {
+            console.error("Errore Archivio:", error);
+            // Fallback se fallisce l'ordinamento per created_at (es. colonna mancante)
+            const { data: dataBack } = await _sb.from('archivio').select('*').eq('status', 'approved');
+            this.render(dataBack, 'archive-list');
+        } else {
+            this.render(data, 'archive-list');
+        }
     },
     render(data, elId, isAdmin = false) {
         const el = document.getElementById(elId);
@@ -218,7 +224,6 @@ const archive = {
         const tx = document.getElementById('mem-tx').value;
         if (!ev || !tx) return ui.toast("Scrivi almeno evento e aneddoto!", "error");
         
-        // NOTA PER L'UTENTE: Assicurati che su Supabase ci sia una policy INSERT per public sulla tabella 'archivio'
         const { error } = await _sb.from('archivio').insert([{ evento: ev, luogo: pl, aneddoto: tx, status: 'pending' }]);
         
         if(error) {
@@ -226,7 +231,6 @@ const archive = {
             ui.toast("Errore invio (Controlla permessi RLS)", "error");
         } else {
             ui.toast("Ricordo inviato ai Capi per approvazione!", "success");
-            // Pulisci form
             document.getElementById('mem-ev').value = "";
             document.getElementById('mem-pl').value = "";
             document.getElementById('mem-tx').value = "";
@@ -258,7 +262,6 @@ const admin = {
             </div>
         `).join('');
     },
-    // NUOVA FUNZIONE RIFORNIMENTO
     renderRestock() {
         document.getElementById('admin-restock-list').innerHTML = state.products.map(p => `
             <div class="bg-white border rounded p-3 flex justify-between items-center shadow-sm">
@@ -290,15 +293,12 @@ const admin = {
 
         loader.show();
         await Promise.all(updates);
-        
-        // Reset inputs
         inputs.forEach(i => i.value = '');
         ui.toast("Magazzino Rifornito!", "success");
-        await app.loadData(); // Ricarica dati
+        await app.loadData();
         loader.hide();
     },
     
-    // Edit standard
     openEdit(id) {
         const p = state.products.find(x => x.id === id);
         document.getElementById('modal-prod-title').innerText = "Modifica Prodotto";
@@ -353,22 +353,56 @@ const admin = {
         ui.closeModals(); app.loadData();
     },
     
-    // Packs
+    // --- PACKS & KITS (LOGICA AGGIORNATA) ---
     renderPackBuilder() {
+        // 1. Render check box per nuovo kit
         document.getElementById('pack-items').innerHTML = state.products.map(p => `
             <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-gray-50 cursor-pointer">
                 <input type="checkbox" value="${p.id}" class="pack-chk accent-yellow-500"> ${p.nome}
             </label>
         `).join('');
+
+        // 2. Render lista kit esistenti per cancellazione
+        const listEl = document.getElementById('admin-packs-list');
+        if(state.packs.length === 0) {
+            listEl.innerHTML = '<p class="text-xs text-gray-400 italic">Nessun kit creato.</p>';
+        } else {
+            listEl.innerHTML = state.packs.map(k => `
+                <div class="flex justify-between items-center bg-white p-2 border rounded shadow-sm">
+                    <span class="font-bold text-sm text-gray-700">🎁 ${k.nome}</span>
+                    <button onclick="admin.deletePack('${k.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-2 py-1 rounded hover:bg-red-50">ELIMINA</button>
+                </div>
+            `).join('');
+        }
     },
     async createPack() {
         const name = document.getElementById('pack-name').value;
         const chks = document.querySelectorAll('.pack-chk:checked');
         if (!name || !chks.length) return ui.toast("Nome o oggetti mancanti", "error");
-        const { data } = await _sb.from('pacchetti').insert([{ nome: name }]).select();
+        
+        const { data, error } = await _sb.from('pacchetti').insert([{ nome: name }]).select();
+        if(error) return ui.toast("Errore creazione kit", "error");
+
         const items = Array.from(chks).map(c => ({ pacchetto_id: data[0].id, oggetto_id: c.value, quantita_necessaria: 1 }));
         await _sb.from('componenti_pacchetto').insert(items);
-        ui.toast("Kit Creato", "success"); app.loadData();
+        
+        ui.toast("Kit Creato", "success"); 
+        document.getElementById('pack-name').value = ""; // Reset
+        app.loadData();
+    },
+    async deletePack(id) {
+        if(!confirm("Vuoi davvero eliminare questo Kit?")) return;
+        
+        // Prima cancello i componenti (se non c'è cascade su supabase)
+        await _sb.from('componenti_pacchetto').delete().eq('pacchetto_id', id);
+        // Poi il pacchetto
+        const { error } = await _sb.from('pacchetti').delete().eq('id', id);
+        
+        if(error) ui.toast("Errore eliminazione", "error");
+        else {
+            ui.toast("Kit Eliminato", "success");
+            app.loadData();
+        }
     },
     
     // Moderazione Ricordi
