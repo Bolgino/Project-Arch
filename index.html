@@ -5,498 +5,178 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Punto ArchiQuadro | System</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.tailwindcss.com"></script> <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Outfit', sans-serif; background-color: #f3f4f6; }
-        .scout-green { background-color: #1b5e20; }
-        .scout-gold { color: #fbc02d; }
-        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        body { font-family: 'Outfit', sans-serif; background-color: #f8fafc; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Nascondi scrollbar ma permetti scroll */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* Nascondi scrollbar carrello */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #16a34a; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="text-gray-800">
+<body class="text-gray-800 h-screen flex flex-col">
 
-    <nav class="scout-green text-white sticky top-0 z-50 shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav class="bg-green-900 text-white sticky top-0 z-40 shadow-xl">
+        <div class="max-w-7xl mx-auto px-4">
             <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-2 cursor-pointer" onclick="location.reload()">
-                    <span class="text-2xl">⚜️</span>
-                    <span class="font-bold text-xl tracking-wider">ARCHIQUADRO</span>
+                <div class="flex items-center gap-2 font-bold text-xl tracking-wider cursor-pointer" onclick="location.reload()">
+                    <span>⚜️ ARCHIQUADRO</span>
                 </div>
-                <div class="flex items-center gap-4">
-                    <div id="public-menu" class="flex gap-4 text-sm font-medium">
-                        <button onclick="app.nav('shop')" class="hover:text-yellow-300 transition">Magazzino</button>
-                        <button onclick="app.nav('archive')" class="hover:text-yellow-300 transition">Memoria</button>
-                        <button onclick="app.toggleCart()" class="bg-white text-green-900 px-3 py-1 rounded-full hover:bg-yellow-300 transition flex items-center gap-2">
-                            🛒 <span id="cart-count">0</span>
-                        </button>
-                    </div>
-                    <div id="admin-menu" class="hidden flex gap-4 text-sm font-medium items-center">
-                        <span class="bg-yellow-400 text-black px-2 py-0.5 rounded text-xs font-bold">ADMIN MODE</span>
-                        <button onclick="auth.logout()" class="hover:text-red-300 transition">Esci</button>
-                    </div>
-                    <button id="login-btn" onclick="ui.modal('login-modal')" class="opacity-50 hover:opacity-100 text-xs">🔒Login</button>
+                
+                <div id="nav-public" class="flex items-center gap-4">
+                    <button onclick="app.nav('shop')" class="hover:text-yellow-400 transition text-sm font-medium">Magazzino</button>
+                    <button onclick="app.nav('archive')" class="hover:text-yellow-400 transition text-sm font-medium">Memoria</button>
+                    <button onclick="ui.toggleCart()" class="bg-white text-green-900 px-3 py-1 rounded-full hover:bg-yellow-300 transition flex items-center gap-2 shadow-sm text-sm font-bold">
+                        🛒 <span id="cart-count">0</span>
+                    </button>
+                    <button onclick="ui.modal('login-modal')" class="opacity-60 hover:opacity-100 text-xs">🔒</button>
+                </div>
+
+                <div id="nav-admin" class="hidden flex items-center gap-4">
+                    <span class="bg-yellow-500 text-black px-2 py-0.5 rounded text-xs font-bold">ADMIN</span>
+                    <button onclick="auth.logout()" class="text-sm hover:text-red-300">Esci</button>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-4 py-8 min-h-screen">
+    <main class="flex-grow max-w-7xl mx-auto w-full px-4 py-6">
 
         <section id="view-shop" class="fade-in">
-            <div class="text-center mb-10">
-                <h1 class="text-4xl font-extrabold text-green-900 mb-2">Magazzino Distintivi</h1>
-                <p class="text-gray-500">Seleziona il materiale. L'ordine verrà notificato all'amministratore.</p>
+            <div class="flex justify-between items-end mb-6 border-b pb-4">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-green-900">Magazzino</h1>
+                    <p class="text-gray-500 text-sm">Seleziona i prodotti da prelevare.</p>
+                </div>
             </div>
 
-            <div class="mb-12">
-                <h3 class="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">🎁 Pacchetti Rapidi</h3>
-                <div id="shop-packs" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
-            </div>
+            <div id="shop-packs" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10"></div>
 
-            <h3 class="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">📦 Singoli Articoli</h3>
-            <div id="shop-products" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6"></div>
+            <h3 class="font-bold text-gray-700 mb-4">📦 Articoli Singoli</h3>
+            <div id="shop-products" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
         </section>
 
-        <section id="view-archive" class="hidden fade-in">
-            <div class="max-w-3xl mx-auto">
-                <div class="text-center mb-8">
-                    <h2 class="text-3xl font-bold text-green-900">Il Muretto dei Ricordi</h2>
-                    <p class="text-gray-500">Lascia una traccia. I ricordi verranno pubblicati dopo approvazione.</p>
-                </div>
-
-                <div class="bg-white p-6 rounded-xl shadow-md mb-8 border-l-4 border-green-600">
-                    <h3 class="font-bold mb-4">Aggiungi un ricordo</h3>
-                    <div class="grid gap-4">
-                        <input type="text" id="mem-evento" placeholder="Evento (es. Campo Estivo 2023)" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none">
-                        <input type="text" id="mem-luogo" placeholder="Luogo" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none">
-                        <textarea id="mem-text" placeholder="Racconta un aneddoto..." class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none" rows="3"></textarea>
-                        <button onclick="archive.submit()" class="bg-green-700 text-white font-bold py-2 rounded-lg hover:bg-green-800 transition">INVIA RICORDO</button>
-                    </div>
-                </div>
-
-                <div id="archive-list" class="space-y-6"></div>
+        <section id="view-archive" class="hidden fade-in max-w-4xl mx-auto">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-green-900">Il Muretto dei Ricordi</h2>
+                <button onclick="ui.modal('modal-add-memory')" class="mt-4 bg-green-700 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-green-800 transition transform hover:scale-105">
+                    ✏️ Scrivi un Ricordo
+                </button>
             </div>
+            <div id="archive-list" class="space-y-6"></div>
         </section>
 
         <section id="view-admin" class="hidden fade-in">
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                
-                <div class="lg:col-span-1 space-y-4">
-                    <div class="bg-white p-6 rounded-xl shadow-sm text-center">
-                        <div class="text-4xl">🛠</div>
-                        <h2 class="font-bold text-xl mt-2">Pannello Admin</h2>
-                        <p class="text-xs text-gray-400">v2.0 Enterprise</p>
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div class="lg:col-span-1 space-y-2">
+                    <div class="bg-white p-4 rounded-lg shadow text-center mb-4">
+                        <div class="text-3xl">🛠</div>
+                        <h2 class="font-bold">Dashboard</h2>
                     </div>
-                    <nav class="space-y-2">
-                        <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded-lg bg-white hover:bg-green-50 font-medium shadow-sm transition">📦 Gestione Scorte & Foto</button>
-                        <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded-lg bg-white hover:bg-green-50 font-medium shadow-sm transition">🎁 Crea Pacchetti</button>
-                        <button onclick="admin.tab('mod')" class="w-full text-left p-3 rounded-lg bg-white hover:bg-green-50 font-medium shadow-sm transition flex justify-between">
-                            🛡 Moderazione <span id="mod-badge" class="bg-red-500 text-white text-xs px-2 py-1 rounded-full hidden">0</span>
-                        </button>
-                    </nav>
+                    <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-medium shadow-sm border-l-4 border-transparent hover:border-green-600">📦 Gestione Prodotti</button>
+                    <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-medium shadow-sm border-l-4 border-transparent hover:border-yellow-500">🎁 Crea Pacchetti</button>
+                    <button onclick="admin.tab('mod')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-medium shadow-sm border-l-4 border-transparent hover:border-red-500 flex justify-between">
+                        🛡 Moderazione <span id="mod-badge" class="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+                    </button>
                 </div>
 
                 <div class="lg:col-span-3">
-                    
-                    <div id="admin-tab-stock" class="admin-tab bg-white p-6 rounded-xl shadow-md">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-xl font-bold">Inventario Completo</h3>
-                            <button onclick="ui.modal('modal-new-prod')" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700">+ Nuovo Oggetto</button>
+                    <div id="admin-tab-stock" class="admin-tab bg-white p-6 rounded-xl shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg">Inventario & Foto</h3>
+                            <button onclick="admin.openNewProd()" class="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700">+ Nuovo</button>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm text-left">
-                                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                                    <tr>
-                                        <th class="p-3">Oggetto</th>
-                                        <th class="p-3">Quantità</th>
-                                        <th class="p-3">Soglia</th>
-                                        <th class="p-3">Azioni</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="admin-stock-list" class="divide-y"></tbody>
-                            </table>
-                        </div>
+                        <div id="admin-stock-list" class="divide-y text-sm"></div>
                     </div>
 
-                    <div id="admin-tab-packs" class="hidden admin-tab bg-white p-6 rounded-xl shadow-md">
-                        <h3 class="text-xl font-bold mb-4">Costruttore Pacchetti</h3>
-                        <div class="bg-gray-50 p-4 rounded-lg mb-6">
-                            <input type="text" id="new-pack-name" placeholder="Nome del Kit (es. Kit Promessa)" class="w-full p-2 border rounded mb-4">
-                            <div id="pack-builder-items" class="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto mb-4"></div>
-                            <button onclick="admin.createPack()" class="w-full bg-yellow-400 text-black font-bold py-2 rounded hover:bg-yellow-500">SALVA PACCHETTO</button>
-                        </div>
+                    <div id="admin-tab-packs" class="admin-tab hidden bg-white p-6 rounded-xl shadow">
+                        <h3 class="font-bold text-lg mb-4">Crea Kit</h3>
+                        <input type="text" id="pack-name" placeholder="Nome Kit (es. Promessa)" class="w-full p-2 border rounded mb-4">
+                        <div id="pack-items" class="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto mb-4 border p-2 rounded"></div>
+                        <button onclick="admin.createPack()" class="w-full bg-yellow-400 font-bold py-2 rounded">Salva Kit</button>
                     </div>
 
-                    <div id="admin-tab-mod" class="hidden admin-tab bg-white p-6 rounded-xl shadow-md">
-                        <h3 class="text-xl font-bold mb-4">Approvazione Ricordi</h3>
-                        <p class="text-sm text-gray-500 mb-4">Questi aneddoti non sono ancora visibili al pubblico.</p>
+                    <div id="admin-tab-mod" class="admin-tab hidden bg-white p-6 rounded-xl shadow">
+                        <h3 class="font-bold text-lg mb-4">Ricordi in Attesa</h3>
                         <div id="mod-list" class="space-y-4"></div>
                     </div>
-
                 </div>
             </div>
         </section>
 
     </main>
 
-    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 p-6 flex flex-col">
-        <div class="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 class="text-xl font-bold">Il tuo Ordine</h2>
-            <button onclick="app.toggleCart()" class="text-gray-500 hover:text-red-500 text-2xl">&times;</button>
+    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 flex flex-col">
+        <div class="p-4 border-b flex justify-between items-center bg-green-50">
+            <h2 class="font-bold text-green-900">Il tuo Ordine</h2>
+            <button onclick="ui.toggleCart()" class="text-2xl text-gray-400 hover:text-red-500">&times;</button>
         </div>
-        <div id="cart-items" class="flex-1 overflow-y-auto space-y-4"></div>
-        <div class="mt-auto pt-6 border-t">
-            <label class="block text-xs font-bold text-gray-500 mb-1">CHI PRELEVA?</label>
-            <input type="text" id="checkout-user" placeholder="Nome e Branca" class="w-full p-3 border rounded-lg mb-4">
-            <button onclick="app.checkout()" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg hover:bg-green-800">CONFERMA PRELIEVO</button>
-        </div>
-    </div>
-
-    <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white p-8 rounded-2xl w-96 shadow-2xl relative">
-            <button onclick="ui.closeModals()" class="absolute top-4 right-4 text-gray-400 hover:text-black">&times;</button>
-            <h2 class="text-2xl font-bold text-green-800 mb-2 text-center">Area Admin</h2>
-            <p class="text-center text-gray-500 mb-6 text-sm">Accesso riservato alla gestione</p>
-            <input type="email" id="login-email" placeholder="Email" class="w-full p-3 border rounded-lg mb-3">
-            <input type="password" id="login-pass" placeholder="Password" class="w-full p-3 border rounded-lg mb-6">
-            <button onclick="auth.login()" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg hover:bg-green-800">ENTRA</button>
+        <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+        <div class="p-4 border-t bg-gray-50">
+            <button onclick="cart.empty()" class="w-full text-red-500 text-xs font-bold mb-4 hover:underline text-center">SVUOTA CARRELLO 🗑</button>
+            <input type="text" id="checkout-name" placeholder="Tuo Nome e Branca" class="w-full p-3 border rounded mb-3 text-sm">
+            <button onclick="app.checkout()" class="w-full bg-green-700 text-white font-bold py-3 rounded hover:bg-green-800 shadow-lg">CONFERMA PRELIEVO</button>
         </div>
     </div>
 
-    <div id="modal-edit-prod" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h3 class="font-bold text-lg mb-4">Modifica Prodotto</h3>
-            <input type="hidden" id="edit-id">
+    <div id="login-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-80 relative">
+            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
+            <h2 class="text-center font-bold text-xl mb-6">Area Capi</h2>
+            <input type="email" id="log-mail" placeholder="Email" class="w-full p-2 border rounded mb-3">
+            <input type="password" id="log-pass" placeholder="Password" class="w-full p-2 border rounded mb-6">
+            <button onclick="auth.login()" class="w-full bg-green-700 text-white font-bold py-2 rounded">Entra</button>
+        </div>
+    </div>
+
+    <div id="modal-add-memory" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md relative">
+            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
+            <h3 class="font-bold text-lg mb-4 text-green-800">Nuovo Ricordo</h3>
+            <input type="text" id="mem-ev" placeholder="Evento (es. Campo 2024)" class="w-full p-2 border rounded mb-3">
+            <input type="text" id="mem-pl" placeholder="Luogo" class="w-full p-2 border rounded mb-3">
+            <textarea id="mem-tx" rows="4" placeholder="Scrivi qui il tuo aneddoto..." class="w-full p-2 border rounded mb-4"></textarea>
+            <button onclick="archive.submit()" class="w-full bg-green-600 text-white font-bold py-2 rounded">Invia per Approvazione</button>
+        </div>
+    </div>
+
+    <div id="modal-prod" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md relative max-h-screen overflow-y-auto">
+            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
+            <h3 class="font-bold text-lg mb-4" id="modal-prod-title">Prodotto</h3>
+            <input type="hidden" id="prod-id">
+            
             <label class="text-xs font-bold text-gray-500">Nome</label>
-            <input type="text" id="edit-nome" class="w-full p-2 border rounded mb-2">
-            <label class="text-xs font-bold text-gray-500">Foto URL</label>
-            <input type="text" id="edit-foto" class="w-full p-2 border rounded mb-2 text-sm text-gray-600">
-            <div class="flex gap-4 mb-4">
+            <input type="text" id="prod-name" class="w-full p-2 border rounded mb-3">
+            
+            <div class="flex gap-2 mb-3">
                 <div class="w-1/2">
                     <label class="text-xs font-bold text-gray-500">Quantità</label>
-                    <input type="number" id="edit-qty" class="w-full p-2 border rounded">
+                    <input type="number" id="prod-qty" class="w-full p-2 border rounded">
                 </div>
                 <div class="w-1/2">
                     <label class="text-xs font-bold text-gray-500">Soglia Min</label>
-                    <input type="number" id="edit-soglia" class="w-full p-2 border rounded">
+                    <input type="number" id="prod-min" class="w-full p-2 border rounded">
                 </div>
             </div>
-            <div class="flex gap-2">
-                <button onclick="admin.saveEdit()" class="flex-1 bg-green-600 text-white py-2 rounded">Salva</button>
-                <button onclick="ui.closeModals()" class="flex-1 bg-gray-200 py-2 rounded">Annulla</button>
+
+            <label class="text-xs font-bold text-gray-500">Foto</label>
+            <div class="flex gap-2 items-center mb-2">
+                <input type="file" id="prod-file" class="text-xs w-full" accept="image/*">
+                <span id="upload-loader" class="loader hidden"></span>
             </div>
-            <button onclick="admin.deleteProduct()" class="w-full mt-2 text-red-500 text-xs hover:underline">Elimina Prodotto</button>
+            <input type="text" id="prod-img" placeholder="URL Immagine (o carica sopra)" class="w-full p-2 border rounded text-xs text-gray-500 mb-4 bg-gray-50">
+
+            <button onclick="admin.saveProd()" class="w-full bg-green-700 text-white font-bold py-2 rounded mb-2">Salva Prodotto</button>
+            <button onclick="admin.deleteProd()" id="btn-del" class="w-full text-red-500 text-xs hover:underline">Elimina</button>
         </div>
     </div>
 
-    <div id="modal-new-prod" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl">
-            <h3 class="font-bold text-lg mb-4">Nuovo Prodotto</h3>
-            <input type="text" id="new-n" placeholder="Nome" class="w-full p-2 border rounded mb-2">
-            <input type="text" id="new-f" placeholder="URL Foto" class="w-full p-2 border rounded mb-2">
-            <div class="flex gap-2 mb-4">
-                <input type="number" id="new-q" placeholder="Qty" class="w-1/2 p-2 border rounded">
-                <input type="number" id="new-s" placeholder="Soglia" class="w-1/2 p-2 border rounded">
-            </div>
-            <button onclick="admin.createProduct()" class="w-full bg-green-600 text-white py-2 rounded mb-2">Crea</button>
-            <button onclick="ui.closeModals()" class="w-full bg-gray-200 py-2 rounded">Annulla</button>
-        </div>
-    </div>
+    <div id="toast-container" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-[100]"></div>
 
-    <div id="toast-box" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-50"></div>
-
-<script>
-    // --- CONFIGURAZIONE ---
-    const CFG = {
-        url: "https://jmildwxjaviqkrkhjzhl.supabase.co",
-        key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", 
-        adminEmail: "marcobolge@gmail.com"
-    };
-    const _sb = supabase.createClient(CFG.url, CFG.key);
-    
-    // --- STATE ---
-    const state = { cart: [], products: [], packs: [], user: null };
-
-    // --- LOGIC ---
-    const app = {
-        async init() {
-            await auth.check();
-            this.loadData();
-        },
-        
-        async loadData() {
-            const { data: p } = await _sb.from('oggetti').select('*').order('nome');
-            const { data: pk } = await _sb.from('pacchetti').select('*');
-            state.products = p || [];
-            state.packs = pk || [];
-            this.renderShop();
-            if(state.user) admin.refresh(); // Se admin, carica dati admin
-            else archive.loadPublic(); // Se pubblico, carica solo approvati
-        },
-
-        nav(view) {
-            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`view-${view}`).classList.remove('hidden');
-        },
-
-        renderShop() {
-            // Prodotti
-            document.getElementById('shop-products').innerHTML = state.products.map(p => `
-                <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden hover:shadow-lg transition group">
-                    <div class="h-32 bg-gray-50 p-4 relative">
-                        <img src="${p.foto_url || 'https://placehold.co/200'}" class="w-full h-full object-contain mix-blend-multiply">
-                        ${p.quantita_disponibile <= p.soglia_minima ? '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full">SCARSO</span>' : ''}
-                    </div>
-                    <div class="p-4">
-                        <h4 class="font-bold text-gray-800 leading-tight mb-2 h-10 overflow-hidden">${p.nome}</h4>
-                        <div class="flex justify-between items-center">
-                            <span class="text-xs text-gray-500 font-mono">${p.quantita_disponibile} pz</span>
-                            <button onclick="cart.add('${p.id}', '${p.nome}', 'item', 1, ${p.quantita_disponibile})" class="bg-green-100 text-green-700 hover:bg-green-600 hover:text-white p-2 rounded-lg transition">+</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-
-            // Pacchetti
-            document.getElementById('shop-packs').innerHTML = state.packs.map(p => `
-                <div class="bg-yellow-50 rounded-xl p-4 border border-yellow-200 flex justify-between items-center">
-                    <div>
-                        <h4 class="font-bold text-yellow-900">${p.nome}</h4>
-                        <span class="text-xs text-yellow-700">Kit completo</span>
-                    </div>
-                    <button onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, 999)" class="bg-yellow-400 text-black px-4 py-2 rounded-lg font-bold hover:bg-yellow-500 text-sm">AGGIUNGI</button>
-                </div>
-            `).join('');
-        },
-
-        toggleCart() {
-            const cart = document.getElementById('cart-sidebar');
-            cart.classList.toggle('translate-x-full');
-        },
-
-        async checkout() {
-            const user = document.getElementById('checkout-user').value;
-            if(!user || state.cart.length === 0) return ui.toast("Compila nome e aggiungi oggetti", "error");
-            
-            ui.toast("Invio ordine...", "info");
-            let details = `<h3>Prelievo di: ${user}</h3><ul>`;
-
-            for(let item of state.cart) {
-                if(item.type === 'item') {
-                    const newQ = item.max - item.qty;
-                    await _sb.from('oggetti').update({quantita_disponibile: newQ}).eq('id', item.id);
-                    details += `<li>${item.qty}x ${item.name}</li>`;
-                } else {
-                    const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', item.id);
-                    for(let c of comps) {
-                        await _sb.from('oggetti').update({quantita_disponibile: c.oggetti.quantita_disponibile - c.quantita_necessaria}).eq('id', c.oggetto_id);
-                    }
-                    details += `<li><b>KIT ${item.name}</b></li>`;
-                }
-            }
-            details += `</ul>`;
-            
-            await fetch(`${CFG.url}/functions/v1/notify-admin`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${CFG.key}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ details, admin_email: CFG.adminEmail })
-            });
-
-            state.cart = []; cart.render(); app.toggleCart();
-            ui.toast("Ordine inviato!", "success");
-            setTimeout(() => location.reload(), 1500);
-        }
-    };
-
-    // --- CART LOGIC ---
-    const cart = {
-        add(id, name, type, qty, max) {
-            state.cart.push({ id, name, type, qty, max });
-            this.render();
-            ui.toast("Aggiunto al carrello", "success");
-        },
-        remove(idx) { state.cart.splice(idx, 1); this.render(); },
-        render() {
-            document.getElementById('cart-count').innerText = state.cart.length;
-            document.getElementById('cart-items').innerHTML = state.cart.map((i, idx) => `
-                <div class="flex justify-between items-center bg-gray-50 p-3 rounded mb-2">
-                    <div class="text-sm"><b>${i.name}</b> <span class="text-gray-500 text-xs">(${i.type})</span></div>
-                    <button onclick="cart.remove(${idx})" class="text-red-500 font-bold">&times;</button>
-                </div>
-            `).join('');
-        }
-    };
-
-    // --- ARCHIVE LOGIC ---
-    const archive = {
-        async loadPublic() {
-            const { data } = await _sb.from('archivio').select('*').eq('status', 'approved').order('created_at', {ascending: false});
-            this.renderList(data, 'archive-list');
-        },
-        async submit() {
-            const ev = document.getElementById('mem-evento').value;
-            const pl = document.getElementById('mem-luogo').value;
-            const txt = document.getElementById('mem-text').value;
-            if(!ev || !txt) return ui.toast("Compila i campi", "error");
-            
-            await _sb.from('archivio').insert([{ evento: ev, luogo: pl, aneddoto: txt, status: 'pending' }]);
-            ui.toast("Inviato per approvazione!", "success");
-            document.getElementById('mem-text').value = "";
-        },
-        renderList(data, containerId, isAdmin = false) {
-            const container = document.getElementById(containerId);
-            if(!data || data.length === 0) { container.innerHTML = '<p class="text-gray-400 text-center italic">Nessun ricordo presente.</p>'; return; }
-            
-            container.innerHTML = data.map(m => `
-                <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-100">
-                    <div class="flex justify-between">
-                        <h4 class="font-bold text-green-800">${m.evento}</h4>
-                        ${isAdmin ? `<div class="flex gap-2">
-                            <button onclick="admin.approveMem('${m.id}')" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Approva</button>
-                            <button onclick="admin.deleteMem('${m.id}')" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Elimina</button>
-                        </div>` : `<small class="text-gray-400">${m.luogo}</small>`}
-                    </div>
-                    <p class="mt-2 text-gray-600 text-sm italic">"${m.aneddoto}"</p>
-                </div>
-            `).join('');
-        }
-    };
-
-    // --- ADMIN LOGIC ---
-    const admin = {
-        refresh() {
-            this.renderStock();
-            this.renderPackBuilder();
-            this.checkModeration();
-        },
-        tab(t) {
-            document.querySelectorAll('.admin-tab').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`admin-tab-${t}`).classList.remove('hidden');
-        },
-        // Stock & Prodotti
-        renderStock() {
-            document.getElementById('admin-stock-list').innerHTML = state.products.map(p => `
-                <tr class="hover:bg-gray-50 group">
-                    <td class="p-3 font-medium">${p.nome}</td>
-                    <td class="p-3">${p.quantita_disponibile}</td>
-                    <td class="p-3 text-gray-400">${p.soglia_minima}</td>
-                    <td class="p-3">
-                        <button onclick="admin.openEdit('${p.id}')" class="text-blue-600 hover:underline text-xs">Modifica</button>
-                    </td>
-                </tr>
-            `).join('');
-        },
-        openEdit(id) {
-            const p = state.products.find(x => x.id === id);
-            document.getElementById('edit-id').value = id;
-            document.getElementById('edit-nome').value = p.nome;
-            document.getElementById('edit-foto').value = p.foto_url || '';
-            document.getElementById('edit-qty').value = p.quantita_disponibile;
-            document.getElementById('edit-soglia').value = p.soglia_minima;
-            ui.modal('modal-edit-prod');
-        },
-        async saveEdit() {
-            const id = document.getElementById('edit-id').value;
-            const updates = {
-                nome: document.getElementById('edit-nome').value,
-                foto_url: document.getElementById('edit-foto').value,
-                quantita_disponibile: document.getElementById('edit-qty').value,
-                soglia_minima: document.getElementById('edit-soglia').value
-            };
-            await _sb.from('oggetti').update(updates).eq('id', id);
-            ui.closeModals(); app.loadData(); ui.toast("Prodotto aggiornato", "success");
-        },
-        async createProduct() {
-            const n = document.getElementById('new-n').value;
-            const f = document.getElementById('new-f').value;
-            const q = document.getElementById('new-q').value;
-            const s = document.getElementById('new-s').value;
-            await _sb.from('oggetti').insert([{nome:n, foto_url:f, quantita_disponibile:q, soglia_minima:s}]);
-            ui.closeModals(); app.loadData();
-        },
-        async deleteProduct() {
-            if(!confirm("Sicuro?")) return;
-            const id = document.getElementById('edit-id').value;
-            await _sb.from('oggetti').delete().eq('id', id);
-            ui.closeModals(); app.loadData();
-        },
-        // Moderazione
-        async checkModeration() {
-            const { data } = await _sb.from('archivio').select('*').eq('status', 'pending');
-            if(data && data.length > 0) {
-                document.getElementById('mod-badge').innerText = data.length;
-                document.getElementById('mod-badge').classList.remove('hidden');
-                archive.renderList(data, 'mod-list', true);
-            } else {
-                document.getElementById('mod-list').innerHTML = "<p class='text-sm text-gray-400'>Tutto approvato!</p>";
-                document.getElementById('mod-badge').classList.add('hidden');
-            }
-        },
-        async approveMem(id) { await _sb.from('archivio').update({status: 'approved'}).eq('id', id); this.checkModeration(); },
-        async deleteMem(id) { await _sb.from('archivio').delete().eq('id', id); this.checkModeration(); },
-        
-        // Pack Builder
-        renderPackBuilder() {
-            document.getElementById('pack-builder-items').innerHTML = state.products.map(p => `
-                <label class="flex items-center gap-2 text-sm bg-white p-2 rounded border">
-                    <input type="checkbox" value="${p.id}" class="pack-chk"> ${p.nome}
-                </label>
-            `).join('');
-        },
-        async createPack() {
-            const name = document.getElementById('new-pack-name').value;
-            const checks = document.querySelectorAll('.pack-chk:checked');
-            if(!name || checks.length === 0) return ui.toast("Nome o oggetti mancanti", "error");
-            
-            const { data } = await _sb.from('pacchetti').insert([{nome: name}]).select();
-            const packId = data[0].id;
-            const items = Array.from(checks).map(c => ({ pacchetto_id: packId, oggetto_id: c.value, quantita_necessaria: 1 }));
-            await _sb.from('componenti_pacchetto').insert(items);
-            ui.toast("Pacchetto creato!", "success"); app.loadData();
-        }
-    };
-
-    // --- AUTH ---
-    const auth = {
-        async check() {
-            const { data: { user } } = await _sb.auth.getUser();
-            if(user) {
-                state.user = user;
-                // UI Changes for Admin
-                document.getElementById('login-btn').classList.add('hidden');
-                document.getElementById('admin-menu').classList.remove('hidden');
-                document.getElementById('public-menu').classList.add('hidden'); // Nasconde menu pubblico
-                app.nav('admin'); // Porta direttamente alla Dashboard
-            }
-        },
-        async login() {
-            const e = document.getElementById('login-email').value;
-            const p = document.getElementById('login-pass').value;
-            const { error } = await _sb.auth.signInWithPassword({email: e, password: p});
-            if(!error) location.reload();
-            else ui.toast("Errore accesso", "error");
-        },
-        logout() { _sb.auth.signOut().then(() => location.reload()); }
-    };
-
-    // --- UI HELPERS ---
-    const ui = {
-        modal(id) { document.getElementById(id).classList.remove('hidden'); },
-        closeModals() { document.querySelectorAll('.fixed').forEach(m => { if(m.id.includes('modal')) m.classList.add('hidden'); }); },
-        toast(msg, type) {
-            const t = document.createElement('div');
-            t.className = `px-6 py-3 rounded-full text-white text-sm shadow-lg font-bold fade-in ${type === 'error' ? 'bg-red-500' : 'bg-green-600'}`;
-            t.innerText = msg;
-            document.getElementById('toast-box').appendChild(t);
-            setTimeout(() => t.remove(), 3000);
-        }
-    };
-    
-    app.init();
-</script>
+    <script src="script.js"></script>
 </body>
 </html>
