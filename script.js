@@ -48,7 +48,8 @@ const app = {
             admin.renderRestock();
             admin.renderPackBuilder();
             admin.checkMod();
-            admin.renderHistory(); 
+            admin.renderHistory();
+            admin.renderMovements(); // NUOVO
         } else {
             this.renderShop();
             archive.load();
@@ -135,22 +136,37 @@ const app = {
 
         loader.show(); 
         let details = `<h3>Prelievo di: ${name}</h3><ul>`;
+        let logDetails = [];
 
         for (let i of state.cart) {
+            let itemWarn = "";
             if (i.type === 'item') {
                 const nQ = i.max - i.qty;
+                const pObj = state.products.find(x => x.id === i.id);
+                // Controllo Sotto Scorta
+                if (pObj && nQ <= pObj.soglia_minima) itemWarn = " [ALERTA SCORTA BASSA]";
+                
                 await _sb.from('oggetti').update({ quantita_disponibile: nQ }).eq('id', i.id);
-                details += `<li>${i.name} <b>(${i.qty})</b></li>`;
+                details += `<li>${i.name} <b>(${i.qty})</b>${itemWarn}</li>`;
+                logDetails.push(`${i.name} x${i.qty}`);
             } else {
                 const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
                 for (let c of comps) {
                     await _sb.from('oggetti').update({ quantita_disponibile: c.oggetti.quantita_disponibile - c.quantita_necessaria }).eq('id', c.oggetto_id);
                 }
                 details += `<li>KIT ${i.name}</li>`;
+                logDetails.push(`KIT ${i.name}`);
             }
         }
         details += `</ul>`;
 
+        // 1. INSERIMENTO LOG MOVIMENTI
+        await _sb.from('movimenti').insert([{
+            utente: name,
+            dettagli: logDetails.join(', ')
+        }]);
+
+        // 2. NOTIFICA MAIL
         try {
             await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
                 method: 'POST',
@@ -257,7 +273,6 @@ const admin = {
     
     // --- STOCK & RESTOCK ---
     renderStock() {
-        // AGGIORNAMENTO CONTATORE (NUMERO DI TIPI/RIGHE)
         document.getElementById('admin-total-count').innerText = state.products.length;
 
         document.getElementById('admin-stock-list').innerHTML = state.products.map(p => `
@@ -274,17 +289,15 @@ const admin = {
         `).join('');
     },
 
-    // --- FUNZIONE DI FILTRO PER ADMIN (AGGIUNTA) ---
     filterStock() {
         const term = document.getElementById('admin-search-bar').value.toLowerCase().trim();
         const rows = document.querySelectorAll('#admin-stock-list > div');
         
         rows.forEach(row => {
-            // Cerchiamo il nome dell'oggetto all'interno del div
             const text = row.innerText.toLowerCase();
             if (text.includes(term)) {
                 row.classList.remove('hidden');
-                row.classList.add('flex'); // Ripristina layout flex
+                row.classList.add('flex');
             } else {
                 row.classList.add('hidden');
                 row.classList.remove('flex');
@@ -385,7 +398,7 @@ const admin = {
         ui.closeModals(); app.loadData();
     },
     
-    // --- KIT (MODIFICATO) ---
+    // --- KIT ---
     renderPackBuilder() {
         document.getElementById('pack-items').innerHTML = state.products.map(p => `
             <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-gray-50 cursor-pointer">
@@ -462,7 +475,7 @@ const admin = {
         ui.toast("Eliminato", "success"); app.loadData();
     },
     
-    // --- MODERAZIONE & STORICO ---
+    // --- MODERAZIONE & STORICO & MOVIMENTI ---
     async checkMod() {
         const { data } = await _sb.from('archivio').select('*').eq('status', 'pending');
         if (data && data.length) {
@@ -494,6 +507,22 @@ const admin = {
                     ${m.status !== 'approved' ? `<button onclick="admin.memAction('${m.id}', 'approved')" class="text-green-600 text-xs font-bold hover:underline">Approva</button>` : ''}
                     <button onclick="admin.memAction('${m.id}', 'del')" class="text-red-500 text-xs font-bold hover:underline">Elimina</button>
                 </div>
+            </div>
+        `).join('');
+    },
+    async renderMovements() {
+        const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false });
+        if(!data || data.length === 0) {
+            document.getElementById('movements-list').innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessun movimento recente.</p>";
+            return;
+        }
+        document.getElementById('movements-list').innerHTML = data.map(m => `
+            <div class="bg-teal-50 p-3 rounded border border-teal-100 mb-2">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-teal-900 text-sm">${m.utente}</span>
+                    <span class="text-[10px] text-teal-600 font-mono">${new Date(m.created_at).toLocaleDateString()}</span>
+                </div>
+                <p class="text-xs text-teal-800 leading-snug">${m.dettagli}</p>
             </div>
         `).join('');
     },
