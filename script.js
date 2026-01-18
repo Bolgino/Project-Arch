@@ -40,29 +40,47 @@ const app = {
     },
 
     renderShop() {
+        // --- RENDER PRODOTTI SINGOLI ---
         document.getElementById('shop-products').innerHTML = state.products.map(p => `
-            <div class="bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition flex flex-col h-full">
+            <div class="bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition flex flex-col h-full group">
                 <div class="h-32 bg-gray-50 p-2 relative">
                     <img src="${p.foto_url || 'https://placehold.co/200?text=📦'}" class="w-full h-full object-contain mix-blend-multiply">
-                    ${p.quantita_disponibile <= p.soglia_minima ? '<span class="absolute top-1 right-1 bg-red-100 text-red-600 text-[10px] font-bold px-2 rounded-full">SCARSO</span>' : ''}
+                    ${p.quantita_disponibile <= p.soglia_minima ? 
+                        '<span class="absolute top-1 right-1 bg-red-100 text-red-600 text-[10px] font-bold px-2 rounded-full border border-red-200">SCARSO</span>' 
+                        : ''}
                 </div>
+                
                 <div class="p-3 flex flex-col flex-grow">
-                    <h4 class="font-bold text-sm leading-tight mb-auto">${p.nome}</h4>
-                    <div class="mt-2 flex justify-between items-center">
-                        <span class="text-xs text-gray-500 font-mono">${p.quantita_disponibile} pz</span>
-                        <button onclick="cart.add('${p.id}', '${p.nome}', 'item', 1, ${p.quantita_disponibile})" class="bg-green-100 text-green-700 w-6 h-6 rounded flex items-center justify-center hover:bg-green-600 hover:text-white transition">+</button>
+                    <h4 class="font-bold text-sm leading-tight mb-1 text-gray-800">${p.nome}</h4>
+                    <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: ${p.quantita_disponibile}</p>
+                    
+                    <div class="mt-auto flex items-center gap-2">
+                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" 
+                               class="w-12 p-1 text-center border rounded text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                        
+                        <button onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" 
+                                class="flex-1 bg-green-100 text-green-800 text-xs font-bold py-1.5 rounded hover:bg-green-700 hover:text-white transition">
+                            AGGIUNGI
+                        </button>
                     </div>
                 </div>
             </div>
         `).join('');
 
+        // --- RENDER PACCHETTI (Resta uguale o aggiungiamo qty anche qui) ---
         document.getElementById('shop-packs').innerHTML = state.packs.map(p => `
-            <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 flex justify-between items-center">
+            <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 flex justify-between items-center shadow-sm">
                 <div>
-                    <h4 class="font-bold text-yellow-900">${p.nome}</h4>
-                    <span class="text-xs text-yellow-700">Kit Completo</span>
+                    <h4 class="font-bold text-yellow-900 leading-tight">${p.nome}</h4>
+                    <span class="text-[10px] uppercase tracking-wide text-yellow-700 font-bold">Kit Completo</span>
                 </div>
-                <button onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, 999)" class="bg-yellow-400 text-black px-3 py-1.5 rounded text-xs font-bold hover:bg-yellow-500">AGGIUNGI</button>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="pack-qty-${p.id}" value="1" min="1" max="50" class="w-10 p-1 text-center border border-yellow-300 rounded text-xs bg-white">
+                    <button onclick="const q = document.getElementById('pack-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'pack', parseInt(q), 999)" 
+                            class="bg-yellow-400 text-black px-3 py-1.5 rounded text-xs font-bold hover:bg-yellow-500 shadow-sm">
+                        +
+                    </button>
+                </div>
             </div>
         `).join('');
     },
