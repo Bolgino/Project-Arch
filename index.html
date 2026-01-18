@@ -3,335 +3,459 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Punto ArchiQuadro | Gestione Magazzino</title>
+    <title>Punto ArchiQuadro | Gestionale</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { --primary: #1b5e20; --secondary: #2e7d32; --accent: #fbc02d; --danger: #d32f2f; --bg: #f4f7f6; --white: #ffffff; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: #333; margin: 0; padding-bottom: 100px; }
+        /* --- STILE PROFESSIONALE --- */
+        :root { 
+            --primary: #1b5e20; --primary-dark: #003300; 
+            --accent: #fbc02d; --danger: #d32f2f; 
+            --bg: #f8f9fa; --surface: #ffffff; --text: #2d3436;
+            --shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding-bottom: 80px; }
         
-        /* Navbar Moderna */
-        nav { background: var(--primary); color: white; padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .nav-brand { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .nav-menu { display: flex; gap: 20px; align-items: center; }
-        .nav-menu a { color: white; text-decoration: none; font-weight: 500; font-size: 0.9rem; transition: 0.3s; cursor: pointer; opacity: 0.9; }
-        .nav-menu a:hover { opacity: 1; color: var(--accent); }
+        /* Navbar */
+        nav { background: var(--surface); padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); }
+        .brand { font-size: 1.2rem; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+        .menu { display: flex; gap: 20px; align-items: center; }
+        .menu-item { color: var(--text); text-decoration: none; font-weight: 500; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
+        .menu-item:hover, .menu-item.active { color: var(--primary); font-weight: 700; }
 
-        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
-        
-        /* Shop Cards */
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; }
-        .card { background: var(--white); border-radius: 16px; overflow: hidden; border: 1px solid #e0e0e0; transition: 0.3s; position: relative; }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
-        .card img { width: 100%; height: 160px; object-fit: contain; background: #fafafa; padding: 15px; box-sizing: border-box; }
-        .card-content { padding: 15px; text-align: center; }
-        .card-title { font-weight: 700; margin: 10px 0; font-size: 1.1rem; }
-        .stock-badge { font-size: 0.75rem; font-weight: 700; padding: 4px 12px; border-radius: 20px; background: #e8f5e9; color: var(--primary); }
-        .stock-low { background: #ffebee; color: var(--danger); }
-
-        /* Carrello */
-        #cart-panel { position: fixed; bottom: 30px; right: 30px; background: var(--white); padding: 25px; border-radius: 20px; box-shadow: 0 15px 40px rgba(0,0,0,0.2); width: 320px; display: none; z-index: 2000; border: 2px solid var(--primary); }
-        .cart-item { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.9rem; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-
-        /* Forms & Buttons */
-        .btn { padding: 12px 20px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-accent { background: var(--accent); color: #333; }
-        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
-        input, textarea, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ddd; font-family: inherit; }
-
-        /* Admin Table */
-        .admin-section { display: none; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
-        .admin-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .admin-table th, .admin-table td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
-        .admin-table th { background: #f9f9f9; color: #666; font-size: 0.8rem; text-transform: uppercase; }
-
-        section { display: none; }
+        /* Layout */
+        .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; }
+        section { display: none; animation: fadeIn 0.4s ease; }
         section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Grid & Cards */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 25px; margin-top: 20px; }
+        .card { background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); transition: 0.3s; border: 1px solid #eee; display: flex; flex-direction: column; }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .card-img { width: 100%; height: 180px; object-fit: contain; padding: 20px; box-sizing: border-box; background: #fafafa; }
+        .card-body { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; margin-bottom: 10px; }
+        .bg-ok { background: #e8f5e9; color: var(--primary); }
+        .bg-low { background: #ffebee; color: var(--danger); }
+
+        /* Buttons & Inputs */
+        .btn { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 0.9rem; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-accent { background: var(--accent); color: #333; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-ghost { background: transparent; color: var(--text); border: 1px solid #ddd; }
+        
+        input, select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; box-sizing: border-box; font-family: inherit; }
+        input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+        /* Admin Dashboard Styles */
+        .admin-toolbar { display: flex; gap: 10px; margin-bottom: 30px; background: white; padding: 15px; border-radius: 12px; box-shadow: var(--shadow); flex-wrap: wrap; }
+        .admin-panel-box { background: white; padding: 25px; border-radius: 12px; box-shadow: var(--shadow); }
+        .stock-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        
+        /* Modals (Login) */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .modal-content { background: white; padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,0.2); text-align: center; }
+
+        /* Toasts (Notifiche) */
+        #toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: #333; color: white; padding: 12px 24px; border-radius: 50px; font-size: 0.9rem; box-shadow: 0 5px 15px rgba(0,0,0,0.2); animation: slideUp 0.3s ease; display: flex; align-items: center; gap: 10px; }
+        .toast.success { background: var(--primary); }
+        .toast.error { background: var(--danger); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Cart Sidebar */
+        .cart-sidebar { position: fixed; top: 0; right: -400px; width: 350px; height: 100%; background: white; z-index: 1500; box-shadow: -5px 0 30px rgba(0,0,0,0.1); transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; }
+        .cart-sidebar.open { right: 0; }
+        .cart-items { flex-grow: 1; overflow-y: auto; margin: 20px 0; }
     </style>
 </head>
 <body>
 
 <nav>
-    <div class="nav-brand" onclick="showSection('shop')">⚜️ PUNTO ARCHIQUADRO</div>
-    <div class="nav-menu">
-        <a onclick="showSection('shop')">Magazzino</a>
-        <a onclick="showSection('archive')">Archivio Storico</a>
-        <a onclick="showSection('admin')" id="nav-admin-link" style="display:none">🛠 Dashboard Admin</a>
-        <button class="btn btn-accent" id="btn-login" onclick="openLogin()">Login Admin</button>
-        <button class="btn btn-primary" id="btn-logout" onclick="logout()" style="display:none; background:var(--danger)">Esci</button>
+    <div class="brand" onclick="app.nav('shop')">⚜️ Punto ArchiQuadro</div>
+    <div class="menu">
+        <a class="menu-item active" onclick="app.nav('shop')">Magazzino</a>
+        <a class="menu-item" onclick="app.nav('archive')">Archivio</a>
+        <a class="menu-item" id="nav-admin" onclick="app.nav('admin')" style="display:none">Gestione</a>
+        <button class="btn btn-primary" onclick="app.toggleCart()">🛒 Carrello <span id="cart-count">0</span></button>
+        <button class="btn btn-ghost" id="btn-login" onclick="app.showLogin()">Login</button>
+        <button class="btn btn-danger" id="btn-logout" onclick="app.logout()" style="display:none">Esci</button>
     </div>
 </nav>
 
 <div class="container">
     
     <section id="shop" class="active">
-        <h2 style="color: var(--primary)">📦 Prelievo Materiale</h2>
-        <p>Seleziona gli oggetti e i pacchetti. Il riepilogo verrà inviato automaticamente.</p>
-        
-        <h3 style="margin-top:40px;">🎁 Pacchetti Speciali</h3>
-        <div id="pacchetti-lista" class="grid"></div>
-
-        <h3 style="margin-top:40px;">🏷️ Singoli Articoli</h3>
-        <div id="oggetti-lista" class="grid"></div>
+        <h2>📦 Materiale Disponibile</h2>
+        <div id="shop-list" class="grid"></div>
+        <h2 style="margin-top:50px">🎁 Kit & Pacchetti</h2>
+        <div id="pack-list" class="grid"></div>
     </section>
 
     <section id="archive">
-        <h2>📜 Archivio della Memoria</h2>
-        <div id="archivio-lista" class="grid"></div>
+        <div style="text-align:center; padding: 50px; color: #888;">
+            <h2>📜 Archivio Storico</h2>
+            <p>Questa sezione è pronta per essere riempita con i ricordi.</p>
+        </div>
     </section>
 
     <section id="admin">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h2>🛠 Pannello di Controllo</h2>
-            <div style="display:flex; gap:10px;">
-                <button class="btn btn-primary" onclick="showAdminTab('prodotti')">Gestione Prodotti</button>
-                <button class="btn btn-accent" onclick="showAdminTab('scorte')">Rimpolpa Scorte</button>
-                <button class="btn btn-outline" onclick="showAdminTab('nuovo')">+ Nuovo Prodotto</button>
+        <div class="admin-toolbar">
+            <button class="btn btn-ghost" onclick="admin.view('rimpolpa')">📦 Rimpolpa Scorte</button>
+            <button class="btn btn-ghost" onclick="admin.view('prodotti')">✏️ Modifica Prodotti</button>
+            <button class="btn btn-ghost" onclick="admin.view('pacchetti')">🎁 Crea Pacchetti</button>
+        </div>
+
+        <div id="admin-rimpolpa" class="admin-panel-box">
+            <h3>📥 Merce in arrivo (Rimpolpa)</h3>
+            <p>Inserisci la quantità arrivata accanto ad ogni oggetto e conferma.</p>
+            <div id="rimpolpa-list" style="margin-top:20px"></div>
+            <button class="btn btn-primary" style="margin-top:20px; width:100%" onclick="admin.confirmRestock()">AGGIORNA MAGAZZINO</button>
+        </div>
+
+        <div id="admin-prodotti" class="admin-panel-box" style="display:none">
+            <h3>✏️ Gestione Prodotti</h3>
+            <div style="background:#f0f0f0; padding:15px; border-radius:8px; margin-bottom:20px;">
+                <h4>Nuovo Prodotto</h4>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <input type="text" id="new-p-nome" placeholder="Nome" style="flex:2">
+                    <input type="number" id="new-p-qty" placeholder="Qty" style="flex:1">
+                    <input type="number" id="new-p-min" placeholder="Soglia" style="flex:1">
+                    <input type="text" id="new-p-img" placeholder="URL Foto" style="flex:2">
+                    <button class="btn btn-primary" onclick="admin.createProduct()">Crea</button>
+                </div>
             </div>
+            <div id="crud-list"></div>
         </div>
 
-        <div id="tab-prodotti" class="admin-tab" style="margin-top:30px;">
-            <table class="admin-table">
-                <thead><tr><th>Prodotto</th><th>Quantità</th><th>Soglia Min.</th><th>Azioni</th></tr></thead>
-                <tbody id="admin-prodotti-corpo"></tbody>
-            </table>
-        </div>
-
-        <div id="tab-scorte" class="admin-tab" style="display:none; margin-top:30px;">
-            <h3>➕ Aggiunta Rapida Scorte</h3>
-            <div id="admin-scorte-corpo" class="grid"></div>
-        </div>
-
-        <div id="tab-nuovo" class="admin-tab" style="display:none; margin-top:30px;">
-            <h3>🆕 Inserimento Nuovo Articolo</h3>
-            <div style="max-width:500px; background:#f9f9f9; padding:20px; border-radius:15px;">
-                <input type="text" id="new-nome" placeholder="Nome Oggetto (es. Distintivo Promessa)">
-                <input type="number" id="new-qty" placeholder="Quantità Iniziale">
-                <input type="number" id="new-soglia" placeholder="Soglia Allerta (Email rossa)">
-                <input type="text" id="new-foto" placeholder="URL Foto">
-                <button class="btn btn-primary" onclick="creaProdotto()">Inserisci nel Magazzino</button>
-            </div>
+        <div id="admin-pacchetti" class="admin-panel-box" style="display:none">
+            <h3>🎁 Crea Nuovo Pacchetto</h3>
+            <p>Seleziona gli oggetti che compongono il kit.</p>
+            <input type="text" id="new-pack-name" placeholder="Nome Pacchetto (es. Kit Promessa)" style="margin-bottom:20px; font-weight:bold;">
+            <div id="pack-builder-list" style="max-height:300px; overflow-y:auto; border:1px solid #eee; padding:10px; border-radius:8px;"></div>
+            <button class="btn btn-accent" style="margin-top:20px; width:100%" onclick="admin.createPack()">SALVA PACCHETTO</button>
         </div>
     </section>
 </div>
 
-<div id="cart-panel">
-    <h3 style="margin:0 0 15px 0; display:flex; align-items:center; gap:10px;">🛒 Il tuo ordine</h3>
-    <div id="cart-items"></div>
-    <div style="margin-top:20px;">
-        <label style="font-size:0.8rem; font-weight:700;">CHI STA PRELEVANDO?</label>
-        <input type="text" id="user-name" placeholder="Tuo Nome e Branca">
-        <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="checkout()">CONFERMA E INVIA NOTIFICA</button>
-        <button class="btn" style="width:100%; margin-top:5px; background:none; font-size:0.8rem;" onclick="emptyCart()">Svuota carrello</button>
+<div class="modal-overlay" id="login-modal">
+    <div class="modal-content">
+        <h2 style="color:var(--primary)">Area Capi</h2>
+        <p style="margin-bottom:20px; color:#666">Accedi per gestire il magazzino</p>
+        <input type="email" id="login-email" placeholder="Email" style="margin-bottom:10px">
+        <input type="password" id="login-password" placeholder="Password" style="margin-bottom:20px">
+        <button class="btn btn-primary" style="width:100%" onclick="app.login()">ACCEDI</button>
+        <button class="btn btn-ghost" style="width:100%; margin-top:10px" onclick="app.hideLogin()">Annulla</button>
     </div>
 </div>
 
+<div class="cart-sidebar" id="cart-sidebar">
+    <div style="display:flex; justify-content:space-between; align-items:center">
+        <h2>Il tuo ordine</h2>
+        <button class="btn btn-ghost" onclick="app.toggleCart()">✖</button>
+    </div>
+    <div class="cart-items" id="cart-items-container">
+        <p style="text-align:center; color:#999; margin-top:50px">Il carrello è vuoto.</p>
+    </div>
+    <div style="border-top:1px solid #eee; padding-top:20px;">
+        <label style="font-size:0.8rem; font-weight:bold; display:block; margin-bottom:5px;">CHI SEI?</label>
+        <input type="text" id="checkout-name" placeholder="Nome e Branca (es. Marco L/C)" style="margin-bottom:15px;">
+        <button class="btn btn-primary" style="width:100%" onclick="app.checkout()">CONFERMA PRELIEVO</button>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
 <script>
-    // --- CHIAVI CONFIGURATE (FUNZIONA SU OGNI DISPOSITIVO) ---
-    const SB_URL = "https://jmildwxjaviqkrkhjzhl.supabase.co";
-    const SB_KEY = "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS"; // Prendi la 'anon public' key da Supabase
-    const ADMIN_EMAIL = "marcobolge@gmail.com";
+    // --- CONFIGURAZIONE ---
+    const CFG = {
+        url: "https://jmildwxjaviqkrkhjzhl.supabase.co",
+        key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", // <--- IMPORTANTE: Incolla la chiave qui!
+        adminEmail: "marcobolge@gmail.com"
+    };
 
-    const _supabase = supabase.createClient(SB_URL, SB_KEY);
-    let carrello = [];
+    const _sb = supabase.createClient(CFG.url, CFG.key);
+    
+    // --- STATO DELL'APP ---
+    const state = {
+        cart: [],
+        products: [],
+        user: null
+    };
 
-    async function init() {
-        loadInventory();
-        loadPacks();
-        loadArchive();
-        checkUser();
-    }
+    // --- APP CONTROLLER ---
+    const app = {
+        async init() {
+            this.checkAuth();
+            await this.loadData();
+            this.renderShop();
+        },
 
-    // --- CARICAMENTO DATI ---
-    async function loadInventory() {
-        const { data: oggetti } = await _supabase.from('oggetti').select('*').order('nome');
+        async loadData() {
+            const { data: p } = await _sb.from('oggetti').select('*').order('nome');
+            const { data: packs } = await _sb.from('pacchetti').select('*');
+            state.products = p || [];
+            state.packs = packs || [];
+        },
+
+        // --- NAVIGATION ---
+        nav(sectionId) {
+            document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+            
+            // Highlight menu logic (simplified)
+            if(sectionId === 'shop') document.querySelectorAll('.menu-item')[0].classList.add('active');
+        },
+
+        // --- AUTH & LOGIN ---
+        async checkAuth() {
+            const { data: { user } } = await _sb.auth.getUser();
+            state.user = user;
+            if(user) {
+                document.getElementById('nav-admin').style.display = 'block';
+                document.getElementById('btn-login').style.display = 'none';
+                document.getElementById('btn-logout').style.display = 'block';
+            }
+        },
+        showLogin() { document.getElementById('login-modal').style.display = 'flex'; },
+        hideLogin() { document.getElementById('login-modal').style.display = 'none'; },
         
-        // Vista Utente
-        document.getElementById('oggetti-lista').innerHTML = oggetti.map(o => `
-            <div class="card">
-                <img src="${o.foto_url || 'https://placehold.co/200x200?text=📦'}" alt="${o.nome}">
-                <div class="card-content">
-                    <span class="stock-badge ${o.quantita_disponibile <= o.soglia_minima ? 'stock-low' : ''}">
-                        ${o.quantita_disponibile} disponibili
-                    </span>
-                    <div class="card-title">${o.nome}</div>
-                    <div style="display:flex; gap:5px; justify-content:center; align-items:center;">
-                        <input type="number" id="qty-in-${o.id}" value="1" min="1" max="${o.quantita_disponibile}" style="width:60px; margin:0;">
-                        <button class="btn btn-primary" onclick="addToCart('${o.id}', '${o.nome}', ${o.quantita_disponibile})">Aggiungi</button>
+        async login() {
+            const e = document.getElementById('login-email').value;
+            const p = document.getElementById('login-password').value;
+            const { error } = await _sb.auth.signInWithPassword({ email: e, password: p });
+            if(error) ui.toast("Email o password errati", "error");
+            else location.reload();
+        },
+        logout() { _sb.auth.signOut().then(() => location.reload()); },
+
+        // --- SHOP & CART ---
+        renderShop() {
+            const shopList = document.getElementById('shop-list');
+            shopList.innerHTML = state.products.map(p => `
+                <div class="card">
+                    <img src="${p.foto_url || 'https://placehold.co/300x200/f0f0f0/cccccc?text=FOTO'}" class="card-img">
+                    <div class="card-body">
+                        <div>
+                            <span class="badge ${p.quantita_disponibile <= p.soglia_minima ? 'bg-low' : 'bg-ok'}">
+                                ${p.quantita_disponibile} disp.
+                            </span>
+                            <h3 style="margin:0 0 5px 0">${p.nome}</h3>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:15px">
+                            <input type="number" id="qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" style="width:60px">
+                            <button class="btn btn-primary" onclick="app.addToCart('${p.id}', '${p.nome}', 'product', ${p.quantita_disponibile})">Aggiungi</button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
 
-        // Tabella Admin
-        document.getElementById('admin-prodotti-corpo').innerHTML = oggetti.map(o => `
-            <tr>
-                <td><input type="text" value="${o.nome}" id="edit-n-${o.id}"></td>
-                <td><input type="number" value="${o.quantita_disponibile}" id="edit-q-${o.id}"></td>
-                <td><input type="number" value="${o.soglia_minima}" id="edit-s-${o.id}"></td>
-                <td><button class="btn btn-primary" onclick="updateProdotto('${o.id}')">Salva</button></td>
-            </tr>
-        `).join('');
-
-        // Rimpolpa Scorte Admin
-        document.getElementById('admin-scorte-corpo').innerHTML = oggetti.map(o => `
-            <div class="card" style="padding:15px; text-align:left;">
-                <div style="font-weight:700;">${o.nome}</div>
-                <div style="font-size:0.8rem; color:#666;">Attuali: ${o.quantita_disponibile}</div>
-                <div style="display:flex; gap:5px; margin-top:10px;">
-                    <input type="number" id="add-q-${o.id}" placeholder="+0" style="margin:0;">
-                    <button class="btn btn-accent" onclick="addStock('${o.id}', ${o.quantita_disponibile})">Aggiungi</button>
+            const packList = document.getElementById('pack-list');
+            packList.innerHTML = state.packs.map(p => `
+                <div class="card" style="border:2px solid var(--accent)">
+                    <div class="card-body" style="text-align:center">
+                        <h3>🎁 ${p.nome}</h3>
+                        <p style="font-size:0.9rem; color:#666">Kit Completo</p>
+                        <button class="btn btn-accent" style="width:100%" onclick="app.addToCart('${p.id}', '${p.nome}', 'pack', 999)">Aggiungi al Carrello</button>
+                    </div>
                 </div>
-            </div>
-        `).join('');
-    }
+            `).join('');
+        },
 
-    async function loadPacks() {
-        const { data: pacchetti } = await _supabase.from('pacchetti').select('*');
-        document.getElementById('pacchetti-lista').innerHTML = pacchetti.map(p => `
-            <div class="card" style="border: 2px solid var(--accent)">
-                <div class="card-content">
-                    <div class="card-title">🎁 ${p.nome}</div>
-                    <p style="font-size:0.8rem; color:#666;">${p.descrizione || 'Kit pre-configurato'}</p>
-                    <button class="btn btn-accent" style="width:100%" onclick="addPackToCart('${p.id}', '${p.nome}')">Aggiungi Kit</button>
-                </div>
-            </div>
-        `).join('');
-    }
+        addToCart(id, nome, type, max) {
+            const inputQty = type === 'product' ? parseInt(document.getElementById(`qty-${id}`).value) : 1;
+            if(inputQty > max) return ui.toast("Quantità non sufficiente", "error");
 
-    async function loadArchive() {
-        const { data: memorie } = await _supabase.from('archivio').select('*').order('created_at', {ascending: false});
-        document.getElementById('archivio-lista').innerHTML = memorie.map(m => `
-            <div class="card" style="padding:20px;">
-                <h4 style="margin:0; color:var(--primary)">${m.evento}</h4>
-                <small>📍 ${m.luogo}</small>
-                <p style="font-style:italic; font-size:0.9rem;">"${m.aneddoto}"</p>
-            </div>
-        `).join('');
-    }
+            state.cart.push({ id, nome, type, qty: inputQty, max });
+            this.updateCartUI();
+            ui.toast(`${nome} aggiunto!`, "success");
+            this.toggleCart(true); // Apre carrello
+        },
 
-    // --- CARRELLO ---
-    function addToCart(id, nome, max) {
-        const qty = parseInt(document.getElementById(`qty-in-${id}`).value);
-        if(qty > max) return alert("Quantità non disponibile!");
-        carrello.push({ id, nome, qty, type: 'single', current: max });
-        renderCart();
-    }
-
-    function addPackToCart(id, nome) {
-        carrello.push({ id, nome, qty: 1, type: 'pack' });
-        renderCart();
-    }
-
-    function renderCart() {
-        const panel = document.getElementById('cart-panel');
-        const itemsDiv = document.getElementById('cart-items');
-        if(carrello.length === 0) { panel.style.display = 'none'; return; }
-        
-        panel.style.display = 'block';
-        itemsDiv.innerHTML = carrello.map((item, index) => `
-            <div class="cart-item">
-                <span>${item.qty}x ${item.nome}</span>
-                <span onclick="removeFromCart(${index})" style="color:var(--danger); cursor:pointer;">✖</span>
-            </div>
-        `).join('');
-    }
-
-    function removeFromCart(index) { carrello.splice(index, 1); renderCart(); }
-    function emptyCart() { carrello = []; renderCart(); }
-
-    async function checkout() {
-        const userName = document.getElementById('user-name').value;
-        if(!userName) return alert("Inserisci il tuo nome!");
-        if(!confirm("Confermi il prelievo? L'admin riceverà la mail di riepilogo.")) return;
-
-        let resocontoHtml = `<h3>Prelievo effettuato da: ${userName}</h3><ul>`;
-
-        for (let item of carrello) {
-            if(item.type === 'single') {
-                const nuovaQty = item.current - item.qty;
-                await _supabase.from('oggetti').update({ quantita_disponibile: nuovaQty }).eq('id', item.id);
-                resocontoHtml += `<li>${item.qty}x ${item.nome} ${nuovaQty <= 5 ? '<b style="color:red;">(SOTTO SOGLIA)</b>' : ''}</li>`;
-            } else {
-                // Logica pacchetti
-                const { data: comp } = await _supabase.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', item.id);
-                for(let c of comp) {
-                    const nQty = c.oggetti.quantita_disponibile - c.quantita_necessaria;
-                    await _supabase.from('oggetti').update({ quantita_disponibile: nQty }).eq('id', c.oggetto_id);
-                }
-                resocontoHtml += `<li><b>KIT: ${item.nome}</b> (Tutti i componenti scalati)</li>`;
+        updateCartUI() {
+            document.getElementById('cart-count').innerText = state.cart.length;
+            const container = document.getElementById('cart-items-container');
+            
+            if(state.cart.length === 0) {
+                container.innerHTML = `<p style="text-align:center; color:#999; margin-top:50px">Il carrello è vuoto.</p>`;
+                return;
             }
+
+            container.innerHTML = state.cart.map((item, idx) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:10px 0;">
+                    <div>
+                        <strong>${item.nome}</strong><br>
+                        <small>${item.type === 'pack' ? 'Kit' : 'Singolo'} x${item.qty}</small>
+                    </div>
+                    <button class="btn btn-ghost" style="color:var(--danger)" onclick="app.removeFromCart(${idx})">✖</button>
+                </div>
+            `).join('');
+        },
+
+        removeFromCart(idx) { state.cart.splice(idx, 1); this.updateCartUI(); },
+        toggleCart(forceOpen) { 
+            const el = document.getElementById('cart-sidebar');
+            if(forceOpen) el.classList.add('open');
+            else el.classList.toggle('open');
+        },
+
+        async checkout() {
+            const name = document.getElementById('checkout-name').value;
+            if(!name) return ui.toast("Inserisci il tuo nome!", "error");
+            if(state.cart.length === 0) return ui.toast("Carrello vuoto", "error");
+
+            ui.toast("Elaborazione in corso...", "success");
+
+            let logHtml = `<h3>Prelievo di: ${name}</h3><ul>`;
+
+            for (let item of state.cart) {
+                if(item.type === 'product') {
+                    const newQty = item.max - item.qty;
+                    await _sb.from('oggetti').update({ quantita_disponibile: newQty }).eq('id', item.id);
+                    logHtml += `<li>${item.qty}x ${item.nome} (Rim: ${newQty})</li>`;
+                } else {
+                    // Gestione Pacchetto
+                    const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', item.id);
+                    for(let c of comps) {
+                        const nQty = c.oggetti.quantita_disponibile - c.quantita_necessaria;
+                        await _sb.from('oggetti').update({ quantita_disponibile: nQty }).eq('id', c.oggetto_id);
+                    }
+                    logHtml += `<li><b>KIT ${item.nome}</b> prelevato</li>`;
+                }
+            }
+            logHtml += `</ul>`;
+
+            // Email via Edge Function
+            await fetch(`${CFG.url}/functions/v1/notify-admin`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${CFG.key}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ details: logHtml, admin_email: CFG.adminEmail })
+            });
+
+            state.cart = [];
+            this.updateCartUI();
+            this.toggleCart();
+            ui.toast("Prelievo completato con successo!", "success");
+            setTimeout(() => location.reload(), 2000);
         }
-        resocontoHtml += `</ul>`;
+    };
 
-        // INVIO MAIL
-        await fetch(`${SB_URL}/functions/v1/notify-admin`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ details: resocontoHtml, admin_email: ADMIN_EMAIL })
-        });
+    // --- ADMIN CONTROLLER ---
+    const admin = {
+        view(tabId) {
+            document.querySelectorAll('.admin-panel-box').forEach(el => el.style.display = 'none');
+            document.getElementById(`admin-${tabId}`).style.display = 'block';
+            if(tabId === 'rimpolpa') this.renderRestock();
+            if(tabId === 'prodotti') this.renderCRUD();
+            if(tabId === 'pacchetti') this.renderPackBuilder();
+        },
 
-        alert("Ordine completato! Buona Caccia.");
-        emptyCart();
-        loadInventory();
-    }
+        // 1. RIMPOLPA SCORTE
+        renderRestock() {
+            document.getElementById('rimpolpa-list').innerHTML = state.products.map(p => `
+                <div class="stock-row">
+                    <span>${p.nome} (Attuali: <b>${p.quantita_disponibile}</b>)</span>
+                    <input type="number" id="restock-${p.id}" placeholder="+0" style="width:80px">
+                </div>
+            `).join('');
+        },
+        async confirmRestock() {
+            let updates = 0;
+            for(let p of state.products) {
+                const add = parseInt(document.getElementById(`restock-${p.id}`).value);
+                if(add > 0) {
+                    await _sb.from('oggetti').update({ quantita_disponibile: p.quantita_disponibile + add }).eq('id', p.id);
+                    updates++;
+                }
+            }
+            if(updates > 0) { ui.toast(`${updates} prodotti aggiornati!`, "success"); setTimeout(() => location.reload(), 1500); }
+            else ui.toast("Nessuna modifica inserita", "error");
+        },
 
-    // --- ADMIN ACTIONS ---
-    async function updateProdotto(id) {
-        const nome = document.getElementById(`edit-n-${id}`).value;
-        const qty = document.getElementById(`edit-q-${id}`).value;
-        const soglia = document.getElementById(`edit-s-${id}`).value;
-        await _supabase.from('oggetti').update({ nome, quantita_disponibile: qty, soglia_minima: soglia }).eq('id', id);
-        alert("Aggiornato!"); loadInventory();
-    }
+        // 2. CRUD PRODOTTI
+        renderCRUD() {
+            document.getElementById('crud-list').innerHTML = state.products.map(p => `
+                <div class="stock-row">
+                    <input type="text" value="${p.nome}" id="edit-n-${p.id}" style="width:40%">
+                    <input type="number" value="${p.quantita_disponibile}" id="edit-q-${p.id}" style="width:15%">
+                    <button class="btn btn-ghost" onclick="admin.updateProd('${p.id}')">💾</button>
+                    <button class="btn btn-ghost" style="color:red" onclick="admin.deleteProd('${p.id}')">🗑</button>
+                </div>
+            `).join('');
+        },
+        async createProduct() {
+            const nome = document.getElementById('new-p-nome').value;
+            const qty = document.getElementById('new-p-qty').value;
+            const soglia = document.getElementById('new-p-min').value;
+            const foto = document.getElementById('new-p-img').value;
+            if(!nome) return ui.toast("Nome obbligatorio", "error");
+            
+            await _sb.from('oggetti').insert([{ nome, quantita_disponibile: qty, soglia_minima: soglia, foto_url: foto }]);
+            ui.toast("Creato!", "success"); setTimeout(() => location.reload(), 1000);
+        },
+        async updateProd(id) {
+            const n = document.getElementById(`edit-n-${id}`).value;
+            const q = document.getElementById(`edit-q-${id}`).value;
+            await _sb.from('oggetti').update({ nome: n, quantita_disponibile: q }).eq('id', id);
+            ui.toast("Salvato", "success");
+        },
+        async deleteProd(id) {
+            if(confirm("Eliminare definitivamente?")) {
+                await _sb.from('oggetti').delete().eq('id', id);
+                location.reload();
+            }
+        },
 
-    async function addStock(id, attuale) {
-        const add = parseInt(document.getElementById(`add-q-${id}`).value);
-        if(!add) return;
-        await _supabase.from('oggetti').update({ quantita_disponibile: attuale + add }).eq('id', id);
-        alert("Scorte rimpinguate!"); loadInventory();
-    }
+        // 3. CREA PACCHETTI
+        renderPackBuilder() {
+            document.getElementById('pack-builder-list').innerHTML = state.products.map(p => `
+                <div style="display:flex; align-items:center; gap:10px; padding:5px 0;">
+                    <input type="checkbox" class="pack-check" value="${p.id}" id="chk-${p.id}" style="width:20px;">
+                    <label for="chk-${p.id}">${p.nome}</label>
+                    <input type="number" id="qty-for-pack-${p.id}" value="1" style="width:50px; margin-left:auto;">
+                </div>
+            `).join('');
+        },
+        async createPack() {
+            const name = document.getElementById('new-pack-name').value;
+            if(!name) return ui.toast("Inserisci nome pacchetto", "error");
 
-    async function creaProdotto() {
-        const nome = document.getElementById('new-nome').value;
-        const qty = document.getElementById('new-qty').value;
-        const soglia = document.getElementById('new-soglia').value;
-        const foto = document.getElementById('new-foto').value;
-        await _supabase.from('oggetti').insert([{ nome, quantita_disponibile: qty, soglia_minima: soglia, foto_url: foto }]);
-        alert("Aggiunto!"); loadInventory();
-    }
+            const checks = document.querySelectorAll('.pack-check:checked');
+            if(checks.length === 0) return ui.toast("Seleziona almeno un oggetto", "error");
 
-    // --- NAVIGATION ---
-    function showSection(id) {
-        document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-    }
+            // 1. Crea Pacchetto
+            const { data: newPack } = await _sb.from('pacchetti').insert([{ nome: name }]).select();
+            const packId = newPack[0].id;
 
-    function showAdminTab(id) {
-        document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
-        document.getElementById('tab-' + id).style.display = 'block';
-    }
-
-    // --- AUTH ---
-    async function checkUser() {
-        const { data: { user } } = await _supabase.auth.getUser();
-        if(user) {
-            document.getElementById('nav-admin-link').style.display = 'block';
-            document.getElementById('btn-login').style.display = 'none';
-            document.getElementById('btn-logout').style.display = 'block';
+            // 2. Associa Componenti
+            const components = Array.from(checks).map(chk => ({
+                pacchetto_id: packId,
+                oggetto_id: chk.value,
+                quantita_necessaria: document.getElementById(`qty-for-pack-${chk.value}`).value
+            }));
+            
+            await _sb.from('componenti_pacchetto').insert(components);
+            ui.toast("Pacchetto Creato!", "success"); setTimeout(() => location.reload(), 1500);
         }
-    }
+    };
 
-    function openLogin() {
-        const e = prompt("Email Admin:");
-        const p = prompt("Password Admin:");
-        _supabase.auth.signInWithPassword({ email: e, password: p }).then(() => location.reload());
-    }
+    // --- UI UTILS (Toast System) ---
+    const ui = {
+        toast(msg, type = "success") {
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.innerText = msg;
+            document.getElementById('toast-container').appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+    };
 
-    function logout() { _supabase.auth.signOut().then(() => location.reload()); }
-
-    init();
+    // Avvio
+    app.init();
 </script>
 </body>
 </html>
