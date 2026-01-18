@@ -72,7 +72,22 @@ const app = {
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
     },
-
+    filterProducts() {
+        const term = document.getElementById('search-bar').value.toLowerCase();
+        const cards = document.querySelectorAll('#shop-products > div'); // Seleziona le card dei prodotti
+    
+        cards.forEach(card => {
+            // Cerca il titolo dentro la card (h4)
+            const title = card.querySelector('h4').innerText.toLowerCase();
+            
+            // Se il titolo contiene il termine, mostra, altrimenti nascondi
+            if (title.includes(term)) {
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        });
+    }
     renderShop() {
         document.getElementById('nav-public').classList.remove('hidden');
         
