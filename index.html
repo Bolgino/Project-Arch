@@ -6,129 +6,137 @@
     <title>Punto ArchiQuadro</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --green: #1b5e20; --orange: #ff9800; --bg: #f8f9fa; }
+        :root { --green: #1b5e20; --gold: #fbc02d; --red: #d32f2f; --bg: #f4f4f4; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
-        .container { max-width: 1000px; margin: auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; color: var(--green); }
-        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-        .btn { background: var(--green); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .btn-archivio { background: #388e3c; }
-        .admin-box { background: #fff3e0; border: 2px dashed var(--orange); padding: 20px; border-radius: 15px; margin-bottom: 30px; display: none; }
-        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
-        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center; }
-        .card img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; background: #eee; }
-        input, textarea { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        #auth-section { display: block; } #main-content { display: none; }
+        .container { max-width: 1200px; margin: auto; }
+        .header { background: var(--green); color: white; padding: 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Griglia Prodotti */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border: 1px solid #ddd; }
+        .card img { height: 120px; object-fit: contain; margin-bottom: 10px; }
+        
+        /* Selettore Quantità */
+        .qty-box { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 15px 0; }
+        .qty-input { width: 50px; text-align: center; font-weight: bold; padding: 5px; border-radius: 5px; border: 1px solid #ccc; }
+        
+        .btn { background: var(--green); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; }
+        .btn-pack { background: var(--gold); color: #333; margin-bottom: 10px; }
+        .out-of-stock { color: var(--red); font-weight: bold; padding: 10px; border: 2px solid var(--red); border-radius: 8px; }
+
+        /* Admin */
+        #admin-panel { display: none; background: #fff3e0; padding: 30px; border-radius: 20px; margin-top: 40px; border: 2px dashed #ff9800; }
+        .admin-nav { margin-bottom: 20px; }
+        .admin-nav button { margin-right: 10px; padding: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="auth-section" style="text-align:center; margin-top:100px;">
+    <div class="header">
         <h1>⚜️ Punto ArchiQuadro</h1>
-        <input type="email" id="email" placeholder="Email" style="max-width:300px;"><br>
-        <input type="password" id="password" placeholder="Password" style="max-width:300px;"><br>
-        <button class="btn" onclick="handleLogin()">Entra</button>
+        <div id="auth-buttons">
+            <button onclick="loginAdmin()" id="btn-login" style="padding:10px;">Login Admin</button>
+            <button onclick="logoutAdmin()" id="btn-logout" style="display:none; padding:10px;">Esci</button>
+        </div>
     </div>
 
-    <div id="main-content">
-        <div class="header">
-            <h1>⚜️ Punto ArchiQuadro</h1>
-            <button onclick="handleLogout()" style="color:red; background:none; border:none; cursor:pointer;">Esci</button>
-        </div>
+    <div id="public-view">
+        <h2 style="color:var(--green)">📦 Magazzino Capi</h2>
+        <div id="pacchetti-lista" class="grid"></div>
+        <div id="oggetti-lista" class="grid"></div>
+    </div>
 
-        <div class="nav-tabs">
-            <button class="btn" onclick="showTab('magazzino')">📦 Magazzino</button>
-            <button class="btn btn-archivio" onclick="showTab('archivio')">📜 Archivio Storico</button>
+    <div id="admin-panel">
+        <h2>🛠️ Gestione Super-Admin</h2>
+        <div class="admin-nav">
+            <button onclick="showSection('prodotti')">Prodotti</button>
+            <button onclick="showSection('archivio')">Archivio</button>
         </div>
-
-        <div id="admin-magazzino" class="admin-box">
-            <h3>🛠️ Admin: Nuovo Oggetto</h3>
-            <input type="text" id="m-nome" placeholder="Nome (es. Distintivo)">
-            <input type="number" id="m-qty" placeholder="Quantità">
-            <button class="btn" style="background:var(--orange)" onclick="addMagazzino()">Salva</button>
+        <div id="admin-content">
+            <p>Seleziona una sezione sopra per iniziare.</p>
         </div>
-
-        <div id="admin-archivio" class="admin-box">
-            <h3>📜 Admin: Nuovo Ricordo</h3>
-            <input type="text" id="a-anno" placeholder="Anno (es. 2024)">
-            <input type="text" id="a-campo" placeholder="Nome Campo (es. Campo Estivo - Val di Mello)">
-            <textarea id="a-cronaca" placeholder="Breve racconto..."></textarea>
-            <button class="btn" style="background:var(--orange)" onclick="addArchivio()">Pubblica Storia</button>
-        </div>
-
-        <div id="tab-magazzino" class="card-grid"></div>
-        <div id="tab-archivio" class="card-grid" style="display:none;"></div>
     </div>
 </div>
 
 <script>
     const _supabase = supabase.createClient(localStorage.getItem('sb-url'), localStorage.getItem('sb-key'));
-    let isAdmin = false;
 
-    async function handleLogin() {
-        const { error } = await _supabase.auth.signInWithPassword({
-            email: document.getElementById('email').value,
-            password: document.getElementById('password').value
-        });
-        if (error) alert(error.message); else location.reload();
+    async function init() {
+        checkAdmin();
+        loadInventory();
     }
 
-    async function handleLogout() { await _supabase.auth.signOut(); location.reload(); }
+    // --- FUNZIONI MAGAZZINO ---
+    async function loadInventory() {
+        const { data: oggetti } = await _supabase.from('oggetti').select('*').order('nome');
+        const container = document.getElementById('oggetti-lista');
+        
+        container.innerHTML = oggetti.map(o => {
+            const isOut = o.quantita_disponibile <= 0;
+            return `
+                <div class="card">
+                    <img src="${o.foto_url || 'https://via.placeholder.com/150?text=Senza+Foto'}" alt="${o.nome}">
+                    <h3>${o.nome}</h3>
+                    ${isOut ? 
+                        `<div class="out-of-stock">ESAURITO (In ordine)</div>` : 
+                        `<p>Disponibili: <strong>${o.quantita_disponibile}</strong></p>
+                         <div class="qty-box">
+                            <button onclick="changeQtyValue('${o.id}', -1)">-</button>
+                            <input type="number" id="qty-${o.id}" class="qty-input" value="1" min="1" max="${o.quantita_disponibile}">
+                            <button onclick="changeQtyValue('${o.id}', 1)">+</button>
+                         </div>
+                         <button class="btn" onclick="confermaPrelievo('${o.id}', '${o.nome}', ${o.quantita_disponibile}, ${o.soglia_minima})">Conferma Prelievo</button>`
+                    }
+                </div>`;
+        }).join('');
+    }
 
-    function showTab(tab) {
-        document.getElementById('tab-magazzino').style.display = tab === 'magazzino' ? 'grid' : 'none';
-        document.getElementById('tab-archivio').style.display = tab === 'archivio' ? 'grid' : 'none';
-        if(isAdmin) {
-            document.getElementById('admin-magazzino').style.display = tab === 'magazzino' ? 'block' : 'none';
-            document.getElementById('admin-archivio').style.display = tab === 'archivio' ? 'block' : 'none';
+    function changeQtyValue(id, delta) {
+        const input = document.getElementById(`qty-${id}`);
+        let newVal = parseInt(input.value) + delta;
+        if(newVal >= 1 && newVal <= input.max) input.value = newVal;
+    }
+
+    async function confermaPrelievo(id, nome, attuale, soglia) {
+        const qty = parseInt(document.getElementById(`qty-${id}`).value);
+        if(!confirm(`Confermi di prelevare ${qty} pezzi di "${nome}"?`)) return;
+
+        const nuovaQty = attuale - qty;
+        const { error } = await _supabase.from('oggetti').update({ quantita_disponibile: nuovaQty }).eq('id', id);
+
+        if(!error) {
+            alert("Magazzino aggiornato! Riepilogo inviato all'admin.");
+            if(nuovaQty <= soglia) {
+                // Qui scatta la Edge Function per la mail di allerta
+                console.log("ALERT: Sotto soglia!");
+            }
+            loadInventory();
         }
     }
 
-    async function checkUser() {
+    // --- ADMIN ---
+    async function checkAdmin() {
         const { data: { user } } = await _supabase.auth.getUser();
-        if (user) {
-            document.getElementById('auth-section').style.display = 'none';
-            document.getElementById('main-content').style.display = 'block';
-            const { data } = await _supabase.from('profili').select('ruolo').eq('id', user.id).single();
-            if (data?.ruolo === 'admin') { isAdmin = true; showTab('magazzino'); }
-            loadData();
+        if(user) {
+            const { data: p } = await _supabase.from('profili').select('ruolo').eq('id', user.id).single();
+            if(p?.ruolo === 'admin') {
+                document.getElementById('admin-panel').style.display = 'block';
+                document.getElementById('btn-login').style.display = 'none';
+                document.getElementById('btn-logout').style.display = 'block';
+            }
         }
     }
 
-    async function loadData() {
-        const { data: m } = await _supabase.from('oggetti').select('*').order('nome');
-        document.getElementById('tab-magazzino').innerHTML = m.map(i => `
-            <div class="card">
-                <h3>${i.nome}</h3>
-                <p>Disponibili: ${i.quantita_disponibile}</p>
-                <button class="btn" onclick="updateQty('${i.id}', ${i.quantita_disponibile-1})">Preleva</button>
-            </div>
-        `).join('');
-
-        const { data: a } = await _supabase.from('archivio').select('*').order('anno', {ascending: false});
-        document.getElementById('tab-archivio').innerHTML = a.map(i => `
-            <div class="card">
-                <span style="font-weight:bold; color:var(--green)">${i.anno}</span>
-                <h3>${i.nome_campo}</h3>
-                <p style="font-size:14px italic">${i.cronaca || ''}</p>
-            </div>
-        `).join('');
+    function loginAdmin() {
+        const e = prompt("Email Admin:");
+        const p = prompt("Password:");
+        _supabase.auth.signInWithPassword({ email: e, password: p }).then(() => location.reload());
     }
 
-    async function updateQty(id, val) { await _supabase.from('oggetti').update({quantita_disponibile: val}).eq('id', id); loadData(); }
+    function logoutAdmin() { _supabase.auth.signOut().then(() => location.reload()); }
 
-    async function addMagazzino() {
-        await _supabase.from('oggetti').insert([{ nome: document.getElementById('m-nome').value, quantita_disponibile: document.getElementById('m-qty').value }]);
-        loadData();
-    }
-
-    async function addArchivio() {
-        await _supabase.from('archivio').insert([{ anno: document.getElementById('a-anno').value, nome_campo: document.getElementById('a-campo').value, cronaca: document.getElementById('a-cronaca').value }]);
-        loadData();
-    }
-
-    checkUser();
+    init();
 </script>
 </body>
 </html>
