@@ -13,7 +13,7 @@ const state = { cart: [], products: [], packs: [], user: null, currentCategory: 
 
 // --- LOADER ---
 const loader = {
-    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Accendo il fuoco...", "Conto le scorte...", "Controllo i nodi..."],
+    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Contemplo il fuoco...", "Conto le scorte...", "Imparo i nodi...", "Ammiro le Stelle..."],
     show() {
         const el = document.getElementById('scout-loader');
         const txt = document.getElementById('loader-text');
@@ -178,7 +178,7 @@ const app = {
         cart.empty();
         ui.toggleCart();
         loader.hide();
-        ui.toast("Buona Caccia! Materiale Prelevato.", "success");
+        ui.toast("Materiale Prelevato con successo. Buona Strada! ", "success");
         setTimeout(() => location.reload(), 1500);
     }
 };
@@ -258,7 +258,7 @@ const archive = {
         
         if(error) { ui.toast("Errore invio", "error"); }
         else {
-            ui.toast("Inviato ai Capi!", "success");
+            ui.toast("Inviato agli amministratori!", "success");
             ui.closeModals();
         }
     }
