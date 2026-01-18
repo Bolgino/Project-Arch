@@ -53,13 +53,18 @@ const app = {
         state.packs = k || [];
         
         if (state.user) {
+            // SE SEI UN CAPO (ADMIN)
             admin.renderStock();
             admin.renderRestock();
             admin.renderPackBuilder();
             admin.checkMod();
         } else {
+            // SE SEI UN RAGAZZO (PUBBLICO)
             this.renderShop();
             archive.load();
+            
+            // --- AGGIUNGI QUESTA RIGA QUI SOTTO ---
+            this.nav('shop'); // <--- IMPORTANTE: Dice all'app di mostrare il magazzino!
         }
     },
 
