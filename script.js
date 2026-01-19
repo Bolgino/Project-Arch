@@ -130,42 +130,47 @@ const app = {
         `).join('');
     },
 
+    // Sostituisci l'intera funzione app.checkout con questa:
     async checkout() {
         const name = document.getElementById('checkout-name').value;
         if (!name || state.cart.length === 0) return ui.toast("Inserisci nome e riempi zaino!", "error");
-
+    
         loader.show(); 
         let details = `<h3>Prelievo di: ${name}</h3><ul>`;
         let logDetails = [];
-
-        for (let i of state.cart) {
-            let itemWarn = "";
+    
+        // Iteriamo sugli oggetti nel carrello (notare il secondo parametro idx)
+        for (let [idx, i] of state.cart.entries()) {
+            
+            // RECUPERA IL NOME ASSEGNATO DALL'INPUT
+            const assignedInput = document.getElementById(`assign-${idx}`);
+            const assignedName = assignedInput ? assignedInput.value.trim() : "";
+            const assignString = assignedName ? ` ➝ <b>${assignedName}</b>` : ""; // Per l'email HTML
+            const assignLog = assignedName ? ` [Per: ${assignedName}]` : ""; // Per il DB testo semplice
+    
             if (i.type === 'item') {
                 const nQ = i.max - i.qty;
-                const pObj = state.products.find(x => x.id === i.id);
-                // Controllo Sotto Scorta
-                if (pObj && nQ <= pObj.soglia_minima) itemWarn = " [ALERTA SCORTA BASSA]";
-                
                 await _sb.from('oggetti').update({ quantita_disponibile: nQ }).eq('id', i.id);
-                details += `<li>${i.name} <b>(${i.qty})</b>${itemWarn}</li>`;
-                logDetails.push(`${i.name} x${i.qty}`);
+                
+                details += `<li>${i.name} <b>(${i.qty})</b>${assignString}</li>`;
+                logDetails.push(`${i.name} x${i.qty}${assignLog}`);
             } else {
                 const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
                 for (let c of comps) {
                     await _sb.from('oggetti').update({ quantita_disponibile: c.oggetti.quantita_disponibile - c.quantita_necessaria }).eq('id', c.oggetto_id);
                 }
-                details += `<li>KIT ${i.name}</li>`;
-                logDetails.push(`KIT ${i.name}`);
+                details += `<li>KIT ${i.name}${assignString}</li>`;
+                logDetails.push(`KIT ${i.name}${assignLog}`);
             }
         }
         details += `</ul>`;
-
+    
         // 1. INSERIMENTO LOG MOVIMENTI
         await _sb.from('movimenti').insert([{
             utente: name,
-            dettagli: logDetails.join(', ')
+            dettagli: logDetails.join(', ') // Qui ora ci sarà anche il nome del ragazzo
         }]);
-
+    
         // 2. NOTIFICA MAIL
         try {
             await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
@@ -174,7 +179,7 @@ const app = {
                 body: JSON.stringify({ details, admin_email: CONFIG.adminEmail })
             });
         } catch(e) { console.log("No notify func"); }
-
+    
         cart.empty();
         ui.toggleCart();
         loader.hide();
@@ -204,14 +209,17 @@ const cart = {
         const elMob = document.getElementById('cart-count-mobile');
         
         if(elMob) elMob.innerText = count;
-
+    
         document.getElementById('cart-items').innerHTML = state.cart.length ? state.cart.map((i, idx) => `
-            <div class="flex justify-between items-center bg-white p-3 rounded shadow-sm border-l-4 border-green-600 relative overflow-hidden">
-                <div class="text-sm z-10">
-                    <div class="font-bold text-gray-800 text-lg">${i.name}</div>
-                    <span class="text-green-700 text-xs font-bold bg-green-100 px-2 py-0.5 rounded border border-green-200">Quantità: ${i.qty}</span>
+            <div class="bg-white p-3 rounded shadow-sm border-l-4 border-green-600 relative overflow-hidden flex flex-col gap-2">
+                <div class="flex justify-between items-center">
+                    <div class="text-sm z-10">
+                        <div class="font-bold text-gray-800 text-lg leading-tight">${i.name}</div>
+                        <span class="text-green-700 text-xs font-bold bg-green-100 px-2 py-0.5 rounded border border-green-200">Quantità: ${i.qty}</span>
+                    </div>
+                    <button onclick="cart.remove(${idx})" class="text-red-400 hover:text-red-600 font-bold px-3 py-1 rounded hover:bg-red-50 transition z-10">🗑</button>
                 </div>
-                <button onclick="cart.remove(${idx})" class="text-red-400 hover:text-red-600 font-bold px-3 py-1 rounded hover:bg-red-50 transition z-10">🗑</button>
+                <input type="text" id="assign-${idx}" placeholder="Per chi? (es. Luigi Rossi)" class="text-xs w-full p-2 border-b border-gray-200 bg-gray-50 focus:bg-white outline-none text-gray-700 placeholder-gray-400 font-medium">
             </div>
         `).join('') : '<div class="text-center py-10 opacity-50"><div class="text-4xl mb-2">🎒</div><p class="text-sm font-bold">Lo zaino è vuoto</p></div>';
     }
@@ -540,6 +548,21 @@ const admin = {
         this.checkMod();
         this.renderHistory();
         ui.toast("Fatto", "success");
+    },
+    // Aggiungi questa funzione dentro l'oggetto admin:
+    filterMovements() {
+        const term = document.getElementById('movements-search').value.toLowerCase().trim();
+        const cards = document.querySelectorAll('#movements-list > div');
+        
+        cards.forEach(card => {
+            const text = card.innerText.toLowerCase();
+            // Cerca sia nel nome del capo che nel contenuto (oggetti e nomi ragazzi)
+            if (text.includes(term)) {
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        });
     }
 };
 
