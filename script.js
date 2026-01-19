@@ -60,6 +60,11 @@ const app = {
     nav(view) {
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
+        
+        // Se apro la wishlist, carica i dati aggiornati
+        if (view === 'wishlist') {
+            wishlist.load();
+        }
     },
 
     setCategory(cat) {
@@ -613,6 +618,80 @@ const ui = {
             panel.classList.add('translate-x-full');
             setTimeout(() => menu.classList.add('hidden'), 300);
         }
+    }
+};
+// --- WISHLIST ---
+const wishlist = {
+    async load() {
+        // Carica le richieste non completate (o tutte se serve storico)
+        const { data, error } = await _sb.from('richieste').select('*').order('created_at', { ascending: false });
+        if (error) return;
+        this.render(data);
+    },
+    
+    render(data) {
+        const el = document.getElementById('wishlist-items');
+        if (!data || data.length === 0) {
+            el.innerHTML = '<p class="text-gray-400 italic text-center col-span-2">Nessuna richiesta attiva. Il magazzino è perfetto!</p>';
+            return;
+        }
+
+        const isAdmin = state.user !== null; // Verifica se è loggato un Admin
+
+        el.innerHTML = data.map(item => `
+            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${item.completato ? 'border-green-500 opacity-60' : 'border-purple-500'} flex justify-between items-center transition relative overflow-hidden">
+                <div>
+                    <div class="font-bold text-gray-800 text-lg ${item.completato ? 'line-through' : ''}">${item.oggetto}</div>
+                    <div class="text-xs text-gray-500 font-mono flex items-center gap-2">
+                        <span>👤 ${item.richiedente || 'Anonimo'}</span>
+                        <span>📅 ${new Date(item.created_at).toLocaleDateString()}</span>
+                    </div>
+                </div>
+                
+                ${isAdmin ? `
+                <div class="flex gap-2 z-10">
+                    <button onclick="wishlist.toggle(${item.id}, ${!item.completato})" class="p-2 rounded-full ${item.completato ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'} font-bold text-xs" title="${item.completato ? 'Segna da comprare' : 'Segna comprato'}">
+                        ${item.completato ? '↩️' : '✅'}
+                    </button>
+                    <button onclick="wishlist.delete(${item.id})" class="p-2 rounded-full bg-red-100 text-red-600 font-bold text-xs" title="Elimina">🗑</button>
+                </div>
+                ` : `
+                ${item.completato ? '<span class="text-green-600 font-bold text-xs border border-green-200 bg-green-50 px-2 py-1 rounded">PRESO!</span>' : '<span class="text-purple-400 text-xs italic">In attesa...</span>'}
+                `}
+            </div>
+        `).join('');
+    },
+
+    async add() {
+        const item = document.getElementById('wish-item').value;
+        const name = document.getElementById('wish-name').value;
+        
+        if (!item || !name) return ui.toast("Scrivi cosa serve e chi sei!", "error");
+
+        loader.show();
+        const { error } = await _sb.from('richieste').insert([{ objeto: item, richiedente: name, oggetto: item }]); // 'oggetto' due volte per sicurezza mapping
+        
+        loader.hide();
+        if (error) {
+            console.error(error);
+            ui.toast("Errore durante l'invio.", "error");
+        } else {
+            ui.toast("Richiesta aggiunta alla lista!", "success");
+            document.getElementById('wish-item').value = '';
+            this.load();
+        }
+    },
+
+    // Funzioni solo per Admin
+    async toggle(id, status) {
+        await _sb.from('richieste').update({ completato: status }).eq('id', id);
+        this.load();
+    },
+    
+    async delete(id) {
+        if(!confirm("Eliminare questa richiesta?")) return;
+        await _sb.from('richieste').delete().eq('id', id);
+        this.load();
     }
 };
 
