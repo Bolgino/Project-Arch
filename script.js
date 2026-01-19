@@ -98,7 +98,7 @@ const app = {
     },
 
     renderShop() {
-        document.getElementById('nav-public').classList.remove('hidden');
+        // RIMOSSO CODICE CHE CAUSAVA ERRORE (nav-public)
         document.getElementById('shop-products').innerHTML = state.products.map(p => `
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition flex flex-col h-full group" data-category="${p.categoria || 'Generale'}">
                 <div class="h-28 md:h-32 bg-gray-50 p-4 relative flex items-center justify-center">
@@ -200,7 +200,11 @@ const cart = {
     remove(idx) { state.cart.splice(idx, 1); this.render(); },
     empty() { state.cart = []; this.render(); },
     render() {
-        document.getElementById('cart-count').innerText = state.cart.length;
+        const count = state.cart.length;
+        const elMob = document.getElementById('cart-count-mobile');
+        
+        if(elMob) elMob.innerText = count;
+
         document.getElementById('cart-items').innerHTML = state.cart.length ? state.cart.map((i, idx) => `
             <div class="flex justify-between items-center bg-white p-3 rounded shadow-sm border-l-4 border-green-600 relative overflow-hidden">
                 <div class="text-sm z-10">
@@ -545,8 +549,12 @@ const auth = {
         const { data: { user } } = await _sb.auth.getUser();
         if (user) {
             state.user = user;
-            document.getElementById('nav-public').classList.add('hidden');
-            document.getElementById('nav-admin').classList.remove('hidden');
+            // Mostra menu staff nel menu laterale
+            document.getElementById('nav-admin-mobile').classList.remove('hidden');
+            document.getElementById('nav-admin-mobile').classList.add('flex');
+            // Nascondi tasto login nel menu laterale
+            document.getElementById('btn-login-mobile').classList.add('hidden');
+            
             app.nav('admin');
         }
     },
@@ -570,7 +578,19 @@ const ui = {
         t.innerText = msg;
         document.getElementById('toast-container').appendChild(t);
         setTimeout(() => t.remove(), 3000);
+    },
+    toggleMenu() {
+        const menu = document.getElementById('mobile-menu');
+        const panel = document.getElementById('mobile-menu-panel');
+        
+        if (menu.classList.contains('hidden')) {
+            menu.classList.remove('hidden');
+            setTimeout(() => panel.classList.remove('translate-x-full'), 10);
+        } else {
+            panel.classList.add('translate-x-full');
+            setTimeout(() => menu.classList.add('hidden'), 300);
+        }
     }
 };
 
-app.init();            
+app.init();
