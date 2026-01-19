@@ -286,6 +286,11 @@ const admin = {
     tab(t) {
         document.querySelectorAll('.admin-tab').forEach(e => e.classList.add('hidden'));
         document.getElementById(`admin-tab-${t}`).classList.remove('hidden');
+        
+        // Se apro la tab richieste, carica i dati
+        if (t === 'requests') {
+            this.renderRequests();
+        }
     },
     
     // --- STOCK & RESTOCK ---
@@ -568,7 +573,52 @@ const admin = {
                 card.classList.add('hidden');
             }
         });
-    }
+    },
+    // --- GESTIONE DESIDERI ---
+    async renderRequests() {
+        // Carica tutte le richieste
+        const { data } = await _sb.from('richieste').select('*').order('created_at', { ascending: false });
+        
+        const el = document.getElementById('admin-requests-list');
+        if (!data || data.length === 0) {
+            el.innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessuna richiesta in attesa.</p>";
+            return;
+        }
+
+        el.innerHTML = data.map(r => `
+            <div class="bg-pink-50 p-3 rounded border border-pink-100 flex justify-between items-center transition ${r.completato ? 'opacity-50 grayscale' : ''}">
+                <div>
+                    <div class="font-bold text-gray-800 text-sm ${r.completato ? 'line-through' : ''}">${r.oggetto}</div>
+                    <div class="text-[10px] text-gray-500 font-mono">
+                        👤 ${r.richiedente || 'Anonimo'} | 📅 ${new Date(r.created_at).toLocaleDateString()}
+                    </div>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button onclick="admin.reqAction('${r.id}', 'toggle', ${!r.completato})" class="px-3 py-1 rounded text-xs font-bold shadow-sm ${r.completato ? 'bg-yellow-100 text-yellow-700' : 'bg-green-600 text-white'}">
+                        ${r.completato ? 'Da Comprare' : 'Preso!'}
+                    </button>
+                    <button onclick="admin.reqAction('${r.id}', 'del')" class="px-3 py-1 rounded bg-red-100 text-red-600 text-xs font-bold hover:bg-red-200">
+                        Elimina
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    async reqAction(id, action, status) {
+        if (action === 'del') {
+            if(!confirm("Eliminare questa richiesta?")) return;
+            await _sb.from('richieste').delete().eq('id', id);
+        } else if (action === 'toggle') {
+            await _sb.from('richieste').update({ completato: status }).eq('id', id);
+        }
+        
+        ui.toast("Fatto!", "success");
+        this.renderRequests(); // Ricarica la lista admin
+        // Opzionale: se la lista pubblica è aperta, ricarica anche quella
+        if(typeof wishlist !== 'undefined') wishlist.load(); 
+    },
 };
 
 // --- AUTH & UI ---
