@@ -719,7 +719,7 @@ const wishlist = {
         if (!item || !name) return ui.toast("Scrivi cosa serve e chi sei!", "error");
 
         loader.show();
-        const { error } = await _sb.from('richieste').insert([{ objeto: item, richiedente: name, oggetto: item }]); // 'oggetto' due volte per sicurezza mapping
+        const { error } = await _sb.from('richieste').insert([{ oggetto: item, richiedente: name }]);
         
         loader.hide();
         if (error) {
