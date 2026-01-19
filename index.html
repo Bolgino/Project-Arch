@@ -205,8 +205,20 @@
                     </div>
 
                     <div id="admin-tab-movements" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-teal-500">
-                        <h3 class="font-bold text-xl text-teal-900 mb-2">Registro Movimenti</h3>
-                        <p class="text-xs text-gray-500 mb-4">Storico di chi ha preso cosa.</p>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-xl text-teal-900">Registro Movimenti</h3>
+                            <span class="text-xs text-gray-400 font-mono">Storico</span>
+                        </div>
+                        
+                        <div class="relative mb-4">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-400">🔎</span>
+                            </div>
+                            <input type="text" id="movements-search" onkeyup="admin.filterMovements()" 
+                                   placeholder="Cerca nome ragazzo, capo o patacca..." 
+                                   class="w-full pl-10 p-2 border rounded text-sm focus:border-teal-500 outline-none bg-teal-50">
+                        </div>
+                    
                         <div id="movements-list" class="space-y-2 max-h-[70vh] overflow-y-auto"></div>
                     </div>
 
