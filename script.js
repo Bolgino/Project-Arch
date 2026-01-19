@@ -200,7 +200,17 @@ const cart = {
     remove(idx) { state.cart.splice(idx, 1); this.render(); },
     empty() { state.cart = []; this.render(); },
     render() {
-        document.getElementById('cart-count').innerText = state.cart.length;
+        // Aggiorna entrambi i badge (desktop e mobile)
+        const count = state.cart.length;
+        const elDesk = document.getElementById('cart-count-desktop'); // nota: ho cambiato ID nell'HTML sopra
+        const elDeskOld = document.getElementById('cart-count'); // fallback
+        const elMob = document.getElementById('cart-count-mobile');
+        
+        if(elDesk) elDesk.innerText = count;
+        if(elDeskOld) elDeskOld.innerText = count; // Mantieni compatibilità
+        if(elMob) elMob.innerText = count;
+
+        // ... resto del codice render cart-items ...
         document.getElementById('cart-items').innerHTML = state.cart.length ? state.cart.map((i, idx) => `
             <div class="flex justify-between items-center bg-white p-3 rounded shadow-sm border-l-4 border-green-600 relative overflow-hidden">
                 <div class="text-sm z-10">
@@ -570,6 +580,19 @@ const ui = {
         t.innerText = msg;
         document.getElementById('toast-container').appendChild(t);
         setTimeout(() => t.remove(), 3000);
+    },
+    toggleMenu() {
+        const menu = document.getElementById('mobile-menu');
+        const panel = document.getElementById('mobile-menu-panel');
+        
+        if (menu.classList.contains('hidden')) {
+            menu.classList.remove('hidden');
+            // Piccolo timeout per permettere l'animazione CSS
+            setTimeout(() => panel.classList.remove('translate-x-full'), 10);
+        } else {
+            panel.classList.add('translate-x-full');
+            setTimeout(() => menu.classList.add('hidden'), 300);
+        }
     }
 };
 
