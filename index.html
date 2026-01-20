@@ -70,10 +70,7 @@
                     <button onclick="app.nav('wishlist'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3">
                         <span>✨</span> Lista Desideri
                     </button>
-                    <button onclick="app.nav('archive'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3">
-                        <span>📸</span> Muretto Ricordi
-                    </button>
-                    
+                     
                     <hr class="border-green-700 my-2">
 
                     <div id="nav-admin-mobile" class="hidden flex-col gap-4">
@@ -152,16 +149,7 @@
             <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide mb-4">In attesa di acquisto</h3>
             <div id="wishlist-items" class="grid gap-3 md:grid-cols-2"></div>
         </section>
-        <section id="view-archive" class="hidden fade-in max-w-4xl mx-auto">
-            <div class="text-center mb-8 bg-white p-6 rounded-2xl shadow-md border-b-4 border-green-600">
-                <h2 class="text-2xl font-bold text-green-900 mb-1">Muretto dei Ricordi</h2>
-                <button onclick="ui.modal('modal-add-memory')" class="mt-4 bg-green-700 text-white px-6 py-2 rounded-full font-bold shadow hover:bg-green-800 text-sm">
-                    ✏️ Scrivi un Ricordo
-                </button>
-            </div>
-            <div id="archive-list" class="grid gap-4 md:grid-cols-2"></div>
-        </section>
-
+        
         <section id="view-admin" class="hidden fade-in">
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div class="lg:col-span-1 grid grid-cols-2 lg:flex lg:flex-col gap-2 h-fit">
@@ -175,12 +163,6 @@
                     <button onclick="admin.tab('restock')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-blue-500 transition">🚛 Rifornimento</button>
                     <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-yellow-500 transition">🎁 Gestione Kit</button>
                     <button onclick="admin.tab('movements')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-teal-500 transition">📊 Movimenti</button>
-                    <button onclick="admin.tab('mod')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-red-500 transition flex justify-between">
-                        🛡 Moderazione <span id="mod-badge" class="bg-red-500 text-white text-[10px] px-1.5 rounded-full hidden">0</span>
-                    </button>
-                    <button onclick="admin.tab('history')" class="col-span-2 lg:col-auto w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-purple-500 transition">
-                        📜 Diario
-                    </button>
                 </div>
 
                 <div class="lg:col-span-4 space-y-4">
@@ -279,7 +261,7 @@
                     <p class="text-[10px] text-green-300 font-mono">EQUIPAGGIAMENTO</p>
                 </div>
             </div>
-            <button onclick="ui.toggleCart()" class="text-2xl text-green-200 p-2">&times;</button>
+            <button onclick="ui.toggleCart()" class="text-2xl text-green-200 p-2 relative z-50 hover:text-white transition">&times;</button>
         </div>
         <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 pb-20"></div>
         <div class="p-4 border-t bg-white absolute bottom-0 w-full">
@@ -358,17 +340,6 @@
         </div>
     </div>
 
-    <div id="modal-add-memory" class="hidden fixed inset-0 bg-green-900/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md relative border-t-8 border-green-600">
-            <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-300">&times;</button>
-            <h3 class="font-bold text-xl mb-1 text-green-800">Nuovo Ricordo</h3>
-            <p class="text-xs text-gray-500 mb-4">Condividi un momento speciale.</p>
-            <input type="text" id="mem-ev" placeholder="Evento (es. Campo Estivo 2024)" class="w-full p-3 border rounded-lg mb-3 text-sm font-bold">
-            <input type="text" id="mem-pl" placeholder="Luogo (es. Base Brownsea)" class="w-full p-3 border rounded-lg mb-3 text-sm">
-            <textarea id="mem-tx" rows="4" placeholder="Cosa è successo? Racconta..." class="w-full p-3 border rounded-lg mb-4 text-sm"></textarea>
-            <button onclick="archive.submit()" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow hover:bg-green-700">Invia</button>
-        </div>
-    </div>
 
     <div id="toast-container" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-[150] w-max max-w-sm text-center"></div>
 
