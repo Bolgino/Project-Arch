@@ -589,7 +589,7 @@ const wishlist = {
     render(data) {
         const el = document.getElementById('wishlist-items');
         if (!data || data.length === 0) {
-            el.innerHTML = '<p class="text-gray-400 italic text-center col-span-2">Nessuna richiesta attiva. Il magazzino è perfetto!</p>';
+            el.innerHTML = '<p class="text-gray-400 italic text-center col-span-2">Nessuna richiesta attiva!</p>';
             return;
         }
 
