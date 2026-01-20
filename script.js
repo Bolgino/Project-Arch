@@ -649,5 +649,59 @@ const wishlist = {
         this.load();
     }
 };
+// --- PWA CONFIGURATION ---
+let deferredPrompt;
+
+const pwa = {
+    init() {
+        // 1. Registra il Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW registrato: ', reg.scope))
+                    .catch(err => console.log('SW fallito: ', err));
+            });
+        }
+
+        // 2. Intercetta l'evento di installazione
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Impedisce al browser di mostrare subito il banner standard
+            e.preventDefault();
+            // Salva l'evento per usarlo dopo
+            deferredPrompt = e;
+            // Mostra il nostro bottone nel menu
+            const btn = document.getElementById('btn-install-app');
+            if(btn) {
+                btn.classList.remove('hidden');
+                btn.classList.add('flex');
+            }
+        });
+
+        // 3. Gestione visualizzazione post-installazione
+        window.addEventListener('appinstalled', () => {
+            ui.toast("App installata nello zaino digitale!", "success");
+            const btn = document.getElementById('btn-install-app');
+            if(btn) btn.classList.add('hidden');
+            deferredPrompt = null;
+        });
+    },
+
+    async install() {
+        if (!deferredPrompt) return;
+        // Mostra il prompt nativo
+        deferredPrompt.prompt();
+        // Attendi la risposta dell'utente
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        deferredPrompt = null;
+        // Chiudi il menu mobile se aperto
+        ui.toggleMenu();
+    }
+};
+
+// --- MODIFICA ALLA INITIALIZZAZIONE ---
+// Aggiungi pwa.init() dentro app.init o chiamalo alla fine
+pwa.init(); 
+// (Lascia app.init() dov'era)
 
 app.init();
