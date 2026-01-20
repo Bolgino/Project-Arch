@@ -527,12 +527,19 @@ const auth = {
         const { data: { user } } = await _sb.auth.getUser();
         if (user) {
             state.user = user;
-            // Mostra menu staff nel menu laterale
+            
+            // 1. Mostra menu staff
             document.getElementById('nav-admin-mobile').classList.remove('hidden');
             document.getElementById('nav-admin-mobile').classList.add('flex');
-            // Nascondi tasto login nel menu laterale
+            
+            // 2. Nascondi tasto login
             document.getElementById('btn-login-mobile').classList.add('hidden');
             
+            // 3. NASCONDI I MENU PUBBLICI (Nuova modifica)
+            document.getElementById('nav-btn-shop').classList.add('hidden');
+            document.getElementById('nav-btn-wish').classList.add('hidden');
+            
+            // Vai alla dashboard admin
             app.nav('admin');
         }
     },
