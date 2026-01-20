@@ -47,12 +47,10 @@ const app = {
             admin.renderStock();
             admin.renderRestock();
             admin.renderPackBuilder();
-            admin.checkMod();
-            admin.renderHistory();
+
             admin.renderMovements(); // NUOVO
         } else {
             this.renderShop();
-            archive.load();
             this.nav('shop');
         }
     },
@@ -229,58 +227,6 @@ const cart = {
         `).join('') : '<div class="text-center py-10 opacity-50"><div class="text-4xl mb-2">🎒</div><p class="text-sm font-bold">Lo zaino è vuoto</p></div>';
     }
 };
-
-// --- ARCHIVE ---
-const archive = {
-    async load() {
-        const { data, error } = await _sb.from('archivio').select('*').eq('status', 'approved').order('created_at', { ascending: false });
-        if (error) {
-            const { data: dataBack } = await _sb.from('archivio').select('*').eq('status', 'approved');
-            this.render(dataBack, 'archive-list');
-        } else {
-            this.render(data, 'archive-list');
-        }
-    },
-    render(data, elId, isAdmin = false) {
-        const el = document.getElementById(elId);
-        if (!data || !data.length) { el.innerHTML = '<p class="text-gray-400 italic text-center w-full col-span-2">Nessun ricordo trovato.</p>'; return; }
-        el.innerHTML = data.map(m => `
-            <div class="bg-white p-6 rounded-2xl shadow-lg border-b-4 ${isAdmin ? 'border-red-400' : 'border-green-600'} hover:transform hover:-translate-y-1 transition duration-300 flex flex-col justify-between">
-                <div>
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <h4 class="font-extrabold text-xl text-green-900 leading-tight">${m.evento}</h4>
-                            <span class="text-xs text-white bg-green-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">${m.luogo}</span>
-                        </div>
-                        <span class="text-4xl text-green-100 font-serif">“</span>
-                    </div>
-                    <p class="text-gray-600 text-md italic leading-relaxed mb-4">${m.aneddoto}</p>
-                </div>
-                ${isAdmin ? `
-                    <div class="flex gap-2 mt-2 pt-2 border-t border-gray-100">
-                        <button onclick="admin.memAction('${m.id}', 'approved')" class="flex-1 bg-green-50 text-green-700 py-2 rounded hover:bg-green-100 text-xs font-bold transition">APPROVA</button>
-                        <button onclick="admin.memAction('${m.id}', 'del')" class="flex-1 bg-red-50 text-red-700 py-2 rounded hover:bg-red-100 text-xs font-bold transition">RIFIUTA</button>
-                    </div>
-                ` : ''}
-            </div>
-        `).join('');
-    },
-    async submit() {
-        const ev = document.getElementById('mem-ev').value;
-        const pl = document.getElementById('mem-pl').value;
-        const tx = document.getElementById('mem-tx').value;
-        if (!ev || !tx) return ui.toast("Compila tutto!", "error");
-        
-        const { error } = await _sb.from('archivio').insert([{ evento: ev, luogo: pl, aneddoto: tx, status: 'pending' }]);
-        
-        if(error) { ui.toast("Errore invio", "error"); }
-        else {
-            ui.toast("Inviato agli amministratori!", "success");
-            ui.closeModals();
-        }
-    }
-};
-
 // --- ADMIN ---
 const admin = {
     tab(t) {
@@ -498,40 +444,6 @@ const admin = {
     },
     
     // --- MODERAZIONE & STORICO & MOVIMENTI ---
-    async checkMod() {
-        const { data } = await _sb.from('archivio').select('*').eq('status', 'pending');
-        if (data && data.length) {
-            document.getElementById('mod-badge').innerText = data.length;
-            document.getElementById('mod-badge').classList.remove('hidden');
-            archive.render(data, 'mod-list', true);
-        } else {
-            document.getElementById('mod-badge').classList.add('hidden');
-            document.getElementById('mod-list').innerHTML = "<p class='text-gray-400 italic text-center py-4'>Tutto tranquillo.</p>";
-        }
-    },
-    async renderHistory() {
-        const { data } = await _sb.from('archivio').select('*').order('created_at', { ascending: false });
-        if(!data || data.length === 0) {
-            document.getElementById('history-list').innerHTML = "<p class='text-gray-400 text-center'>Nessun ricordo nel diario.</p>";
-            return;
-        }
-        document.getElementById('history-list').innerHTML = data.map(m => `
-            <div class="bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-start">
-                <div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="text-[10px] font-mono text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span>
-                        <span class="text-xs font-bold px-2 py-0.5 rounded ${m.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} uppercase">${m.status === 'approved' ? 'Pubblicato' : 'In Attesa'}</span>
-                    </div>
-                    <div class="font-bold text-gray-800 text-sm">${m.evento} <span class="font-normal text-gray-500">(${m.luogo})</span></div>
-                    <div class="text-xs text-gray-600 italic mt-1 line-clamp-1">"${m.aneddoto}"</div>
-                </div>
-                <div class="flex flex-col gap-1">
-                    ${m.status !== 'approved' ? `<button onclick="admin.memAction('${m.id}', 'approved')" class="text-green-600 text-xs font-bold hover:underline">Approva</button>` : ''}
-                    <button onclick="admin.memAction('${m.id}', 'del')" class="text-red-500 text-xs font-bold hover:underline">Elimina</button>
-                </div>
-            </div>
-        `).join('');
-    },
     async renderMovements() {
         const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false });
         if(!data || data.length === 0) {
@@ -548,18 +460,6 @@ const admin = {
             </div>
         `).join('');
     },
-    async memAction(id, action) {
-        if (action === 'del') {
-            if(!confirm("Cancellare definitivamente questo ricordo?")) return;
-            await _sb.from('archivio').delete().eq('id', id);
-        } else {
-            await _sb.from('archivio').update({ status: 'approved' }).eq('id', id);
-        }
-        this.checkMod();
-        this.renderHistory();
-        ui.toast("Fatto", "success");
-    },
-    // Aggiungi questa funzione dentro l'oggetto admin:
     filterMovements() {
         const term = document.getElementById('movements-search').value.toLowerCase().trim();
         const cards = document.querySelectorAll('#movements-list > div');
