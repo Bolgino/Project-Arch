@@ -142,28 +142,27 @@ const app = {
         let details = `<h3>Prelievo di: ${name}</h3><ul>`;
         let logDetails = [];
     
-        // Iteriamo sugli oggetti nel carrello (notare il secondo parametro idx)
-        for (let [idx, i] of state.cart.entries()) {
+        // Iteriamo sugli oggetti nel carrello
+        for (let i of state.cart) {
             
-            // RECUPERA IL NOME ASSEGNATO DALL'INPUT
-            const assignedInput = document.getElementById(`assign-${idx}`);
-            const assignedName = assignedInput ? assignedInput.value.trim() : "";
-            const assignString = assignedName ? ` ➝ <b>${assignedName}</b>` : ""; // Per l'email HTML
-            const assignLog = assignedName ? ` [Per: ${assignedName}]` : ""; // Per il DB testo semplice
-    
+            // Logica gestione quantità (invariata)
             if (i.type === 'item') {
                 const nQ = i.max - i.qty;
                 await _sb.from('oggetti').update({ quantita_disponibile: nQ }).eq('id', i.id);
                 
-                details += `<li>${i.name} <b>(${i.qty})</b>${assignString}</li>`;
-                logDetails.push(`${i.name} x${i.qty}${assignLog}`);
+                // Rimosso riferimento a assignString
+                details += `<li>${i.name} <b>(${i.qty})</b></li>`;
+                // Rimosso riferimento a assignLog
+                logDetails.push(`${i.name} x${i.qty}`);
             } else {
                 const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
                 for (let c of comps) {
                     await _sb.from('oggetti').update({ quantita_disponibile: c.oggetti.quantita_disponibile - c.quantita_necessaria }).eq('id', c.oggetto_id);
                 }
-                details += `<li>KIT ${i.name}${assignString}</li>`;
-                logDetails.push(`KIT ${i.name}${assignLog}`);
+                // Rimosso riferimento a assignString
+                details += `<li>KIT ${i.name}</li>`;
+                // Rimosso riferimento a assignLog
+                logDetails.push(`KIT ${i.name}`);
             }
         }
         details += `</ul>`;
@@ -171,7 +170,7 @@ const app = {
         // 1. INSERIMENTO LOG MOVIMENTI
         await _sb.from('movimenti').insert([{
             utente: name,
-            dettagli: logDetails.join(', ') // Qui ora ci sarà anche il nome del ragazzo
+            dettagli: logDetails.join(', ') 
         }]);
     
         // 2. NOTIFICA MAIL
@@ -222,8 +221,7 @@ const cart = {
                     </div>
                     <button onclick="cart.remove(${idx})" class="text-red-400 hover:text-red-600 font-bold px-3 py-1 rounded hover:bg-red-50 transition z-10">🗑</button>
                 </div>
-                <input type="text" id="assign-${idx}" placeholder="Per chi? (es. Luigi Rossi)" class="text-xs w-full p-2 border-b border-gray-200 bg-gray-50 focus:bg-white outline-none text-gray-700 placeholder-gray-400 font-medium">
-            </div>
+                </div>
         `).join('') : '<div class="text-center py-10 opacity-50"><div class="text-4xl mb-2">🎒</div><p class="text-sm font-bold">Lo zaino è vuoto</p></div>';
     }
 };
