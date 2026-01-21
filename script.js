@@ -13,7 +13,7 @@ const state = { cart: [], products: [], packs: [], user: null, currentCategory: 
 
 // --- LOADER ---
 const loader = {
-    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Contemplo il fuoco...", "Conto le scorte...", "Imparo i nodi...", "Ammiro le Stelle..."],
+    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Contemplo il fuoco...", "Imparo il Morse...", "Imparo i nodi...", "Ammiro le Stelle...","Preparo la legna...","Pulisco la gavetta...","Preparo lo zaino...","Guado il torrente...","Inseguo l'orizzonte...",],
     show() {
         const el = document.getElementById('scout-loader');
         const txt = document.getElementById('loader-text');
