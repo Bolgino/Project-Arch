@@ -207,6 +207,7 @@
                             <span class="font-bold text-blue-900">Modifiche pronte</span>
                             <button onclick="admin.processRestock()" class="bg-blue-600 text-white px-6 py-2 rounded font-bold shadow hover:bg-blue-700 transition">CONFERMA CARICO 🚛</button>
                         </div>
+                        <input type="text" id="search-restock" onkeyup="admin.filterRestock()" placeholder="🔍 Cerca oggetto per rifornimento..." class="w-full p-3 border rounded mb-4 shadow-sm text-sm font-bold bg-blue-50 focus:bg-white transition">
                         <div id="admin-restock-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto"></div>
                     </div>
 
@@ -215,6 +216,7 @@
                         <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100 mb-6">
                             <h4 class="font-bold text-yellow-800 text-sm mb-2 uppercase">Nuovo Kit Rapido</h4>
                             <input type="text" id="pack-name" placeholder="Nome Kit (es. Kit Cucina)" class="w-full p-3 border rounded mb-3 font-bold bg-white">
+                            <input type="text" id="search-pack-create" onkeyup="admin.filterPackCreation()" placeholder="🔍 Cerca pezzo..." class="w-full p-2 border rounded mb-2 text-xs font-bold bg-gray-50">
                             <div id="pack-items" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto mb-3 border p-2 rounded bg-white"></div>
                             <button onclick="admin.createPack()" class="w-full bg-yellow-400 font-bold py-2 rounded text-yellow-900 hover:bg-yellow-500 shadow">Salva Kit</button>
                         </div>
@@ -289,6 +291,7 @@
             <input type="text" id="edit-kit-name" class="w-full p-3 border rounded mb-4 font-bold">
             
             <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Contenuto Kit</label>
+            <input type="text" id="search-pack-edit" onkeyup="admin.filterPackEdit()" placeholder="🔍 Cerca pezzo..." class="w-full p-2 border rounded mb-2 text-xs font-bold bg-gray-50">
             <div id="edit-kit-items" class="grid grid-cols-2 gap-2 overflow-y-auto border p-2 rounded bg-gray-50 flex-grow"></div>
 
             <button onclick="admin.saveEditPack()" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg shadow hover:bg-green-800">Salva Modifiche</button>
