@@ -22,7 +22,8 @@ const loader = {
     },
     hide() {
         setTimeout(() => {
-            document.getElementById('scout-loader').classList.('opacity-0', 'pointer-events-none');
+            // CORREZIONE: Aggiunto .add prima delle parentesi
+            document.getElementById('scout-loader').classList.add('opacity-0', 'pointer-events-none');
         }, 2000); 
     }
 };
