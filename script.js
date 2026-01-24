@@ -22,7 +22,6 @@ const loader = {
     },
     hide() {
         setTimeout(() => {
-            // CORREZIONE: Aggiunto .add prima delle parentesi
             document.getElementById('scout-loader').classList.add('opacity-0', 'pointer-events-none');
         }, 2000); 
     }
@@ -33,11 +32,11 @@ const app = {
     async init() {
         loader.show(); 
         await auth.check();
-        await this.loata();
+        await this.loadData();
         loader.hide(); 
     },
 
-    async loata() {
+    async loadData() {
         const { data: p } = await _sb.from('oggetti').select('*').order('nome');
         state.products = p || [];
         
@@ -57,7 +56,7 @@ const app = {
     },
 
     nav(view) {
-        document.querySelectorAll('section').forEach(el => el.classList.('hidden'));
+        document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
         
         // Se apro la wishlist, carica i dati aggiornati
@@ -70,7 +69,7 @@ const app = {
         state.currentCategory = cat;
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'bg-opacity-100', 'text-white'));
         const btn = document.getElementById(`btn-cat-${cat}`);
-        if(btn) btn.classList.('active');
+        if(btn) btn.classList.add('active');
         this.filterProducts();
     },
 
@@ -87,10 +86,10 @@ const app = {
 
             if (matchesText && matchesCat) {
                 card.classList.remove('hidden');
-                card.classList.('flex');
+                card.classList.add('flex');
                 visibleCount++;
             } else {
-                card.classList.('hidden');
+                card.classList.add('hidden');
                 card.classList.remove('flex');
             }
         });
@@ -101,7 +100,7 @@ const app = {
         }
     },
 
-   renderShop() {
+    renderShop() {
         document.getElementById('shop-products').innerHTML = state.products.map(p => {
             // Logica per determinare lo stato (Esaurito vs Scorta Bassa)
             let statusBadge = '';
