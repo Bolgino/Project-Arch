@@ -22,7 +22,7 @@ const loader = {
     },
     hide() {
         setTimeout(() => {
-            document.getElementById('scout-loader').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('scout-loader').classList.('opacity-0', 'pointer-events-none');
         }, 2000); 
     }
 };
@@ -32,11 +32,11 @@ const app = {
     async init() {
         loader.show(); 
         await auth.check();
-        await this.loadData();
+        await this.loata();
         loader.hide(); 
     },
 
-    async loadData() {
+    async loata() {
         const { data: p } = await _sb.from('oggetti').select('*').order('nome');
         state.products = p || [];
         
@@ -56,7 +56,7 @@ const app = {
     },
 
     nav(view) {
-        document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('section').forEach(el => el.classList.('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
         
         // Se apro la wishlist, carica i dati aggiornati
@@ -69,7 +69,7 @@ const app = {
         state.currentCategory = cat;
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'bg-opacity-100', 'text-white'));
         const btn = document.getElementById(`btn-cat-${cat}`);
-        if(btn) btn.classList.add('active');
+        if(btn) btn.classList.('active');
         this.filterProducts();
     },
 
@@ -86,10 +86,10 @@ const app = {
 
             if (matchesText && matchesCat) {
                 card.classList.remove('hidden');
-                card.classList.add('flex');
+                card.classList.('flex');
                 visibleCount++;
             } else {
-                card.classList.add('hidden');
+                card.classList.('hidden');
                 card.classList.remove('flex');
             }
         });
@@ -100,28 +100,47 @@ const app = {
         }
     },
 
-    renderShop() {
-        // RIMOSSO CODICE CHE CAUSAVA ERRORE (nav-public)
-        document.getElementById('shop-products').innerHTML = state.products.map(p => `
+   renderShop() {
+        document.getElementById('shop-products').innerHTML = state.products.map(p => {
+            // Logica per determinare lo stato (Esaurito vs Scorta Bassa)
+            let statusBadge = '';
+            const isOut = p.quantita_disponibile <= 0;
+            const isLow = !isOut && p.quantita_disponibile <= p.soglia_minima;
+
+            if (isOut) {
+                statusBadge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-600 shadow-sm z-10">ESAURITO 🚫</span>';
+            } else if (isLow) {
+                statusBadge = '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 shadow-sm animate-pulse z-10">SCORTA BASSA ⚠️</span>';
+            }
+
+            // Disabilita i controlli se esaurito
+            const disabledClass = isOut ? 'opacity-50 cursor-not-allowed grayscale' : '';
+            const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-sm active:transform active:scale-95';
+
+            return `
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition flex flex-col h-full group" data-category="${p.categoria || 'Generale'}">
                 <div class="h-28 md:h-32 bg-gray-50 p-4 relative flex items-center justify-center">
-                    <img src="${p.foto_url || 'https://placehold.co/200?text=📦'}" class="max-h-full max-w-full object-contain mix-blend-multiply transition group-hover:scale-110 duration-300">
-                    ${p.quantita_disponibile <= p.soglia_minima ? '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 shadow-sm animate-pulse">SCORTA BASSA</span>' : ''}
+                    <img src="${p.foto_url || 'https://placehold.co/200?text=📦'}" class="max-h-full max-w-full object-contain mix-blend-multiply transition group-hover:scale-110 duration-300 ${disabledClass}">
+                    ${statusBadge}
                 </div>
                 <div class="p-3 flex flex-col flex-grow">
                     <div class="flex justify-between items-start mb-1">
                         <span class="text-[9px] font-bold uppercase text-gray-400 border px-1 rounded">${p.categoria || 'Gen'}</span>
                     </div>
                     <h4 class="font-bold text-sm leading-tight mb-1 text-gray-800 line-clamp-2 uppercase tracking-wide">${p.nome}</h4>
-                    <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: <span class="text-green-700 font-bold text-lg">${p.quantita_disponibile}</span></p>
+                    <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: <span class="${isOut ? 'text-red-600' : 'text-green-700'} font-bold text-lg">${p.quantita_disponibile}</span></p>
                     <div class="mt-auto flex items-center gap-1">
-                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-green-500 outline-none bg-gray-50 font-bold">
-                        <button onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 bg-green-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-green-700 transition shadow-sm active:transform active:scale-95">AGGIUNGI</button>
+                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" ${isOut ? 'disabled' : ''} class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-green-500 outline-none bg-gray-50 font-bold ${disabledClass}">
+                        <button ${isOut ? 'disabled' : ''} onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 text-white text-xs font-bold py-2.5 rounded-lg transition ${btnClass}">
+                            ${isOut ? 'ESAURITO' : 'AGGIUNGI'}
+                        </button>
                     </div>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
 
+        // La parte dei pacchetti rimane invariata o puoi reinserire il codice originale dei pacchetti qui sotto
         document.getElementById('shop-packs').innerHTML = state.packs.map(p => `
             <div class="bg-yellow-50 p-4 rounded-xl border-l-4 border-yellow-400 flex justify-between items-center shadow-sm hover:shadow-md transition">
                 <div>
@@ -139,33 +158,55 @@ const app = {
         if (!name || state.cart.length === 0) return ui.toast("Inserisci nome e riempi zaino!", "error");
     
         loader.show(); 
-        let details = `<h3>Prelievo di: ${name}</h3><ul>`;
+        let details = `<h3>Prelievo effettuato da: ${name}</h3><ul>`;
         let logDetails = [];
+        let urgentAlerts = ""; // Stringa per raccogliere avvisi di scorte critiche
     
         // Iteriamo sugli oggetti nel carrello
         for (let i of state.cart) {
             
-            // Logica gestione quantità (invariata)
             if (i.type === 'item') {
                 const nQ = i.max - i.qty;
+                
+                // Aggiornamento DB
                 await _sb.from('oggetti').update({ quantita_disponibile: nQ }).eq('id', i.id);
                 
-                // Rimosso riferimento a assignString
+                // --- LOGICA AVVISI MAIL ---
+                // Recupero i dati originali dal prodotto nello state per vedere la soglia minima
+                const originalProd = state.products.find(p => p.id === i.id);
+                const threshold = originalProd ? originalProd.soglia_minima : 0;
+
+                if (nQ === 0) {
+                    urgentAlerts += `<p style="color: red; font-weight: bold;">🚨 ATTENZIONE: L'oggetto '${i.name}' è definitivamente ESAURITO (Qtà: 0)!</p>`;
+                } else if (nQ <= threshold) {
+                    urgentAlerts += `<p style="color: #d97706; font-weight: bold;">⚠️ ATTENZIONE: L'oggetto '${i.name}' è sotto scorta (Rimasti: ${nQ})!</p>`;
+                }
+                // ---------------------------
+
                 details += `<li>${i.name} <b>(${i.qty})</b></li>`;
-                // Rimosso riferimento a assignLog
                 logDetails.push(`${i.name} x${i.qty}`);
             } else {
+                // Gestione Kit (logica simile per i componenti se necessario, ma qui semplifichiamo)
                 const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
                 for (let c of comps) {
-                    await _sb.from('oggetti').update({ quantita_disponibile: c.oggetti.quantita_disponibile - c.quantita_necessaria }).eq('id', c.oggetto_id);
+                    const nuovaQta = c.oggetti.quantita_disponibile - c.quantita_necessaria;
+                    await _sb.from('oggetti').update({ quantita_disponibile: nuovaQta }).eq('id', c.oggetto_id);
+                    
+                    // Controllo esaurimento anche dentro ai kit
+                    if (nuovaQta <= c.oggetti.soglia_minima) {
+                         urgentAlerts += `<p style="color: red;">⚠️ Verifica scorte dopo prelievo Kit ${i.name}: ${c.oggetti.nome} (Rimasti: ${nuovaQta})</p>`;
+                    }
                 }
-                // Rimosso riferimento a assignString
                 details += `<li>KIT ${i.name}</li>`;
-                // Rimosso riferimento a assignLog
                 logDetails.push(`KIT ${i.name}`);
             }
         }
         details += `</ul>`;
+        
+        // Se ci sono avvisi urgenti, li mettiamo IN CIMA alla mail
+        if (urgentAlerts !== "") {
+            details = `<h2>⚠️ REPORT SCORTE CRITICHE</h2>${urgentAlerts}<hr>${details}`;
+        }
     
         // 1. INSERIMENTO LOG MOVIMENTI
         await _sb.from('movimenti').insert([{
@@ -173,7 +214,7 @@ const app = {
             dettagli: logDetails.join(', ') 
         }]);
     
-        // 2. NOTIFICA MAIL
+        // 2. NOTIFICA MAIL (Includerà gli avvisi urgenti se generati)
         try {
             await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
                 method: 'POST',
@@ -193,12 +234,18 @@ const app = {
 // --- CART ---
 const cart = {
     add(id, name, type, qty, max) {
+        // 1. Controllo gravissimo: se la quantità massima è 0 o meno, ferma tutto.
+        if (max <= 0) return ui.toast("Oggetto ESAURITO! Impossibile aggiungere.", "error");
+        
         if(isNaN(qty) || qty < 1) return ui.toast("Quantità non valida", "error");
+        
         const exists = state.cart.find(x => x.id === id);
         if (exists) {
             if (exists.qty + qty > max) return ui.toast("Non abbiamo abbastanza scorte!", "error");
             exists.qty += qty;
         } else {
+            // Un ulteriore controllo di sicurezza nel caso qty > max al primo inserimento
+            if (qty > max) return ui.toast("Richiesta superiore alla disponibilità!", "error");
             state.cart.push({ id, name, type, qty, max });
         }
         this.render();
