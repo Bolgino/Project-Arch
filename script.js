@@ -778,6 +778,37 @@ const pwa = {
         ui.toggleMenu();
     }
 };
+// --- NUOVE FUNZIONI DI RICERCA ---
+    
+    // 1. Filtro Rifornimento
+    filterRestock() {
+        const term = document.getElementById('search-restock').value.toLowerCase();
+        // Nasconde i div che non contengono il testo cercato
+        document.querySelectorAll('#admin-restock-list > div').forEach(el => {
+            const text = el.innerText.toLowerCase();
+            el.classList.toggle('hidden', !text.includes(term));
+        });
+    },
+
+    // 2. Filtro Creazione Pacchetti
+    filterPackCreation() {
+        const term = document.getElementById('search-pack-create').value.toLowerCase();
+        // Filtra le etichette (checkbox)
+        document.querySelectorAll('#pack-items > label').forEach(el => {
+            const text = el.innerText.toLowerCase();
+            el.classList.toggle('hidden', !text.includes(term));
+        });
+    },
+
+    // 3. Filtro Modifica Pacchetti
+    filterPackEdit() {
+        const term = document.getElementById('search-pack-edit').value.toLowerCase();
+        // Filtra le etichette nel popup
+        document.querySelectorAll('#edit-kit-items > label').forEach(el => {
+            const text = el.innerText.toLowerCase();
+            el.classList.toggle('hidden', !text.includes(term));
+        });
+    },
 
 // --- MODIFICA ALLA INITIALIZZAZIONE ---
 // Aggiungi pwa.init() dentro app.init o chiamalo alla fine
