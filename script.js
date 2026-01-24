@@ -184,7 +184,7 @@ const app = {
             </div>
             `;
         }).join('');
-
+    },
     // Sostituisci l'intera funzione app.checkout con questa:
     async checkout() {
         const name = document.getElementById('checkout-name').value;
