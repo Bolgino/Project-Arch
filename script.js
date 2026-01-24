@@ -9,7 +9,7 @@ const CONFIG = {
 const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
 
 // --- STATO ---
-const state = { cart: [], products: [], packs: [], user: null, currentCategory: 'all' };
+const state = { cart: [], products: [], packs: [], packComponents: [], user: null, currentCategory: 'all' };
 
 // --- LOADER ---
 const loader = {
@@ -43,12 +43,15 @@ const app = {
         const { data: k } = await _sb.from('pacchetti').select('*');
         state.packs = k || [];
         
+        // NUOVO: Carichiamo le ricette dei kit per calcolare la disponibilità reale
+        const { data: c } = await _sb.from('componenti_pacchetto').select('*');
+        state.packComponents = c || [];
+        
         if (state.user) {
             admin.renderStock();
             admin.renderRestock();
             admin.renderPackBuilder();
-
-            admin.renderMovements(); // NUOVO
+            admin.renderMovements(); 
         } else {
             this.renderShop();
             this.nav('shop');
@@ -141,16 +144,46 @@ const app = {
         }).join('');
 
         // La parte dei pacchetti rimane invariata o puoi reinserire il codice originale dei pacchetti qui sotto
-        document.getElementById('shop-packs').innerHTML = state.packs.map(p => `
+        document.getElementById('shop-packs').innerHTML = state.packs.map(p => {
+            // 1. Troviamo i componenti di questo pacchetto
+            const comps = state.packComponents.filter(c => c.pacchetto_id === p.id);
+            
+            // 2. Calcoliamo quanti pacchetti massimi possiamo fare
+            let maxQty = 9999; // Partiamo da infinito
+            
+            if (comps.length === 0) maxQty = 0; // Se il kit è vuoto, non si può prendere
+
+            comps.forEach(c => {
+                const item = state.products.find(x => x.id === c.oggetto_id);
+                if (item) {
+                    // Quante volte ci sta il componente necessario nella disponibilità totale?
+                    const possible = Math.floor(item.quantita_disponibile / c.quantita_necessaria);
+                    // Il massimo numero di kit è limitato dal componente più scarso
+                    if (possible < maxQty) maxQty = possible;
+                } else {
+                    maxQty = 0; // Se un componente non esiste più nel database
+                }
+            });
+
+            const isOut = maxQty <= 0;
+            const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed text-white' : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500 shadow-sm transform active:scale-95';
+
+            return `
             <div class="bg-yellow-50 p-4 rounded-xl border-l-4 border-yellow-400 flex justify-between items-center shadow-sm hover:shadow-md transition">
                 <div>
                     <h4 class="font-bold text-yellow-900 leading-tight text-lg">🎁 ${p.nome}</h4>
-                    <span class="text-[10px] uppercase tracking-wide text-yellow-700 font-bold bg-yellow-100 px-1 rounded">Kit Pronto</span>
+                    <span class="text-[10px] uppercase tracking-wide text-yellow-700 font-bold bg-yellow-100 px-1 rounded">
+                        ${isOut ? 'NON DISPONIBILE ❌' : 'Kit Pronto'}
+                    </span>
+                    ${!isOut ? `<div class="text-[10px] text-yellow-600 font-mono mt-1">Disponibili: <b>${maxQty}</b></div>` : ''}
                 </div>
-                <button onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, 999)" class="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-lg text-xs font-bold hover:bg-yellow-500 shadow-sm transform active:scale-95">PRENDI</button>
+                
+                <button ${isOut ? 'disabled' : ''} onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, ${maxQty})" class="px-4 py-2 rounded-lg text-xs font-bold transition ${btnClass}">
+                    ${isOut ? 'MANCA MATERIALE' : 'PRENDI'}
+                </button>
             </div>
-        `).join('');
-    },
+            `;
+        }).join('');
 
     // Sostituisci l'intera funzione app.checkout con questa:
     async checkout() {
