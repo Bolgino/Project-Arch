@@ -135,7 +135,7 @@ const app = {
                     <div class="mt-auto flex items-center gap-1">
                         <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" ${isOut ? 'disabled' : ''} class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-green-500 outline-none bg-gray-50 font-bold ${disabledClass}">
                         <button ${isOut ? 'disabled' : ''} onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 text-white text-xs font-bold py-2.5 rounded-lg transition ${btnClass}">
-                            ${isOut ? 'ESAURITO' : 'AGGIUNGI'}
+                            ${isOut ? 'ESAURITO' : 'PRENDI'}
                         </button>
                     </div>
                 </div>
