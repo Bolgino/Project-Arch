@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Azimut.Arch | Cambusa</title>
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; background-color: #fff7ed; } /* Sfondo arancione chiaro per il cibo */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <nav class="bg-orange-800 text-white sticky top-0 z-50 shadow-xl border-b-4 border-yellow-500 shrink-0">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-2 font-bold text-xl tracking-wider cursor-pointer select-none" onclick="window.location.href='index.html'">
+                    <span class="text-2xl">⬅️</span>
+                    <div class="leading-none">CAMBUSA</div>
+                </div>
+                <button class="text-yellow-400"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-7xl mx-auto w-full px-3 py-4 overflow-y-auto">
+        <h1 class="text-3xl font-extrabold text-orange-900 mb-2">Gestione Cambusa</h1>
+        <p class="text-gray-600">Qui gestiremo le scorte alimentari e i menu.</p>
+        
+        <div id="cambusa-content" class="mt-8 text-center text-gray-400">
+            <span class="text-6xl">🥘</span>
+            <p class="mt-4 font-bold">Sezione in allestimento</p>
+        </div>
+    </main>
+
+    <script src="cambusa.js"></script>
+</body>
+</html>
