@@ -66,6 +66,8 @@ const app = {
     nav(view) {
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
+        // Aggiungi questa riga:
+        if(view === 'wishlist') wishlist.load();
     },
 
     setCategory(cat) {
@@ -253,15 +255,25 @@ const admin = {
 
     // 4. LISTA SPESA (Requests - Simuliamo usando una tabella 'spesa' o 'richieste' filtrata)
     async renderRequests() {
-        // Supponiamo tu voglia usare una tabella separata 'lista_spesa'
-        const { data } = await _sb.from('lista_spesa').select('*').order('created_at', { ascending: false });
+        // Aggiunto .eq('tipo', 'cambusa')
+        const { data } = await _sb.from('richieste').select('*').eq('tipo', 'cambusa').order('created_at', { ascending: false });
         const el = document.getElementById('admin-requests-list');
-        if(!data || !data.length) { el.innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessuna voce in lista.</p>"; return; }
+        
+        if(!data || !data.length) { 
+            el.innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessuna voce in lista.</p>"; 
+            return; 
+        }
         
         el.innerHTML = data.map(r => `
             <div class="bg-pink-50 p-3 rounded border border-pink-100 flex justify-between items-center">
-                <div class="font-bold text-gray-800 text-sm ${r.completato ? 'line-through' : ''}">${r.oggetto}</div>
-                <button onclick="admin.delReq('${r.id}')" class="text-red-500 font-bold px-2">✕</button>
+                <div class="text-sm">
+                    <div class="font-bold text-gray-800 ${r.completato ? 'line-through' : ''}">${r.oggetto}</div>
+                    <div class="text-[10px] text-gray-500">${r.richiedente || 'N/A'}</div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="admin.reqAction('${r.id}', 'toggle', ${!r.completato})" class="px-2 py-1 rounded text-xs font-bold ${r.completato ? 'bg-yellow-100 text-yellow-700' : 'bg-green-600 text-white'}">${r.completato ? '↩️' : '✅'}</button>
+                    <button onclick="admin.reqAction('${r.id}', 'del')" class="text-red-500 font-bold px-2">✕</button>
+                </div>
             </div>`).join('');
     },
     async delReq(id) { await _sb.from('lista_spesa').delete().eq('id', id); this.renderRequests(); },
@@ -362,5 +374,32 @@ const ui = {
         setTimeout(() => t.remove(), 3000);
     }
 };
-
+const wishlist = {
+    async load() {
+        // Carica SOLO richieste tipo 'cambusa'
+        const { data } = await _sb.from('richieste').select('*').eq('tipo', 'cambusa').order('created_at', { ascending: false });
+        this.render(data || []);
+    },
+    render(data) {
+        const el = document.getElementById('wishlist-items');
+        if (!data.length) { el.innerHTML = '<p class="text-gray-400 italic text-center">Nessuna richiesta attiva!</p>'; return; }
+        el.innerHTML = data.map(item => `
+            <div class="bg-white p-3 rounded border-l-4 ${item.completato ? 'border-green-500 opacity-60' : 'border-orange-500'} flex justify-between items-center mb-2">
+                <div><div class="font-bold text-gray-800 ${item.completato ? 'line-through' : ''}">${item.oggetto}</div><div class="text-xs text-gray-500 font-mono">👤 ${item.richiedente || 'Anonimo'}</div></div>
+                ${item.completato ? '<span class="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded">PRESO!</span>' : '<span class="text-orange-400 text-xs italic">In attesa...</span>'}
+            </div>`).join('');
+    },
+    async add() {
+        const item = document.getElementById('wish-item').value;
+        const name = document.getElementById('wish-name').value;
+        if (!item || !name) return ui.toast("Cosa serve e chi sei?", "error");
+        
+        // SALVA CON TIPO 'cambusa'
+        await _sb.from('richieste').insert([{ oggetto: item, richiedente: name, tipo: 'cambusa' }]);
+        
+        ui.toast("Richiesta inviata!", "success"); 
+        document.getElementById('wish-item').value = ''; 
+        this.load();
+    }
+};
 app.init();
