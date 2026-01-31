@@ -7,21 +7,26 @@ const CONFIG = {
 };
 
 // --- DEFINIZIONE REPARTI (Scalabile) ---
-// Qui puoi aggiungere futuri reparti (es. cancelleria)
 const DEPARTMENTS = {
     armadio: {
         id: 'armadio',
         label: 'Armadio',
-        color: 'green', // Corrisponde a classi tailwind (bg-green-600, text-green-900 etc)
-        icon: '⛺',
-        titles: { shop: 'Armadio di Gruppo', sub: 'Tende, pali e materiale tecnico' }
+        color: 'green', // Classi Tailwind (bg-green-600, text-green-900)
+        icon: '⚜️', 
+        titles: { 
+            shop: 'Uniformi & Distintivi', 
+            sub: 'Promesse, Specialità, Distintivi e Patacche' 
+        }
     },
     cambusa: {
         id: 'cambusa',
         label: 'Cambusa',
-        color: 'orange', // Corrisponde a classi tailwind (bg-orange-600, text-orange-900 etc)
+        color: 'orange', // Classi Tailwind (bg-orange-600, text-orange-900)
         icon: '🍝',
-        titles: { shop: 'Cambusa', sub: 'Cibo, scatolame e consumabili' }
+        titles: { 
+            shop: 'Cambusa di Gruppo', 
+            sub: 'Cibo, scatolame, ingredienti e consumabili' 
+        }
     }
 };
 
@@ -40,7 +45,7 @@ const state = {
 
 // --- LOADER ---
 const loader = {
-    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Contemplo il fuoco...", "Imparo il Morse...", "Imparo i nodi...", "Ammiro le Stelle...","Preparo la legna...","Pulisco la gavetta...","Preparo lo zaino...","Guado il torrente...","Inseguo l'orizzonte..."],
+    phrases: ["Cucio i distintivi...", "Conto le scatolette...", "Verifico le taglie...", "Preparo il menù...", "Lucido gli scarponi...", "Controllo la scadenza...", "Stiro il fazzolettone...", "Accendo il fuoco...", "Calcolo l'azimut..."],
     show() {
         const el = document.getElementById('scout-loader');
         const txt = document.getElementById('loader-text');
@@ -50,7 +55,7 @@ const loader = {
     hide() {
         setTimeout(() => {
             document.getElementById('scout-loader').classList.add('opacity-0', 'pointer-events-none');
-        }, 2000); 
+        }, 1000); 
     }
 };
 
@@ -60,12 +65,10 @@ const app = {
         loader.show(); 
         await auth.check();
         
-        // Se l'utente è loggato (Admin), carichiamo di default l'Armadio (o l'ultimo usato)
-        // Se è utente pubblico, mostriamo la Home per scegliere
+        // Se Admin loggato, default su Armadio, ma l'interfaccia si aggiornerà
         if (state.user) {
-            await this.setScope('armadio'); // Default Admin
+            await this.setScope('armadio'); 
         } else {
-            // Se non è loggato, va alla home di selezione
             this.nav('home');
             loader.hide();
         }
@@ -73,25 +76,25 @@ const app = {
         pwa.init(); 
     },
 
-    // FUNZIONE CHIAVE: Cambio contesto (Armadio <-> Cambusa)
+    // CAMBIO REPARTO (Armadio <-> Cambusa)
     async setScope(scopeId) {
         if (!DEPARTMENTS[scopeId]) return;
         state.currentScope = scopeId;
         
         loader.show();
         
-        // 1. Aggiorna UI (Colori e Testi)
+        // 1. Aggiorna Grafica e Testi
         this.updateTheme(DEPARTMENTS[scopeId]);
         
-        // 2. Svuota carrello (per evitare di mischiare cibo e tende)
+        // 2. Svuota carrello (per non mischiare patacche e pasta)
         cart.empty();
 
-        // 3. Carica i dati filtrati
+        // 3. Carica i dati dal DB filtrati
         await this.loadData();
         
-        // 4. Navigazione
+        // 4. Navigazione e aggiornamento UI Admin
         if (state.user) {
-            admin.refreshUI(); // Aggiorna titoli admin
+            admin.refreshUI(); // Aggiorna le scritte Q.G.
             this.nav('admin');
         } else {
             this.nav('shop');
@@ -101,12 +104,11 @@ const app = {
     },
 
     updateTheme(dept) {
-        // Aggiorna la navbar con il colore del reparto
+        // Aggiorna Navbar
         const nav = document.querySelector('nav');
-        // Rimuove vecchi colori (semplificazione brutale ma efficace per tailwind dinamico)
         nav.className = `bg-${dept.color}-900 text-white sticky top-0 z-50 shadow-xl border-b-4 border-yellow-500 shrink-0 transition-colors duration-500`;
 
-        // Aggiorna titoli Shop
+        // Aggiorna Titoli Vista Shop (Pubblica)
         const shopTitle = document.querySelector('#view-shop h1');
         const shopSub = document.querySelector('#view-shop p');
         if(shopTitle) {
@@ -115,16 +117,15 @@ const app = {
         }
         if(shopSub) shopSub.innerText = dept.titles.sub;
 
-        // Aggiorna Icona menu mobile se presente
+        // Aggiorna Icona Menu Mobile
         const menuIcon = document.getElementById('menu-icon-shop');
         const menuText = document.getElementById('menu-text-shop');
         if(menuIcon) menuIcon.innerText = dept.icon;
-        if(menuText) menuText.innerText = dept.label;
+        if(menuText) menuText.innerText = dept.label; // "Armadio" o "Cambusa"
     },
 
     async loadData() {
-        // FILTRO FONDAMENTALE: .eq('magazzino', state.currentScope)
-        
+        // FILTRO: Scarica solo oggetti del magazzino corrente
         const { data: p } = await _sb.from('oggetti')
             .select('*')
             .eq('magazzino', state.currentScope)
@@ -136,16 +137,12 @@ const app = {
             .eq('magazzino', state.currentScope);
         state.packs = k || [];
         
-        // Componenti pacchetto non hanno "magazzino", dipendono dai pacchetti filtrati sopra
+        // I componenti non hanno magazzino, si filtrano in base ai pacchetti caricati
         const { data: c } = await _sb.from('componenti_pacchetto').select('*');
         state.packComponents = c || [];
         
         if (state.user) {
-            admin.renderStock();
-            admin.renderRestock();
-            admin.renderPackBuilder();
-            admin.renderMovements(); 
-            admin.renderRequests();
+            admin.refreshAll(); // Ricarica tutte le liste admin
         } else {
             this.renderShop();
         }
@@ -156,14 +153,12 @@ const app = {
         document.getElementById(`view-${view}`).classList.remove('hidden');
         window.scrollTo(0,0);
 
-        // Se torno alla home, resetto lo stile navbar a default (verde scout)
+        // Reset navbar verde se torno alla home
         if(view === 'home') {
             document.querySelector('nav').className = `bg-green-900 text-white sticky top-0 z-50 shadow-xl border-b-4 border-yellow-500 shrink-0`;
         }
         
-        if (view === 'wishlist') {
-            wishlist.load();
-        }
+        if (view === 'wishlist') wishlist.load();
     },
 
     setCategory(cat) {
@@ -196,9 +191,7 @@ const app = {
         });
 
         const noRes = document.getElementById('no-results');
-        if(noRes) {
-            (visibleCount === 0 && term !== '') ? noRes.classList.remove('hidden') : noRes.classList.add('hidden');
-        }
+        if(noRes) (visibleCount === 0 && term !== '') ? noRes.classList.remove('hidden') : noRes.classList.add('hidden');
     },
 
     renderShop() {
@@ -210,129 +203,91 @@ const app = {
             const isOut = p.quantita_disponibile <= 0;
             const isLow = !isOut && p.quantita_disponibile <= p.soglia_minima;
 
-            if (isOut) {
-                statusBadge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-600 shadow-sm z-10">ESAURITO 🚫</span>';
-            } else if (isLow) {
-                statusBadge = '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 shadow-sm animate-pulse z-10">SCORTA BASSA ⚠️</span>';
-            }
+            if (isOut) statusBadge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10">ESAURITO</span>';
+            else if (isLow) statusBadge = '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse z-10">SCORTA BASSA</span>';
 
-            const disabledClass = isOut ? 'opacity-50 cursor-not-allowed grayscale' : '';
-            // Colore dinamico bottone
-            const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed' : `bg-${color}-600 hover:bg-${color}-700 shadow-sm active:transform active:scale-95`;
+            const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed' : `bg-${color}-600 hover:bg-${color}-700`;
 
             return `
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition flex flex-col h-full group" data-category="${p.categoria || 'Generale'}">
                 <div class="h-28 md:h-32 bg-gray-50 p-4 relative flex items-center justify-center">
-                    <img src="${p.foto_url || `https://placehold.co/200?text=${currentDept.icon}`}" class="max-h-full max-w-full object-contain mix-blend-multiply transition group-hover:scale-110 duration-300 ${disabledClass}">
+                    <img src="${p.foto_url || `https://placehold.co/200?text=${currentDept.icon}`}" class="max-h-full max-w-full object-contain mix-blend-multiply ${isOut?'grayscale opacity-50':''}">
                     ${statusBadge}
                 </div>
                 <div class="p-3 flex flex-col flex-grow">
                     <div class="flex justify-between items-start mb-1">
                         <span class="text-[9px] font-bold uppercase text-gray-400 border px-1 rounded">${p.categoria || 'Gen'}</span>
                     </div>
-                    <h4 class="font-bold text-sm leading-tight mb-1 text-gray-800 line-clamp-2 uppercase tracking-wide">${p.nome}</h4>
+                    <h4 class="font-bold text-sm leading-tight mb-1 text-gray-800 line-clamp-2 uppercase">${p.nome}</h4>
                     <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: <span class="${isOut ? 'text-red-600' : `text-${color}-700`} font-bold text-lg">${p.quantita_disponibile}</span></p>
                     <div class="mt-auto flex items-center gap-1">
-                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" ${isOut ? 'disabled' : ''} class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-${color}-500 outline-none bg-gray-50 font-bold ${disabledClass}">
-                        <button ${isOut ? 'disabled' : ''} onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 text-white text-xs font-bold py-2.5 rounded-lg transition ${btnClass}">
-                            ${isOut ? 'ESAURITO' : 'PRENDI'}
+                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" ${isOut ? 'disabled' : ''} class="w-12 p-2 text-center border rounded-lg text-sm bg-gray-50 font-bold">
+                        <button ${isOut ? 'disabled' : ''} onclick="cart.add('${p.id}', '${p.nome}', 'item', document.getElementById('shop-qty-${p.id}').value, ${p.quantita_disponibile})" class="flex-1 text-white text-xs font-bold py-2.5 rounded-lg transition ${btnClass}">
+                            ${isOut ? 'NO' : 'PRENDI'}
                         </button>
                     </div>
                 </div>
-            </div>
-            `;
+            </div>`;
         }).join('');
-
-        // Render pacchetti (Kit)
+        
+        // Render Pacchetti/Kit
         document.getElementById('shop-packs').innerHTML = state.packs.map(p => {
-            const comps = state.packComponents.filter(c => c.pacchetto_id === p.id);
-            let maxQty = 9999; 
-            if (comps.length === 0) maxQty = 0;
-
-            comps.forEach(c => {
+             const comps = state.packComponents.filter(c => c.pacchetto_id === p.id);
+             let maxQty = 9999;
+             if (comps.length === 0) maxQty = 0;
+             comps.forEach(c => {
                 const item = state.products.find(x => x.id === c.oggetto_id);
-                if (item) {
+                if(item) {
                     const possible = Math.floor(item.quantita_disponibile / c.quantita_necessaria);
-                    if (possible < maxQty) maxQty = possible;
-                } else {
-                    maxQty = 0;
-                }
-            });
-
-            const isOut = maxQty <= 0;
-            const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed text-white' : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500 shadow-sm transform active:scale-95';
-
-            return `
-            <div class="bg-yellow-50 p-4 rounded-xl border-l-4 border-yellow-400 flex justify-between items-center shadow-sm hover:shadow-md transition">
-                <div>
-                    <h4 class="font-bold text-yellow-900 leading-tight text-lg">🎁 ${p.nome}</h4>
-                    <span class="text-[10px] uppercase tracking-wide text-yellow-700 font-bold bg-yellow-100 px-1 rounded">
-                        ${isOut ? 'NON DISPONIBILE ❌' : 'Kit Pronto'}
-                    </span>
-                    ${!isOut ? `<div class="text-[10px] text-yellow-600 font-mono mt-1">Disponibili: <b>${maxQty}</b></div>` : ''}
-                </div>
-                
-                <button ${isOut ? 'disabled' : ''} onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, ${maxQty})" class="px-4 py-2 rounded-lg text-xs font-bold transition ${btnClass}">
-                    ${isOut ? 'MANCA MATERIALE' : 'PRENDI'}
-                </button>
-            </div>
-            `;
+                    if(possible < maxQty) maxQty = possible;
+                } else maxQty = 0;
+             });
+             const isOut = maxQty <= 0;
+             const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500';
+             
+             return `
+            <div class="bg-yellow-50 p-4 rounded-xl border-l-4 border-yellow-400 flex justify-between items-center shadow-sm">
+                <div><h4 class="font-bold text-yellow-900">🎁 ${p.nome}</h4><span class="text-[10px] text-yellow-700 font-bold">${isOut ? 'NON DISPONIBILE' : `DISPONIBILI: ${maxQty}`}</span></div>
+                <button ${isOut?'disabled':''} onclick="cart.add('${p.id}', '${p.nome}', 'pack', 1, ${maxQty})" class="${btnClass} px-4 py-2 rounded-lg text-xs font-bold shadow-sm">PRENDI</button>
+            </div>`;
         }).join('');
     },
 
     async checkout() {
         const name = document.getElementById('checkout-name').value;
-        if (!name || state.cart.length === 0) return ui.toast("Inserisci nome e riempi zaino!", "error");
+        if (!name || state.cart.length === 0) return ui.toast("Zaino vuoto o nome mancante!", "error");
     
         loader.show(); 
         const dept = DEPARTMENTS[state.currentScope];
-        let details = `<h3>Prelievo [${dept.label}] effettuato da: ${name}</h3><ul>`;
+        let details = `<h3>Prelievo [${dept.label}] di: ${name}</h3><ul>`;
         let logDetails = [];
         let urgentAlerts = ""; 
     
         for (let i of state.cart) {
-            
             if (i.type === 'item') {
                 const nQ = i.max - i.qty;
                 await _sb.from('oggetti').update({ quantita_disponibile: nQ }).eq('id', i.id);
                 
                 const originalProd = state.products.find(p => p.id === i.id);
-                const threshold = originalProd ? originalProd.soglia_minima : 0;
-
-                if (nQ === 0) {
-                    urgentAlerts += `<p style="color: red; font-weight: bold;">🚨 ATTENZIONE [${dept.label}]: '${i.name}' ESAURITO!</p>`;
-                } else if (nQ <= threshold) {
-                    urgentAlerts += `<p style="color: #d97706; font-weight: bold;">⚠️ ATTENZIONE: '${i.name}' sotto scorta (Rimasti: ${nQ})!</p>`;
-                }
-
+                if (nQ <= originalProd.soglia_minima) urgentAlerts += `<p style="color:red">⚠️ ${i.name} in esaurimento (${nQ})</p>`;
                 details += `<li>${i.name} <b>(${i.qty})</b></li>`;
                 logDetails.push(`${i.name} x${i.qty}`);
             } else {
-                // Kit
-                const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
-                for (let c of comps) {
+                 const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
+                 for (let c of comps) {
                     const nuovaQta = c.oggetti.quantita_disponibile - c.quantita_necessaria;
                     await _sb.from('oggetti').update({ quantita_disponibile: nuovaQta }).eq('id', c.oggetto_id);
-                    
-                    if (nuovaQta <= c.oggetti.soglia_minima) {
-                         urgentAlerts += `<p style="color: red;">⚠️ Verifica scorte dopo prelievo Kit ${i.name}: ${c.oggetti.nome} (Rimasti: ${nuovaQta})</p>`;
-                    }
-                }
-                details += `<li>KIT ${i.name}</li>`;
-                logDetails.push(`KIT ${i.name}`);
+                 }
+                 logDetails.push(`KIT ${i.name}`);
+                 details += `<li>KIT ${i.name}</li>`;
             }
         }
-        details += `</ul>`;
-        
-        if (urgentAlerts !== "") {
-            details = `<h2>⚠️ REPORT SCORTE CRITICHE [${dept.label}]</h2>${urgentAlerts}<hr>${details}`;
-        }
+        details += `</ul>${urgentAlerts}`;
     
-        // INSERIMENTO LOG MOVIMENTI CON IL MAGAZZINO
-        await _sb.from('movimenti').insert([{
-            utente: name,
-            dettagli: logDetails.join(', '),
-            magazzino: state.currentScope // Importante: traccia dove è avvenuto il prelievo
+        await _sb.from('movimenti').insert([{ 
+            utente: name, 
+            dettagli: logDetails.join(', '), 
+            magazzino: state.currentScope // SALVA NEL REPARTO GIUSTO
         }]);
     
         try {
@@ -341,77 +296,85 @@ const app = {
                 headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ details, admin_email: CONFIG.adminEmail })
             });
-        } catch(e) { console.log("No notify func"); }
+        } catch(e) {}
     
         cart.empty();
         ui.toggleCart();
         loader.hide();
-        ui.toast("Materiale Prelevato con successo. Buona Strada! ", "success");
-        
-        // Ricarichiamo i dati invece di ricaricare la pagina per mantenere il contesto
-        setTimeout(() => app.loadData(), 1500);
+        ui.toast("Prelievo registrato!", "success");
+        setTimeout(() => app.loadData(), 1000); 
     }
 };
 
 // --- CART ---
 const cart = {
-    add(id, name, type, qty, max) {
-        if (max <= 0) return ui.toast("Oggetto ESAURITO! Impossibile aggiungere.", "error");
-        if(isNaN(qty) || qty < 1) return ui.toast("Quantità non valida", "error");
+    add(id, name, type, qtyVal, max) {
+        const qty = parseInt(qtyVal);
+        if (max <= 0) return ui.toast("Esaurito!", "error");
+        if(isNaN(qty) || qty < 1) return ui.toast("Quantità invalida", "error");
         
         const exists = state.cart.find(x => x.id === id);
         if (exists) {
-            if (exists.qty + qty > max) return ui.toast("Non abbiamo abbastanza scorte!", "error");
+            if (exists.qty + qty > max) return ui.toast("Non basta!", "error");
             exists.qty += qty;
         } else {
-            if (qty > max) return ui.toast("Richiesta superiore alla disponibilità!", "error");
+            if (qty > max) return ui.toast("Troppo!", "error");
             state.cart.push({ id, name, type, qty, max });
         }
         this.render();
-        ui.toast(`${name} aggiunto allo zaino`, "success");
+        ui.toast("Aggiunto!", "success");
     },
     remove(idx) { state.cart.splice(idx, 1); this.render(); },
     empty() { state.cart = []; this.render(); },
     render() {
-        const count = state.cart.length;
-        const elMob = document.getElementById('cart-count-mobile');
-        if(elMob) elMob.innerText = count;
-        
-        // Colore bordo in base al reparto
         const deptColor = state.currentScope ? DEPARTMENTS[state.currentScope].color : 'green';
-
-        document.getElementById('cart-items').innerHTML = state.cart.length ? state.cart.map((i, idx) => `
-            <div class="bg-white p-3 rounded shadow-sm border-l-4 border-${deptColor}-600 relative overflow-hidden flex flex-col gap-2">
-                <div class="flex justify-between items-center">
-                    <div class="text-sm z-10">
-                        <div class="font-bold text-gray-800 text-lg leading-tight">${i.name}</div>
-                        <span class="text-${deptColor}-700 text-xs font-bold bg-${deptColor}-100 px-2 py-0.5 rounded border border-${deptColor}-200">Quantità: ${i.qty}</span>
-                    </div>
-                    <button onclick="cart.remove(${idx})" class="text-red-400 hover:text-red-600 font-bold px-3 py-1 rounded hover:bg-red-50 transition z-10">🗑</button>
-                </div>
-            </div>
-        `).join('') : '<div class="text-center py-10 opacity-50"><div class="text-4xl mb-2">🎒</div><p class="text-sm font-bold">Lo zaino è vuoto</p></div>';
+        document.getElementById('cart-count-mobile').innerText = state.cart.length;
+        document.getElementById('cart-items').innerHTML = state.cart.map((i, idx) => `
+            <div class="bg-white p-3 rounded shadow-sm border-l-4 border-${deptColor}-600 flex justify-between items-center">
+                <div><div class="font-bold">${i.name}</div><div class="text-xs">Quantità: ${i.qty}</div></div>
+                <button onclick="cart.remove(${idx})" class="text-red-500 font-bold">🗑</button>
+            </div>`).join('');
     }
 };
 
 // --- ADMIN ---
 const admin = {
-    // Nuova funzione per cambiare UI admin in base al reparto
+    // AGGIORNA LE SCRITTE Q.G. IN BASE AL REPARTO
     refreshUI() {
         if(!state.currentScope) return;
         const dept = DEPARTMENTS[state.currentScope];
+        
+        // 1. Aggiorna Titolo Principale Admin (Q.G. ARMADIO / Q.G. CAMBUSA)
         const adminHeader = document.querySelector('#view-admin h2');
         if(adminHeader) {
-            adminHeader.innerText = `Q.G. ${dept.label}`;
-            // Cambia colore bordo box titolo
+            adminHeader.innerText = `Q.G. ${dept.label.toUpperCase()}`;
             adminHeader.parentElement.className = `col-span-2 lg:col-auto bg-white p-3 rounded-lg shadow text-center border-l-4 border-${dept.color}-600 mb-0 lg:mb-2`;
+        }
+        
+        // 2. Aggiorna il testo del pulsante Stock
+        const stockBtn = document.querySelector(`button[onclick="admin.tab('stock')"]`);
+        if(stockBtn) {
+            stockBtn.innerHTML = `📦 ${dept.label}`; 
+        }
+        
+        // 3. Aggiorna Titolo interno alla tab stock
+        const stockTitle = document.querySelector('#admin-tab-stock h3');
+        if(stockTitle) {
+            stockTitle.innerText = `Inventario ${dept.label}`;
+            stockTitle.className = `font-bold text-xl text-${dept.color}-900`;
         }
     },
 
-    // Funzione per switchare rapidamente magazzino da Admin
+    refreshAll() {
+        this.refreshUI();
+        this.renderStock();
+        this.renderRestock();
+        this.renderPackBuilder();
+        this.renderMovements();
+        this.renderRequests();
+    },
+
     switchScopeFromAdmin() {
-        // Logica semplice toggle: se sei armadio vai cambusa, e viceversa
-        // Per renderlo più robusto in futuro con N reparti, si potrebbe aprire una modale
         const newScope = state.currentScope === 'armadio' ? 'cambusa' : 'armadio';
         app.setScope(newScope);
     },
@@ -419,89 +382,70 @@ const admin = {
     tab(t) {
         document.querySelectorAll('.admin-tab').forEach(e => e.classList.add('hidden'));
         document.getElementById(`admin-tab-${t}`).classList.remove('hidden');
-        if (t === 'requests') this.renderRequests();
     },
     
-    // --- STOCK & RESTOCK ---
+    // --- STOCK ---
     renderStock() {
         const dept = DEPARTMENTS[state.currentScope];
         document.getElementById('admin-total-count').innerText = state.products.length;
-
         document.getElementById('admin-stock-list').innerHTML = state.products.map(p => `
-            <div class="flex justify-between items-center py-3 hover:bg-gray-50 px-2 transition border-b border-gray-100 last:border-0">
+            <div class="flex justify-between items-center py-3 border-b">
                 <div class="flex items-center gap-3">
-                    <img src="${p.foto_url || ''}" class="w-10 h-10 object-contain bg-white border rounded p-0.5">
-                    <div>
-                        <div class="font-bold text-gray-800">${p.nome}</div>
-                        <div class="text-xs text-gray-500 font-mono">Qty: ${p.quantita_disponibile} | Min: ${p.soglia_minima}</div>
-                    </div>
+                    <div class="font-bold text-gray-800">${p.nome}</div>
+                    <div class="text-xs text-gray-500 font-mono">Qty: ${p.quantita_disponibile}</div>
                 </div>
-                <button onclick="admin.openEdit('${p.id}')" class="text-${dept.color}-600 text-xs font-bold bg-${dept.color}-50 px-3 py-1.5 rounded hover:bg-${dept.color}-100 transition">MODIFICA</button>
-            </div>
-        `).join('');
+                <button onclick="admin.openEdit('${p.id}')" class="text-${dept.color}-600 text-xs font-bold border border-${dept.color}-200 bg-${dept.color}-50 px-3 py-1 rounded">MODIFICA</button>
+            </div>`).join('');
     },
-
     filterStock() {
         const term = document.getElementById('admin-search-bar').value.toLowerCase().trim();
-        const rows = document.querySelectorAll('#admin-stock-list > div');
-        rows.forEach(row => {
-            const text = row.innerText.toLowerCase();
-            if (text.includes(term)) { row.classList.remove('hidden'); row.classList.add('flex'); } 
-            else { row.classList.add('hidden'); row.classList.remove('flex'); }
+        document.querySelectorAll('#admin-stock-list > div').forEach(r => {
+            r.classList.toggle('hidden', !r.innerText.toLowerCase().includes(term));
+            r.classList.toggle('flex', r.innerText.toLowerCase().includes(term));
         });
     },
 
+    // --- RIFORNIMENTO ---
     renderRestock() {
         document.getElementById('admin-restock-list').innerHTML = state.products.map(p => `
-            <div class="bg-white border rounded-lg p-3 flex justify-between items-center shadow-sm hover:shadow-md transition">
-                <div class="truncate pr-2">
-                    <div class="font-bold text-sm text-gray-700 truncate">${p.nome}</div>
-                    <div class="text-xs text-gray-400">Attuali: ${p.quantita_disponibile}</div>
-                </div>
+            <div class="bg-white border rounded-lg p-3 flex justify-between items-center shadow-sm">
+                <div class="truncate pr-2"><div class="font-bold text-sm text-gray-700 truncate">${p.nome}</div><div class="text-xs text-gray-400">Attuali: ${p.quantita_disponibile}</div></div>
                 <div class="flex items-center bg-blue-50 rounded-lg px-2 py-1 border border-blue-100">
                     <span class="text-blue-600 text-xs font-bold mr-2">+</span>
-                    <input type="number" min="0" placeholder="0" data-id="${p.id}" data-current="${p.quantita_disponibile}" class="restock-input w-16 p-1 text-center bg-transparent outline-none font-bold text-blue-900 border-b border-blue-200 focus:border-blue-500">
+                    <input type="number" min="0" placeholder="0" data-id="${p.id}" data-current="${p.quantita_disponibile}" class="restock-input w-16 p-1 text-center bg-transparent outline-none font-bold">
                 </div>
-            </div>
-        `).join('');
+            </div>`).join('');
+    },
+    filterRestock() {
+        const term = document.getElementById('search-restock').value.toLowerCase();
+        document.querySelectorAll('#admin-restock-list > div').forEach(el => el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term)));
     },
     async processRestock() {
         const inputs = document.querySelectorAll('.restock-input');
         let updates = [];
         inputs.forEach(inp => {
             const val = parseInt(inp.value);
-            if(val > 0) {
-                const id = inp.dataset.id;
-                const current = parseInt(inp.dataset.current);
-                updates.push(_sb.from('oggetti').update({ quantita_disponibile: current + val }).eq('id', id));
-            }
+            if(val > 0) updates.push(_sb.from('oggetti').update({ quantita_disponibile: parseInt(inp.dataset.current) + val }).eq('id', inp.dataset.id));
         });
-        if(updates.length === 0) return ui.toast("Nessuna quantità", "error");
-        loader.show();
-        await Promise.all(updates);
-        inputs.forEach(i => i.value = '');
-        ui.toast("Rifornito!", "success");
-        await app.loadData();
-        loader.hide();
+        if(updates.length) { await Promise.all(updates); ui.toast("Rifornito!", "success"); app.loadData(); }
     },
     
-    // --- PRODOTTO ---
+    // --- EDITOR PRODOTTO ---
     openEdit(id) {
         const p = state.products.find(x => x.id === id);
-        document.getElementById('modal-prod-title').innerText = "Modifica Prodotto";
+        document.getElementById('modal-prod-title').innerText = "Modifica Oggetto";
         document.getElementById('prod-id').value = id;
         document.getElementById('prod-name').value = p.nome;
         document.getElementById('prod-cat').value = p.categoria || 'Generale';
         document.getElementById('prod-qty').value = p.quantita_disponibile;
         document.getElementById('prod-min').value = p.soglia_minima;
         document.getElementById('prod-img').value = p.foto_url || '';
-        document.getElementById('prod-img-preview').src = p.foto_url || 'https://placehold.co/200?text=No+Img';
-        document.getElementById('prod-file').value = "";
+        document.getElementById('prod-img-preview').src = p.foto_url || '';
         document.getElementById('btn-del').classList.remove('hidden');
         ui.modal('modal-prod');
     },
     openNewProd() {
-        document.getElementById('modal-prod-title').innerText = "Nuovo Prodotto";
+        document.getElementById('modal-prod-title').innerText = "Nuovo Oggetto";
         document.getElementById('prod-id').value = "";
         document.querySelectorAll('#modal-prod input').forEach(i => i.value = "");
         document.getElementById('prod-cat').value = 'Generale';
@@ -513,7 +457,7 @@ const admin = {
         const id = document.getElementById('prod-id').value;
         const file = document.getElementById('prod-file').files[0];
         let imgUrl = document.getElementById('prod-img').value;
-
+        
         if (file) {
             document.getElementById('upload-loader').classList.remove('hidden');
             const fileName = `${Date.now()}_${file.name.replace(/\s/g, '')}`;
@@ -531,7 +475,7 @@ const admin = {
             quantita_disponibile: document.getElementById('prod-qty').value,
             soglia_minima: document.getElementById('prod-min').value,
             foto_url: imgUrl,
-            magazzino: state.currentScope // SALVIAMO NEL REPARTO CORRENTE
+            magazzino: state.currentScope // SALVA NEL REPARTO CORRENTE
         };
 
         if (id) await _sb.from('oggetti').update(data).eq('id', id);
@@ -545,76 +489,54 @@ const admin = {
         ui.closeModals(); app.loadData();
     },
     
-    // --- KIT ---
+    // --- KIT (GESTIONE COMPLETA) ---
     renderPackBuilder() {
-        document.getElementById('pack-items').innerHTML = state.products.map(p => `
+         document.getElementById('pack-items').innerHTML = state.products.map(p => `
             <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-gray-50 cursor-pointer">
-                <input type="checkbox" value="${p.id}" class="pack-chk accent-yellow-500 w-4 h-4"> 
-                <span class="font-medium">${p.nome}</span>
-            </label>
-        `).join('');
-
-        const listEl = document.getElementById('admin-packs-list');
-        if(state.packs.length === 0) {
-            listEl.innerHTML = '<p class="text-xs text-gray-400 italic">Nessun kit in questo reparto.</p>';
-        } else {
-            listEl.innerHTML = state.packs.map(k => `
-                <div class="flex justify-between items-center bg-white p-3 border rounded-lg shadow-sm hover:shadow-md transition">
-                    <span class="font-bold text-sm text-gray-700 flex items-center gap-2">🎁 ${k.nome}</span>
-                    <div class="flex gap-2">
-                        <button onclick="admin.openEditPack('${k.id}')" class="text-blue-500 hover:text-blue-700 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-50 transition">MODIFICA</button>
-                        <button onclick="admin.deletePack('${k.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-3 py-1.5 rounded hover:bg-red-50 transition">ELIMINA</button>
-                    </div>
+                <input type="checkbox" value="${p.id}" class="pack-chk accent-yellow-500 w-4 h-4"> <span class="font-medium">${p.nome}</span>
+            </label>`).join('');
+         
+         document.getElementById('admin-packs-list').innerHTML = state.packs.map(k => `
+            <div class="flex justify-between items-center bg-white p-3 border rounded-lg shadow-sm hover:shadow-md transition">
+                <span class="font-bold text-sm text-gray-700 flex items-center gap-2">🎁 ${k.nome}</span>
+                <div class="flex gap-2">
+                    <button onclick="admin.openEditPack('${k.id}')" class="text-blue-500 hover:text-blue-700 text-xs font-bold border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-50 transition">MODIFICA</button>
+                    <button onclick="admin.deletePack('${k.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 px-3 py-1.5 rounded hover:bg-red-50 transition">ELIMINA</button>
                 </div>
-            `).join('');
-        }
+            </div>`).join('');
     },
     async createPack() {
         const name = document.getElementById('pack-name').value;
         const chks = document.querySelectorAll('.pack-chk:checked');
         if (!name || !chks.length) return ui.toast("Dati mancanti", "error");
-        
-        // Creiamo il pacchetto assegnandolo al magazzino corrente
         const { data } = await _sb.from('pacchetti').insert([{ nome: name, magazzino: state.currentScope }]).select();
         const items = Array.from(chks).map(c => ({ pacchetto_id: data[0].id, oggetto_id: c.value, quantita_necessaria: 1 }));
         await _sb.from('componenti_pacchetto').insert(items);
-        
-        ui.toast("Creato!", "success"); document.getElementById('pack-name').value = ""; app.loadData();
+        ui.toast("Kit Creato!", "success"); app.loadData();
     },
     async openEditPack(id) {
         const pack = state.packs.find(k => k.id === id);
         if(!pack) return;
-
         const { data: currentItems } = await _sb.from('componenti_pacchetto').select('oggetto_id').eq('pacchetto_id', id);
         const currentIds = currentItems.map(i => i.oggetto_id);
-
         document.getElementById('edit-kit-id').value = id;
         document.getElementById('edit-kit-name').value = pack.nome;
-        
         document.getElementById('edit-kit-items').innerHTML = state.products.map(p => `
             <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-white cursor-pointer ${currentIds.includes(p.id) ? 'bg-yellow-50 border-yellow-300' : ''}">
-                <input type="checkbox" value="${p.id}" class="edit-pack-chk accent-yellow-500 w-4 h-4" ${currentIds.includes(p.id) ? 'checked' : ''}> 
-                <span class="font-medium">${p.nome}</span>
-            </label>
-        `).join('');
-
+                <input type="checkbox" value="${p.id}" class="edit-pack-chk accent-yellow-500 w-4 h-4" ${currentIds.includes(p.id) ? 'checked' : ''}> <span class="font-medium">${p.nome}</span>
+            </label>`).join('');
         ui.modal('modal-kit');
     },
     async saveEditPack() {
         const id = document.getElementById('edit-kit-id').value;
         const name = document.getElementById('edit-kit-name').value;
         const chks = document.querySelectorAll('.edit-pack-chk:checked');
-
         if(!name || !chks.length) return ui.toast("Serve nome e almeno un oggetto", "error");
-
         await _sb.from('pacchetti').update({ nome: name }).eq('id', id);
         await _sb.from('componenti_pacchetto').delete().eq('pacchetto_id', id);
         const items = Array.from(chks).map(c => ({ pacchetto_id: id, oggetto_id: c.value, quantita_necessaria: 1 }));
         await _sb.from('componenti_pacchetto').insert(items);
-
-        ui.toast("Kit Aggiornato!", "success");
-        ui.closeModals();
-        app.loadData();
+        ui.toast("Kit Aggiornato!", "success"); ui.closeModals(); app.loadData();
     },
     async deletePack(id) {
         if(!confirm("Eliminare Kit?")) return;
@@ -622,278 +544,137 @@ const admin = {
         await _sb.from('pacchetti').delete().eq('id', id);
         ui.toast("Eliminato", "success"); app.loadData();
     },
-    
-    // --- MOVIMENTI & RICHIESTE ---
-    async renderMovements() {
-        // Filtriamo i movimenti per magazzino
-        const { data } = await _sb.from('movimenti')
-            .select('*')
-            .eq('magazzino', state.currentScope)
-            .order('created_at', { ascending: false });
-
-        if(!data || data.length === 0) {
-            document.getElementById('movements-list').innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessun movimento recente qui.</p>";
-            return;
-        }
-        document.getElementById('movements-list').innerHTML = data.map(m => `
-            <div class="bg-gray-50 p-3 rounded border border-gray-200 mb-2">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-gray-900 text-sm">${m.utente}</span>
-                    <span class="text-[10px] text-gray-600 font-mono">${new Date(m.created_at).toLocaleDateString()}</span>
-                </div>
-                <p class="text-xs text-gray-800 leading-snug">${m.dettagli}</p>
-            </div>
-        `).join('');
-    },
-    filterMovements() {
-        const term = document.getElementById('movements-search').value.toLowerCase().trim();
-        const cards = document.querySelectorAll('#movements-list > div');
-        cards.forEach(card => {
-            const text = card.innerText.toLowerCase();
-            if (text.includes(term)) { card.classList.remove('hidden'); } else { card.classList.add('hidden'); }
-        });
-    },
-    
-    async renderRequests() {
-        // Carica le richieste del magazzino corrente
-        const { data } = await _sb.from('richieste')
-            .select('*')
-            .eq('magazzino', state.currentScope)
-            .order('created_at', { ascending: false });
-        
-        const el = document.getElementById('admin-requests-list');
-        if (!data || data.length === 0) {
-            el.innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessuna richiesta in attesa.</p>";
-            return;
-        }
-
-        el.innerHTML = data.map(r => `
-            <div class="bg-pink-50 p-3 rounded border border-pink-100 flex justify-between items-center transition ${r.completato ? 'opacity-50 grayscale' : ''}">
-                <div>
-                    <div class="font-bold text-gray-800 text-sm ${r.completato ? 'line-through' : ''}">${r.oggetto}</div>
-                    <div class="text-[10px] text-gray-500 font-mono">
-                        👤 ${r.richiedente || 'Anonimo'} | 📅 ${new Date(r.created_at).toLocaleDateString()}
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="admin.reqAction('${r.id}', 'toggle', ${!r.completato})" class="px-3 py-1 rounded text-xs font-bold shadow-sm ${r.completato ? 'bg-yellow-100 text-yellow-700' : 'bg-green-600 text-white'}">
-                        ${r.completato ? 'Da Comprare' : 'Preso!'}
-                    </button>
-                    <button onclick="admin.reqAction('${r.id}', 'del')" class="px-3 py-1 rounded bg-red-100 text-red-600 text-xs font-bold hover:bg-red-200">
-                        Elimina
-                    </button>
-                </div>
-            </div>
-        `).join('');
-    },
-
-    async reqAction(id, action, status) {
-        if (action === 'del') {
-            if(!confirm("Eliminare questa richiesta?")) return;
-            await _sb.from('richieste').delete().eq('id', id);
-        } else if (action === 'toggle') {
-            await _sb.from('richieste').update({ completato: status }).eq('id', id);
-        }
-        ui.toast("Fatto!", "success");
-        this.renderRequests(); 
-        if(typeof wishlist !== 'undefined') wishlist.load(); 
-    },
-    
-    // FILTRI EXTRA
-    filterRestock() {
-        const term = document.getElementById('search-restock').value.toLowerCase();
-        document.querySelectorAll('#admin-restock-list > div').forEach(el => {
-            el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term));
-        });
-    },
     filterPackCreation() {
         const term = document.getElementById('search-pack-create').value.toLowerCase();
-        document.querySelectorAll('#pack-items > label').forEach(el => {
-            el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term));
-        });
+        document.querySelectorAll('#pack-items > label').forEach(el => el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term)));
     },
     filterPackEdit() {
         const term = document.getElementById('search-pack-edit').value.toLowerCase();
-        document.querySelectorAll('#edit-kit-items > label').forEach(el => {
-            el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term));
-        });
+        document.querySelectorAll('#edit-kit-items > label').forEach(el => el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term)));
     },
-};
 
-// --- AUTH & UI ---
-const auth = {
-    async check() {
-        const { data: { user } } = await _sb.auth.getUser();
-        if (user) {
-            state.user = user;
-            document.getElementById('nav-admin-mobile').classList.remove('hidden');
-            document.getElementById('nav-admin-mobile').classList.add('flex');
-            document.getElementById('btn-login-mobile').classList.add('hidden');
-            
-            // Nascondiamo i menu pubblici se siamo admin (li vediamo dalla dashboard)
-            document.getElementById('nav-btn-shop').classList.add('hidden');
-            document.getElementById('nav-btn-wish').classList.add('hidden');
-            
-            // Se siamo già dentro, init lo gestirà andando su admin
-        }
+    // --- MOVIMENTI & RICHIESTE ---
+    async renderMovements() {
+        const { data } = await _sb.from('movimenti').select('*').eq('magazzino', state.currentScope).order('created_at', { ascending: false });
+        const el = document.getElementById('movements-list');
+        if(!data || !data.length) { el.innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessun movimento.</p>"; return; }
+        el.innerHTML = data.map(m => `
+            <div class="bg-gray-50 p-2 rounded border mb-2">
+                <div class="flex justify-between font-bold text-sm"><span>${m.utente}</span> <span class="text-xs text-gray-400">${new Date(m.created_at).toLocaleDateString()}</span></div>
+                <p class="text-xs text-gray-800">${m.dettagli}</p>
+            </div>`).join('');
     },
-    async login() {
-        const { error } = await _sb.auth.signInWithPassword({
-            email: document.getElementById('log-mail').value,
-            password: document.getElementById('log-pass').value
-        });
-        if (!error) location.reload(); else ui.toast("Dati errati", "error");
+    filterMovements() {
+        const term = document.getElementById('movements-search').value.toLowerCase();
+        document.querySelectorAll('#movements-list > div').forEach(el => el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term)));
     },
-    logout() { _sb.auth.signOut().then(() => location.reload()); }
-};
 
-const ui = {
-    modal(id) { document.getElementById(id).classList.remove('hidden'); },
-    closeModals() { document.querySelectorAll('[id^="modal"], #login-modal').forEach(m => m.classList.add('hidden')); },
-    toggleCart() { document.getElementById('cart-sidebar').classList.toggle('translate-x-full'); },
-    toast(msg, type) {
-        const t = document.createElement('div');
-        t.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce z-[200] ${type === 'error' ? 'bg-red-500' : 'bg-green-800'}`;
-        t.innerText = msg;
-        document.body.appendChild(t);
-        setTimeout(() => t.remove(), 3000);
+    async renderRequests() {
+        const { data } = await _sb.from('richieste').select('*').eq('magazzino', state.currentScope).order('created_at', { ascending: false });
+        const el = document.getElementById('admin-requests-list');
+        if (!data || !data.length) { el.innerHTML = "<p class='text-xs text-gray-400 text-center'>Nessuna richiesta.</p>"; return; }
+        el.innerHTML = data.map(r => `
+            <div class="bg-pink-50 p-2 rounded border mb-1 flex justify-between">
+                <div><div class="font-bold text-sm ${r.completato?'line-through':''}">${r.oggetto}</div><div class="text-[10px]">${r.richiedente}</div></div>
+                <div class="flex gap-1"><button onclick="admin.reqAction('${r.id}', 'toggle', ${!r.completato})" class="text-xs bg-white border px-2 rounded">${r.completato?'↩️':'✅'}</button>
+                <button onclick="admin.reqAction('${r.id}', 'del')" class="text-xs bg-red-100 text-red-600 px-2 rounded">X</button></div>
+            </div>`).join('');
     },
-    toggleMenu() {
-        const menu = document.getElementById('mobile-menu');
-        const panel = document.getElementById('mobile-menu-panel');
-        
-        if (menu.classList.contains('hidden')) {
-            menu.classList.remove('hidden');
-            setTimeout(() => panel.classList.remove('translate-x-full'), 10);
-        } else {
-            panel.classList.add('translate-x-full');
-            setTimeout(() => menu.classList.add('hidden'), 300);
-        }
+    async reqAction(id, type, val) {
+        if(type==='toggle') await _sb.from('richieste').update({completato:val}).eq('id',id);
+        else if(type==='del' && confirm('Eliminare?')) await _sb.from('richieste').delete().eq('id',id);
+        admin.renderRequests(); wishlist.load();
     }
 };
 
 // --- WISHLIST ---
 const wishlist = {
     async load() {
-        // Filtriamo per magazzino corrente
-        const { data, error } = await _sb.from('richieste')
-            .select('*')
-            .eq('magazzino', state.currentScope)
-            .order('created_at', { ascending: false });
-        if (error) return;
-        this.render(data);
+        const { data } = await _sb.from('richieste').select('*').eq('magazzino', state.currentScope).order('created_at', { ascending: false });
+        this.render(data || []);
     },
-    
     render(data) {
         const el = document.getElementById('wishlist-items');
-        if (!data || data.length === 0) {
-            el.innerHTML = '<p class="text-gray-400 italic text-center col-span-2">Nessuna richiesta attiva in questo reparto!</p>';
-            return;
-        }
-
+        if (!data.length) { el.innerHTML = '<p class="text-center text-gray-400 text-xs">Lista vuota!</p>'; return; }
         const isAdmin = state.user !== null;
-
         el.innerHTML = data.map(item => `
-            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${item.completato ? 'border-green-500 opacity-60' : 'border-purple-500'} flex justify-between items-center transition relative overflow-hidden">
-                <div>
-                    <div class="font-bold text-gray-800 text-lg ${item.completato ? 'line-through' : ''}">${item.oggetto}</div>
-                    <div class="text-xs text-gray-500 font-mono flex items-center gap-2">
-                        <span>👤 ${item.richiedente || 'Anonimo'}</span>
-                        <span>📅 ${new Date(item.created_at).toLocaleDateString()}</span>
-                    </div>
-                </div>
-                
+            <div class="bg-white p-4 rounded shadow-sm border-l-4 ${item.completato ? 'border-green-500 opacity-60' : 'border-purple-500'} flex justify-between items-center">
+                <div><div class="font-bold text-gray-800 ${item.completato ? 'line-through' : ''}">${item.oggetto}</div><div class="text-xs text-gray-500">👤 ${item.richiedente}</div></div>
                 ${isAdmin ? `
-                <div class="flex gap-2 z-10">
-                    <button onclick="wishlist.toggle(${item.id}, ${!item.completato})" class="p-2 rounded-full ${item.completato ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'} font-bold text-xs" title="${item.completato ? 'Segna da comprare' : 'Segna comprato'}">
-                        ${item.completato ? '↩️' : '✅'}
-                    </button>
-                    <button onclick="wishlist.delete(${item.id})" class="p-2 rounded-full bg-red-100 text-red-600 font-bold text-xs" title="Elimina">🗑</button>
-                </div>
-                ` : `
-                ${item.completato ? '<span class="text-green-600 font-bold text-xs border border-green-200 bg-green-50 px-2 py-1 rounded">PRESO!</span>' : '<span class="text-purple-400 text-xs italic">In attesa...</span>'}
-                `}
-            </div>
-        `).join('');
+                <div class="flex gap-2">
+                    <button onclick="wishlist.toggle(${item.id}, ${!item.completato})">${item.completato?'↩️':'✅'}</button>
+                    <button onclick="wishlist.delete(${item.id})">🗑</button>
+                </div>` : 
+                (item.completato ? '✅ PRESO' : '⏳')}
+            </div>`).join('');
     },
-
     async add() {
         const item = document.getElementById('wish-item').value;
         const name = document.getElementById('wish-name').value;
-        
-        if (!item || !name) return ui.toast("Scrivi cosa serve e chi sei!", "error");
+        if (!item || !name) return ui.toast("Dati mancanti", "error");
+        await _sb.from('richieste').insert([{ oggetto: item, richiedente: name, magazzino: state.currentScope }]);
+        ui.toast("Richiesta inviata!", "success");
+        document.getElementById('wish-item').value = '';
+        this.load();
+    },
+    async toggle(id, status) { await _sb.from('richieste').update({ completato: status }).eq('id', id); this.load(); },
+    async delete(id) { if(confirm("Eliminare?")) await _sb.from('richieste').delete().eq('id', id); this.load(); }
+};
 
-        loader.show();
-        // Insert con Magazzino
-        const { error } = await _sb.from('richieste').insert([{ 
-            oggetto: item, 
-            richiedente: name,
-            magazzino: state.currentScope 
-        }]);
-        
-        loader.hide();
-        if (error) {
-            console.error(error);
-            ui.toast("Errore durante l'invio.", "error");
-        } else {
-            ui.toast("Richiesta aggiunta alla lista!", "success");
-            document.getElementById('wish-item').value = '';
-            this.load();
+// --- AUTH, UI, PWA ---
+const auth = { 
+    check: async () => { 
+        const {data:{user}} = await _sb.auth.getUser(); 
+        if(user) { 
+            state.user = user; 
+            document.getElementById('nav-admin-mobile').classList.remove('hidden'); 
+            document.getElementById('nav-admin-mobile').classList.add('flex'); 
+            document.getElementById('btn-login-mobile').classList.add('hidden');
+            document.getElementById('nav-btn-shop').classList.add('hidden');
+            document.getElementById('nav-btn-wish').classList.add('hidden');
         }
     },
+    login: async () => { const {error} = await _sb.auth.signInWithPassword({email:document.getElementById('log-mail').value, password:document.getElementById('log-pass').value}); if(!error) location.reload(); else ui.toast("Errore Login", "error"); },
+    logout: () => _sb.auth.signOut().then(() => location.reload())
+};
 
-    async toggle(id, status) {
-        await _sb.from('richieste').update({ completato: status }).eq('id', id);
-        this.load();
-    },
-    
-    async delete(id) {
-        if(!confirm("Eliminare questa richiesta?")) return;
-        await _sb.from('richieste').delete().eq('id', id);
-        this.load();
+const ui = {
+    modal: (id) => document.getElementById(id).classList.remove('hidden'),
+    closeModals: () => document.querySelectorAll('[id^="modal"], #login-modal').forEach(m => m.classList.add('hidden')),
+    toggleCart: () => document.getElementById('cart-sidebar').classList.toggle('translate-x-full'),
+    toggleMenu: () => { document.getElementById('mobile-menu').classList.toggle('hidden'); document.getElementById('mobile-menu-panel').classList.toggle('translate-x-full'); },
+    toast: (msg, type) => {
+        const t = document.createElement('div'); t.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full text-white font-bold shadow-xl z-[200] ${type==='error'?'bg-red-500':'bg-green-800'}`;
+        t.innerText = msg; document.body.appendChild(t); setTimeout(()=>t.remove(), 3000);
     }
 };
 
-// --- PWA CONFIGURATION ---
-let deferredPrompt;
-
-const pwa = {
-    init() {
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW registrato: ', reg.scope))
-                    .catch(err => console.log('SW fallito: ', err));
-            });
+const pwa = { 
+    init: () => { 
+        if('serviceWorker' in navigator) {
+             window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
         }
-
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
             const btn = document.getElementById('btn-install-app');
-            if(btn) {
-                btn.classList.remove('hidden');
-                btn.classList.add('flex');
-            }
+            if(btn) { btn.classList.remove('hidden'); btn.classList.add('flex'); }
         });
-
         window.addEventListener('appinstalled', () => {
-            ui.toast("App installata nello zaino digitale!", "success");
-            const btn = document.getElementById('btn-install-app');
-            if(btn) btn.classList.add('hidden');
-            deferredPrompt = null;
+             ui.toast("App installata!", "success");
+             document.getElementById('btn-install-app').classList.add('hidden');
+             deferredPrompt = null;
         });
-    },
-
-    async install() {
+    }, 
+    install: async () => { 
         if (!deferredPrompt) return;
         deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
+        await deferredPrompt.userChoice;
         deferredPrompt = null;
         ui.toggleMenu();
-    }
+    } 
 };
+let deferredPrompt;
 
-// Inizializzazione App
+// FINE SCRIPT
 app.init();
