@@ -68,31 +68,44 @@
                     <button onclick="ui.toggleMenu()" class="text-green-300 hover:text-white text-2xl">&times;</button>
                 </div>
 
-                    <div class="flex flex-col gap-4">
-                        <button id="nav-btn-shop" onclick="app.nav('shop'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3">
-                            <span>📦</span> Armadio
-                        </button>
-                        <button id="nav-btn-wish" onclick="app.nav('wishlist'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3">
-                            <span>✨</span> Lista Desideri
-                        </button>
-                        
-                        <hr class="border-green-700 my-2">
+                <div class="flex flex-col gap-4">
+                    <button id="nav-btn-shop" onclick="app.nav('shop'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3">
+                        <span>📦</span> Armadio
+                    </button>
+                    <button id="nav-btn-wish" onclick="app.nav('wishlist'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3 mb-2">
+                        <span>✨</span> Lista Desideri
+                    </button>
                     
-                        <div id="nav-admin-mobile" class="hidden flex-col gap-4">
-                        
-                        <div class="bg-yellow-500/10 p-3 rounded border border-yellow-500/30">
-                            <span class="text-yellow-400 text-xs font-bold uppercase tracking-widest mb-1 block">Area Staff</span>
-                            <button onclick="app.nav('admin'); ui.toggleMenu()" class="text-left text-white font-bold w-full mb-2 hover:underline">Q.G. Armadio</button>
-                            <button onclick="auth.logout()" class="text-left text-red-300 text-sm font-bold w-full hover:text-red-200">Disconnetti</button>
+                    <button id="nav-btn-cambusa" onclick="window.location.href='cambusa.html'" class="text-left w-full text-orange-100 font-bold text-sm hover:text-white transition flex items-center justify-between gap-3 border border-orange-600 bg-orange-800/80 p-3 rounded-lg shadow-inner">
+                        <span class="flex items-center gap-2"><span>🥘</span> Vai in Cambusa</span>
+                        <span class="text-lg">→</span>
+                    </button>
+                    
+                    <hr class="border-green-700 my-2">
+                
+                    <div id="nav-admin-mobile" class="hidden flex-col gap-4">
+                        <div class="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/30">
+                            <span class="text-yellow-400 text-xs font-bold uppercase tracking-widest mb-2 block">Area Staff</span>
+                            <button onclick="app.nav('admin'); ui.toggleMenu()" class="text-left text-white font-bold w-full mb-3 hover:underline">Q.G. Armadio</button>
+                            
+                            <button onclick="window.location.href='cambusa.html'" class="w-full bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold py-3 px-3 rounded-lg flex items-center justify-between shadow-md transition mb-3 border border-orange-500">
+                                <span class="flex items-center gap-2"><span>🥘</span> Q.G. CAMBUSA</span>
+                                <span>➡</span>
+                            </button>
+
+                            <button onclick="auth.logout()" class="text-left text-red-300 text-sm font-bold w-full hover:text-red-200 mt-2">Disconnetti</button>
                         </div>
                     </div>
+                    
                     <button id="btn-install-app" onclick="pwa.install()" class="hidden text-left text-yellow-300 font-bold text-lg hover:text-white transition flex items-center gap-3 mb-4 border-2 border-dashed border-yellow-500/30 p-2 rounded-lg bg-yellow-500/10">
                         <span>📲</span> Installa App
                     </button>
-                    <button id="btn-login-mobile" onclick="ui.modal('login-modal'); ui.toggleMenu()" class="text-left text-green-200 font-bold text-sm hover:text-white flex items-center gap-3 bg-green-900 p-3 rounded border border-green-700">
+                    <button id="btn-login-mobile" onclick="ui.modal('login-modal'); ui.toggleMenu()" class="text-left text-green-200 font-bold text-sm hover:text-white flex items-center gap-3 bg-green-900 p-3 rounded border border-green-700 mt-auto">
                         <span>🔐</span> Accesso Admin
                     </button>
                 </div>
+            </div>
+        </div>
                 
                 <div class="mt-auto text-center">
                     <p class="text-[10px] text-green-400 font-mono">"Estote Parati"</p>
