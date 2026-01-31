@@ -1,7 +1,10 @@
-const CACHE_NAME = 'azimut-arch-v1';
+const CACHE_NAME = 'azimut-arch-v2';
 const urlsToCache = [
   './',
-  './index.html',
+  './index.html',     // Il portale
+  './armadio.html',   // Il vecchio index
+  './armadio.js',     // Il vecchio script
+  './cambusa.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
