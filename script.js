@@ -6,14 +6,41 @@ const CONFIG = {
     bucket: "immagini-oggetti"
 };
 
+// --- DEFINIZIONE REPARTI (Scalabile) ---
+// Qui puoi aggiungere futuri reparti (es. cancelleria)
+const DEPARTMENTS = {
+    armadio: {
+        id: 'armadio',
+        label: 'Armadio',
+        color: 'green', // Corrisponde a classi tailwind (bg-green-600, text-green-900 etc)
+        icon: '⛺',
+        titles: { shop: 'Armadio di Gruppo', sub: 'Tende, pali e materiale tecnico' }
+    },
+    cambusa: {
+        id: 'cambusa',
+        label: 'Cambusa',
+        color: 'orange', // Corrisponde a classi tailwind (bg-orange-600, text-orange-900 etc)
+        icon: '🍝',
+        titles: { shop: 'Cambusa', sub: 'Cibo, scatolame e consumabili' }
+    }
+};
+
 const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
 
 // --- STATO ---
-const state = { cart: [], products: [], packs: [], packComponents: [], user: null, currentCategory: 'all' };
+const state = { 
+    cart: [], 
+    products: [], 
+    packs: [], 
+    packComponents: [], 
+    user: null, 
+    currentCategory: 'all',
+    currentScope: null // 'armadio' o 'cambusa'
+};
 
 // --- LOADER ---
 const loader = {
-    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Contemplo il fuoco...", "Imparo il Morse...", "Imparo i nodi...", "Ammiro le Stelle...","Preparo la legna...","Pulisco la gavetta...","Preparo lo zaino...","Guado il torrente...","Inseguo l'orizzonte...",],
+    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Contemplo il fuoco...", "Imparo il Morse...", "Imparo i nodi...", "Ammiro le Stelle...","Preparo la legna...","Pulisco la gavetta...","Preparo lo zaino...","Guado il torrente...","Inseguo l'orizzonte..."],
     show() {
         const el = document.getElementById('scout-loader');
         const txt = document.getElementById('loader-text');
@@ -32,18 +59,84 @@ const app = {
     async init() {
         loader.show(); 
         await auth.check();
+        
+        // Se l'utente è loggato (Admin), carichiamo di default l'Armadio (o l'ultimo usato)
+        // Se è utente pubblico, mostriamo la Home per scegliere
+        if (state.user) {
+            await this.setScope('armadio'); // Default Admin
+        } else {
+            // Se non è loggato, va alla home di selezione
+            this.nav('home');
+            loader.hide();
+        }
+        
+        pwa.init(); 
+    },
+
+    // FUNZIONE CHIAVE: Cambio contesto (Armadio <-> Cambusa)
+    async setScope(scopeId) {
+        if (!DEPARTMENTS[scopeId]) return;
+        state.currentScope = scopeId;
+        
+        loader.show();
+        
+        // 1. Aggiorna UI (Colori e Testi)
+        this.updateTheme(DEPARTMENTS[scopeId]);
+        
+        // 2. Svuota carrello (per evitare di mischiare cibo e tende)
+        cart.empty();
+
+        // 3. Carica i dati filtrati
         await this.loadData();
-        loader.hide(); 
+        
+        // 4. Navigazione
+        if (state.user) {
+            admin.refreshUI(); // Aggiorna titoli admin
+            this.nav('admin');
+        } else {
+            this.nav('shop');
+        }
+        
+        loader.hide();
+    },
+
+    updateTheme(dept) {
+        // Aggiorna la navbar con il colore del reparto
+        const nav = document.querySelector('nav');
+        // Rimuove vecchi colori (semplificazione brutale ma efficace per tailwind dinamico)
+        nav.className = `bg-${dept.color}-900 text-white sticky top-0 z-50 shadow-xl border-b-4 border-yellow-500 shrink-0 transition-colors duration-500`;
+
+        // Aggiorna titoli Shop
+        const shopTitle = document.querySelector('#view-shop h1');
+        const shopSub = document.querySelector('#view-shop p');
+        if(shopTitle) {
+            shopTitle.innerText = dept.titles.shop;
+            shopTitle.className = `text-2xl md:text-4xl font-extrabold text-${dept.color}-900`;
+        }
+        if(shopSub) shopSub.innerText = dept.titles.sub;
+
+        // Aggiorna Icona menu mobile se presente
+        const menuIcon = document.getElementById('menu-icon-shop');
+        const menuText = document.getElementById('menu-text-shop');
+        if(menuIcon) menuIcon.innerText = dept.icon;
+        if(menuText) menuText.innerText = dept.label;
     },
 
     async loadData() {
-        const { data: p } = await _sb.from('oggetti').select('*').order('nome');
+        // FILTRO FONDAMENTALE: .eq('magazzino', state.currentScope)
+        
+        const { data: p } = await _sb.from('oggetti')
+            .select('*')
+            .eq('magazzino', state.currentScope)
+            .order('nome');
         state.products = p || [];
         
-        const { data: k } = await _sb.from('pacchetti').select('*');
+        const { data: k } = await _sb.from('pacchetti')
+            .select('*')
+            .eq('magazzino', state.currentScope);
         state.packs = k || [];
         
-        // NUOVO: Carichiamo le ricette dei kit per calcolare la disponibilità reale
+        // Componenti pacchetto non hanno "magazzino", dipendono dai pacchetti filtrati sopra
         const { data: c } = await _sb.from('componenti_pacchetto').select('*');
         state.packComponents = c || [];
         
@@ -52,17 +145,22 @@ const app = {
             admin.renderRestock();
             admin.renderPackBuilder();
             admin.renderMovements(); 
+            admin.renderRequests();
         } else {
             this.renderShop();
-            this.nav('shop');
         }
     },
 
     nav(view) {
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
+        window.scrollTo(0,0);
+
+        // Se torno alla home, resetto lo stile navbar a default (verde scout)
+        if(view === 'home') {
+            document.querySelector('nav').className = `bg-green-900 text-white sticky top-0 z-50 shadow-xl border-b-4 border-yellow-500 shrink-0`;
+        }
         
-        // Se apro la wishlist, carica i dati aggiornati
         if (view === 'wishlist') {
             wishlist.load();
         }
@@ -104,8 +202,10 @@ const app = {
     },
 
     renderShop() {
+        const currentDept = DEPARTMENTS[state.currentScope];
+        const color = currentDept.color;
+
         document.getElementById('shop-products').innerHTML = state.products.map(p => {
-            // Logica per determinare lo stato (Esaurito vs Scorta Bassa)
             let statusBadge = '';
             const isOut = p.quantita_disponibile <= 0;
             const isLow = !isOut && p.quantita_disponibile <= p.soglia_minima;
@@ -116,14 +216,14 @@ const app = {
                 statusBadge = '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 shadow-sm animate-pulse z-10">SCORTA BASSA ⚠️</span>';
             }
 
-            // Disabilita i controlli se esaurito
             const disabledClass = isOut ? 'opacity-50 cursor-not-allowed grayscale' : '';
-            const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-sm active:transform active:scale-95';
+            // Colore dinamico bottone
+            const btnClass = isOut ? 'bg-gray-400 cursor-not-allowed' : `bg-${color}-600 hover:bg-${color}-700 shadow-sm active:transform active:scale-95`;
 
             return `
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition flex flex-col h-full group" data-category="${p.categoria || 'Generale'}">
                 <div class="h-28 md:h-32 bg-gray-50 p-4 relative flex items-center justify-center">
-                    <img src="${p.foto_url || 'https://placehold.co/200?text=📦'}" class="max-h-full max-w-full object-contain mix-blend-multiply transition group-hover:scale-110 duration-300 ${disabledClass}">
+                    <img src="${p.foto_url || `https://placehold.co/200?text=${currentDept.icon}`}" class="max-h-full max-w-full object-contain mix-blend-multiply transition group-hover:scale-110 duration-300 ${disabledClass}">
                     ${statusBadge}
                 </div>
                 <div class="p-3 flex flex-col flex-grow">
@@ -131,9 +231,9 @@ const app = {
                         <span class="text-[9px] font-bold uppercase text-gray-400 border px-1 rounded">${p.categoria || 'Gen'}</span>
                     </div>
                     <h4 class="font-bold text-sm leading-tight mb-1 text-gray-800 line-clamp-2 uppercase tracking-wide">${p.nome}</h4>
-                    <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: <span class="${isOut ? 'text-red-600' : 'text-green-700'} font-bold text-lg">${p.quantita_disponibile}</span></p>
+                    <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: <span class="${isOut ? 'text-red-600' : `text-${color}-700`} font-bold text-lg">${p.quantita_disponibile}</span></p>
                     <div class="mt-auto flex items-center gap-1">
-                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" ${isOut ? 'disabled' : ''} class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-green-500 outline-none bg-gray-50 font-bold ${disabledClass}">
+                        <input type="number" id="shop-qty-${p.id}" value="1" min="1" max="${p.quantita_disponibile}" ${isOut ? 'disabled' : ''} class="w-12 p-2 text-center border-2 border-gray-200 rounded-lg text-sm focus:border-${color}-500 outline-none bg-gray-50 font-bold ${disabledClass}">
                         <button ${isOut ? 'disabled' : ''} onclick="const q = document.getElementById('shop-qty-${p.id}').value; cart.add('${p.id}', '${p.nome}', 'item', parseInt(q), ${p.quantita_disponibile})" class="flex-1 text-white text-xs font-bold py-2.5 rounded-lg transition ${btnClass}">
                             ${isOut ? 'ESAURITO' : 'PRENDI'}
                         </button>
@@ -143,25 +243,19 @@ const app = {
             `;
         }).join('');
 
-        // La parte dei pacchetti rimane invariata o puoi reinserire il codice originale dei pacchetti qui sotto
+        // Render pacchetti (Kit)
         document.getElementById('shop-packs').innerHTML = state.packs.map(p => {
-            // 1. Troviamo i componenti di questo pacchetto
             const comps = state.packComponents.filter(c => c.pacchetto_id === p.id);
-            
-            // 2. Calcoliamo quanti pacchetti massimi possiamo fare
-            let maxQty = 9999; // Partiamo da infinito
-            
-            if (comps.length === 0) maxQty = 0; // Se il kit è vuoto, non si può prendere
+            let maxQty = 9999; 
+            if (comps.length === 0) maxQty = 0;
 
             comps.forEach(c => {
                 const item = state.products.find(x => x.id === c.oggetto_id);
                 if (item) {
-                    // Quante volte ci sta il componente necessario nella disponibilità totale?
                     const possible = Math.floor(item.quantita_disponibile / c.quantita_necessaria);
-                    // Il massimo numero di kit è limitato dal componente più scarso
                     if (possible < maxQty) maxQty = possible;
                 } else {
-                    maxQty = 0; // Se un componente non esiste più nel database
+                    maxQty = 0;
                 }
             });
 
@@ -185,47 +279,41 @@ const app = {
             `;
         }).join('');
     },
-    // Sostituisci l'intera funzione app.checkout con questa:
+
     async checkout() {
         const name = document.getElementById('checkout-name').value;
         if (!name || state.cart.length === 0) return ui.toast("Inserisci nome e riempi zaino!", "error");
     
         loader.show(); 
-        let details = `<h3>Prelievo effettuato da: ${name}</h3><ul>`;
+        const dept = DEPARTMENTS[state.currentScope];
+        let details = `<h3>Prelievo [${dept.label}] effettuato da: ${name}</h3><ul>`;
         let logDetails = [];
-        let urgentAlerts = ""; // Stringa per raccogliere avvisi di scorte critiche
+        let urgentAlerts = ""; 
     
-        // Iteriamo sugli oggetti nel carrello
         for (let i of state.cart) {
             
             if (i.type === 'item') {
                 const nQ = i.max - i.qty;
-                
-                // Aggiornamento DB
                 await _sb.from('oggetti').update({ quantita_disponibile: nQ }).eq('id', i.id);
                 
-                // --- LOGICA AVVISI MAIL ---
-                // Recupero i dati originali dal prodotto nello state per vedere la soglia minima
                 const originalProd = state.products.find(p => p.id === i.id);
                 const threshold = originalProd ? originalProd.soglia_minima : 0;
 
                 if (nQ === 0) {
-                    urgentAlerts += `<p style="color: red; font-weight: bold;">🚨 ATTENZIONE: L'oggetto '${i.name}' è definitivamente ESAURITO (Qtà: 0)!</p>`;
+                    urgentAlerts += `<p style="color: red; font-weight: bold;">🚨 ATTENZIONE [${dept.label}]: '${i.name}' ESAURITO!</p>`;
                 } else if (nQ <= threshold) {
-                    urgentAlerts += `<p style="color: #d97706; font-weight: bold;">⚠️ ATTENZIONE: L'oggetto '${i.name}' è sotto scorta (Rimasti: ${nQ})!</p>`;
+                    urgentAlerts += `<p style="color: #d97706; font-weight: bold;">⚠️ ATTENZIONE: '${i.name}' sotto scorta (Rimasti: ${nQ})!</p>`;
                 }
-                // ---------------------------
 
                 details += `<li>${i.name} <b>(${i.qty})</b></li>`;
                 logDetails.push(`${i.name} x${i.qty}`);
             } else {
-                // Gestione Kit (logica simile per i componenti se necessario, ma qui semplifichiamo)
+                // Kit
                 const { data: comps } = await _sb.from('componenti_pacchetto').select('*, oggetti(*)').eq('pacchetto_id', i.id);
                 for (let c of comps) {
                     const nuovaQta = c.oggetti.quantita_disponibile - c.quantita_necessaria;
                     await _sb.from('oggetti').update({ quantita_disponibile: nuovaQta }).eq('id', c.oggetto_id);
                     
-                    // Controllo esaurimento anche dentro ai kit
                     if (nuovaQta <= c.oggetti.soglia_minima) {
                          urgentAlerts += `<p style="color: red;">⚠️ Verifica scorte dopo prelievo Kit ${i.name}: ${c.oggetti.nome} (Rimasti: ${nuovaQta})</p>`;
                     }
@@ -236,18 +324,17 @@ const app = {
         }
         details += `</ul>`;
         
-        // Se ci sono avvisi urgenti, li mettiamo IN CIMA alla mail
         if (urgentAlerts !== "") {
-            details = `<h2>⚠️ REPORT SCORTE CRITICHE</h2>${urgentAlerts}<hr>${details}`;
+            details = `<h2>⚠️ REPORT SCORTE CRITICHE [${dept.label}]</h2>${urgentAlerts}<hr>${details}`;
         }
     
-        // 1. INSERIMENTO LOG MOVIMENTI
+        // INSERIMENTO LOG MOVIMENTI CON IL MAGAZZINO
         await _sb.from('movimenti').insert([{
             utente: name,
-            dettagli: logDetails.join(', ') 
+            dettagli: logDetails.join(', '),
+            magazzino: state.currentScope // Importante: traccia dove è avvenuto il prelievo
         }]);
     
-        // 2. NOTIFICA MAIL (Includerà gli avvisi urgenti se generati)
         try {
             await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
                 method: 'POST',
@@ -260,16 +347,16 @@ const app = {
         ui.toggleCart();
         loader.hide();
         ui.toast("Materiale Prelevato con successo. Buona Strada! ", "success");
-        setTimeout(() => location.reload(), 1500);
+        
+        // Ricarichiamo i dati invece di ricaricare la pagina per mantenere il contesto
+        setTimeout(() => app.loadData(), 1500);
     }
 };
 
 // --- CART ---
 const cart = {
     add(id, name, type, qty, max) {
-        // 1. Controllo gravissimo: se la quantità massima è 0 o meno, ferma tutto.
         if (max <= 0) return ui.toast("Oggetto ESAURITO! Impossibile aggiungere.", "error");
-        
         if(isNaN(qty) || qty < 1) return ui.toast("Quantità non valida", "error");
         
         const exists = state.cart.find(x => x.id === id);
@@ -277,7 +364,6 @@ const cart = {
             if (exists.qty + qty > max) return ui.toast("Non abbiamo abbastanza scorte!", "error");
             exists.qty += qty;
         } else {
-            // Un ulteriore controllo di sicurezza nel caso qty > max al primo inserimento
             if (qty > max) return ui.toast("Richiesta superiore alla disponibilità!", "error");
             state.cart.push({ id, name, type, qty, max });
         }
@@ -289,36 +375,56 @@ const cart = {
     render() {
         const count = state.cart.length;
         const elMob = document.getElementById('cart-count-mobile');
-        
         if(elMob) elMob.innerText = count;
-    
+        
+        // Colore bordo in base al reparto
+        const deptColor = state.currentScope ? DEPARTMENTS[state.currentScope].color : 'green';
+
         document.getElementById('cart-items').innerHTML = state.cart.length ? state.cart.map((i, idx) => `
-            <div class="bg-white p-3 rounded shadow-sm border-l-4 border-green-600 relative overflow-hidden flex flex-col gap-2">
+            <div class="bg-white p-3 rounded shadow-sm border-l-4 border-${deptColor}-600 relative overflow-hidden flex flex-col gap-2">
                 <div class="flex justify-between items-center">
                     <div class="text-sm z-10">
                         <div class="font-bold text-gray-800 text-lg leading-tight">${i.name}</div>
-                        <span class="text-green-700 text-xs font-bold bg-green-100 px-2 py-0.5 rounded border border-green-200">Quantità: ${i.qty}</span>
+                        <span class="text-${deptColor}-700 text-xs font-bold bg-${deptColor}-100 px-2 py-0.5 rounded border border-${deptColor}-200">Quantità: ${i.qty}</span>
                     </div>
                     <button onclick="cart.remove(${idx})" class="text-red-400 hover:text-red-600 font-bold px-3 py-1 rounded hover:bg-red-50 transition z-10">🗑</button>
                 </div>
-                </div>
+            </div>
         `).join('') : '<div class="text-center py-10 opacity-50"><div class="text-4xl mb-2">🎒</div><p class="text-sm font-bold">Lo zaino è vuoto</p></div>';
     }
 };
+
 // --- ADMIN ---
 const admin = {
+    // Nuova funzione per cambiare UI admin in base al reparto
+    refreshUI() {
+        if(!state.currentScope) return;
+        const dept = DEPARTMENTS[state.currentScope];
+        const adminHeader = document.querySelector('#view-admin h2');
+        if(adminHeader) {
+            adminHeader.innerText = `Q.G. ${dept.label}`;
+            // Cambia colore bordo box titolo
+            adminHeader.parentElement.className = `col-span-2 lg:col-auto bg-white p-3 rounded-lg shadow text-center border-l-4 border-${dept.color}-600 mb-0 lg:mb-2`;
+        }
+    },
+
+    // Funzione per switchare rapidamente magazzino da Admin
+    switchScopeFromAdmin() {
+        // Logica semplice toggle: se sei armadio vai cambusa, e viceversa
+        // Per renderlo più robusto in futuro con N reparti, si potrebbe aprire una modale
+        const newScope = state.currentScope === 'armadio' ? 'cambusa' : 'armadio';
+        app.setScope(newScope);
+    },
+
     tab(t) {
         document.querySelectorAll('.admin-tab').forEach(e => e.classList.add('hidden'));
         document.getElementById(`admin-tab-${t}`).classList.remove('hidden');
-        
-        // Se apro la tab richieste, carica i dati
-        if (t === 'requests') {
-            this.renderRequests();
-        }
+        if (t === 'requests') this.renderRequests();
     },
     
     // --- STOCK & RESTOCK ---
     renderStock() {
+        const dept = DEPARTMENTS[state.currentScope];
         document.getElementById('admin-total-count').innerText = state.products.length;
 
         document.getElementById('admin-stock-list').innerHTML = state.products.map(p => `
@@ -330,7 +436,7 @@ const admin = {
                         <div class="text-xs text-gray-500 font-mono">Qty: ${p.quantita_disponibile} | Min: ${p.soglia_minima}</div>
                     </div>
                 </div>
-                <button onclick="admin.openEdit('${p.id}')" class="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1.5 rounded hover:bg-blue-100 transition">MODIFICA</button>
+                <button onclick="admin.openEdit('${p.id}')" class="text-${dept.color}-600 text-xs font-bold bg-${dept.color}-50 px-3 py-1.5 rounded hover:bg-${dept.color}-100 transition">MODIFICA</button>
             </div>
         `).join('');
     },
@@ -338,16 +444,10 @@ const admin = {
     filterStock() {
         const term = document.getElementById('admin-search-bar').value.toLowerCase().trim();
         const rows = document.querySelectorAll('#admin-stock-list > div');
-        
         rows.forEach(row => {
             const text = row.innerText.toLowerCase();
-            if (text.includes(term)) {
-                row.classList.remove('hidden');
-                row.classList.add('flex');
-            } else {
-                row.classList.add('hidden');
-                row.classList.remove('flex');
-            }
+            if (text.includes(term)) { row.classList.remove('hidden'); row.classList.add('flex'); } 
+            else { row.classList.add('hidden'); row.classList.remove('flex'); }
         });
     },
 
@@ -430,7 +530,8 @@ const admin = {
             categoria: document.getElementById('prod-cat').value,
             quantita_disponibile: document.getElementById('prod-qty').value,
             soglia_minima: document.getElementById('prod-min').value,
-            foto_url: imgUrl
+            foto_url: imgUrl,
+            magazzino: state.currentScope // SALVIAMO NEL REPARTO CORRENTE
         };
 
         if (id) await _sb.from('oggetti').update(data).eq('id', id);
@@ -455,7 +556,7 @@ const admin = {
 
         const listEl = document.getElementById('admin-packs-list');
         if(state.packs.length === 0) {
-            listEl.innerHTML = '<p class="text-xs text-gray-400 italic">Nessun kit creato.</p>';
+            listEl.innerHTML = '<p class="text-xs text-gray-400 italic">Nessun kit in questo reparto.</p>';
         } else {
             listEl.innerHTML = state.packs.map(k => `
                 <div class="flex justify-between items-center bg-white p-3 border rounded-lg shadow-sm hover:shadow-md transition">
@@ -473,7 +574,8 @@ const admin = {
         const chks = document.querySelectorAll('.pack-chk:checked');
         if (!name || !chks.length) return ui.toast("Dati mancanti", "error");
         
-        const { data } = await _sb.from('pacchetti').insert([{ nome: name }]).select();
+        // Creiamo il pacchetto assegnandolo al magazzino corrente
+        const { data } = await _sb.from('pacchetti').insert([{ nome: name, magazzino: state.currentScope }]).select();
         const items = Array.from(chks).map(c => ({ pacchetto_id: data[0].id, oggetto_id: c.value, quantita_necessaria: 1 }));
         await _sb.from('componenti_pacchetto').insert(items);
         
@@ -521,41 +623,43 @@ const admin = {
         ui.toast("Eliminato", "success"); app.loadData();
     },
     
-    // --- MODERAZIONE & STORICO & MOVIMENTI ---
+    // --- MOVIMENTI & RICHIESTE ---
     async renderMovements() {
-        const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false });
+        // Filtriamo i movimenti per magazzino
+        const { data } = await _sb.from('movimenti')
+            .select('*')
+            .eq('magazzino', state.currentScope)
+            .order('created_at', { ascending: false });
+
         if(!data || data.length === 0) {
-            document.getElementById('movements-list').innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessun movimento recente.</p>";
+            document.getElementById('movements-list').innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessun movimento recente qui.</p>";
             return;
         }
         document.getElementById('movements-list').innerHTML = data.map(m => `
-            <div class="bg-teal-50 p-3 rounded border border-teal-100 mb-2">
+            <div class="bg-gray-50 p-3 rounded border border-gray-200 mb-2">
                 <div class="flex justify-between items-center mb-1">
-                    <span class="font-bold text-teal-900 text-sm">${m.utente}</span>
-                    <span class="text-[10px] text-teal-600 font-mono">${new Date(m.created_at).toLocaleDateString()}</span>
+                    <span class="font-bold text-gray-900 text-sm">${m.utente}</span>
+                    <span class="text-[10px] text-gray-600 font-mono">${new Date(m.created_at).toLocaleDateString()}</span>
                 </div>
-                <p class="text-xs text-teal-800 leading-snug">${m.dettagli}</p>
+                <p class="text-xs text-gray-800 leading-snug">${m.dettagli}</p>
             </div>
         `).join('');
     },
     filterMovements() {
         const term = document.getElementById('movements-search').value.toLowerCase().trim();
         const cards = document.querySelectorAll('#movements-list > div');
-        
         cards.forEach(card => {
             const text = card.innerText.toLowerCase();
-            // Cerca sia nel nome del capo che nel contenuto (oggetti e nomi ragazzi)
-            if (text.includes(term)) {
-                card.classList.remove('hidden');
-            } else {
-                card.classList.add('hidden');
-            }
+            if (text.includes(term)) { card.classList.remove('hidden'); } else { card.classList.add('hidden'); }
         });
     },
-    // --- GESTIONE DESIDERI ---
+    
     async renderRequests() {
-        // Carica tutte le richieste
-        const { data } = await _sb.from('richieste').select('*').order('created_at', { ascending: false });
+        // Carica le richieste del magazzino corrente
+        const { data } = await _sb.from('richieste')
+            .select('*')
+            .eq('magazzino', state.currentScope)
+            .order('created_at', { ascending: false });
         
         const el = document.getElementById('admin-requests-list');
         if (!data || data.length === 0) {
@@ -571,7 +675,6 @@ const admin = {
                         👤 ${r.richiedente || 'Anonimo'} | 📅 ${new Date(r.created_at).toLocaleDateString()}
                     </div>
                 </div>
-                
                 <div class="flex gap-2">
                     <button onclick="admin.reqAction('${r.id}', 'toggle', ${!r.completato})" class="px-3 py-1 rounded text-xs font-bold shadow-sm ${r.completato ? 'bg-yellow-100 text-yellow-700' : 'bg-green-600 text-white'}">
                         ${r.completato ? 'Da Comprare' : 'Preso!'}
@@ -591,41 +694,28 @@ const admin = {
         } else if (action === 'toggle') {
             await _sb.from('richieste').update({ completato: status }).eq('id', id);
         }
-        
         ui.toast("Fatto!", "success");
-        this.renderRequests(); // Ricarica la lista admin
-        // Opzionale: se la lista pubblica è aperta, ricarica anche quella
+        this.renderRequests(); 
         if(typeof wishlist !== 'undefined') wishlist.load(); 
     },
-    // --- NUOVE FUNZIONI DI RICERCA ---
     
-    // 1. Filtro Rifornimento
+    // FILTRI EXTRA
     filterRestock() {
         const term = document.getElementById('search-restock').value.toLowerCase();
-        // Nasconde i div che non contengono il testo cercato
         document.querySelectorAll('#admin-restock-list > div').forEach(el => {
-            const text = el.innerText.toLowerCase();
-            el.classList.toggle('hidden', !text.includes(term));
+            el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term));
         });
     },
-
-    // 2. Filtro Creazione Pacchetti
     filterPackCreation() {
         const term = document.getElementById('search-pack-create').value.toLowerCase();
-        // Filtra le etichette (checkbox)
         document.querySelectorAll('#pack-items > label').forEach(el => {
-            const text = el.innerText.toLowerCase();
-            el.classList.toggle('hidden', !text.includes(term));
+            el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term));
         });
     },
-
-    // 3. Filtro Modifica Pacchetti
     filterPackEdit() {
         const term = document.getElementById('search-pack-edit').value.toLowerCase();
-        // Filtra le etichette nel popup
         document.querySelectorAll('#edit-kit-items > label').forEach(el => {
-            const text = el.innerText.toLowerCase();
-            el.classList.toggle('hidden', !text.includes(term));
+            el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term));
         });
     },
 };
@@ -636,20 +726,15 @@ const auth = {
         const { data: { user } } = await _sb.auth.getUser();
         if (user) {
             state.user = user;
-            
-            // 1. Mostra menu staff
             document.getElementById('nav-admin-mobile').classList.remove('hidden');
             document.getElementById('nav-admin-mobile').classList.add('flex');
-            
-            // 2. Nascondi tasto login
             document.getElementById('btn-login-mobile').classList.add('hidden');
             
-            // 3. NASCONDI I MENU PUBBLICI (Nuova modifica)
+            // Nascondiamo i menu pubblici se siamo admin (li vediamo dalla dashboard)
             document.getElementById('nav-btn-shop').classList.add('hidden');
             document.getElementById('nav-btn-wish').classList.add('hidden');
             
-            // Vai alla dashboard admin
-            app.nav('admin');
+            // Se siamo già dentro, init lo gestirà andando su admin
         }
     },
     async login() {
@@ -668,9 +753,9 @@ const ui = {
     toggleCart() { document.getElementById('cart-sidebar').classList.toggle('translate-x-full'); },
     toast(msg, type) {
         const t = document.createElement('div');
-        t.className = `px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce ${type === 'error' ? 'bg-red-500' : 'bg-green-800'}`;
+        t.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce z-[200] ${type === 'error' ? 'bg-red-500' : 'bg-green-800'}`;
         t.innerText = msg;
-        document.getElementById('toast-container').appendChild(t);
+        document.body.appendChild(t);
         setTimeout(() => t.remove(), 3000);
     },
     toggleMenu() {
@@ -686,11 +771,15 @@ const ui = {
         }
     }
 };
+
 // --- WISHLIST ---
 const wishlist = {
     async load() {
-        // Carica le richieste non completate (o tutte se serve storico)
-        const { data, error } = await _sb.from('richieste').select('*').order('created_at', { ascending: false });
+        // Filtriamo per magazzino corrente
+        const { data, error } = await _sb.from('richieste')
+            .select('*')
+            .eq('magazzino', state.currentScope)
+            .order('created_at', { ascending: false });
         if (error) return;
         this.render(data);
     },
@@ -698,11 +787,11 @@ const wishlist = {
     render(data) {
         const el = document.getElementById('wishlist-items');
         if (!data || data.length === 0) {
-            el.innerHTML = '<p class="text-gray-400 italic text-center col-span-2">Nessuna richiesta attiva!</p>';
+            el.innerHTML = '<p class="text-gray-400 italic text-center col-span-2">Nessuna richiesta attiva in questo reparto!</p>';
             return;
         }
 
-        const isAdmin = state.user !== null; // Verifica se è loggato un Admin
+        const isAdmin = state.user !== null;
 
         el.innerHTML = data.map(item => `
             <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${item.completato ? 'border-green-500 opacity-60' : 'border-purple-500'} flex justify-between items-center transition relative overflow-hidden">
@@ -735,7 +824,12 @@ const wishlist = {
         if (!item || !name) return ui.toast("Scrivi cosa serve e chi sei!", "error");
 
         loader.show();
-        const { error } = await _sb.from('richieste').insert([{ oggetto: item, richiedente: name }]);
+        // Insert con Magazzino
+        const { error } = await _sb.from('richieste').insert([{ 
+            oggetto: item, 
+            richiedente: name,
+            magazzino: state.currentScope 
+        }]);
         
         loader.hide();
         if (error) {
@@ -748,7 +842,6 @@ const wishlist = {
         }
     },
 
-    // Funzioni solo per Admin
     async toggle(id, status) {
         await _sb.from('richieste').update({ completato: status }).eq('id', id);
         this.load();
@@ -760,12 +853,12 @@ const wishlist = {
         this.load();
     }
 };
+
 // --- PWA CONFIGURATION ---
 let deferredPrompt;
 
 const pwa = {
     init() {
-        // 1. Registra il Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
@@ -774,13 +867,9 @@ const pwa = {
             });
         }
 
-        // 2. Intercetta l'evento di installazione
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Impedisce al browser di mostrare subito il banner standard
             e.preventDefault();
-            // Salva l'evento per usarlo dopo
             deferredPrompt = e;
-            // Mostra il nostro bottone nel menu
             const btn = document.getElementById('btn-install-app');
             if(btn) {
                 btn.classList.remove('hidden');
@@ -788,7 +877,6 @@ const pwa = {
             }
         });
 
-        // 3. Gestione visualizzazione post-installazione
         window.addEventListener('appinstalled', () => {
             ui.toast("App installata nello zaino digitale!", "success");
             const btn = document.getElementById('btn-install-app');
@@ -799,21 +887,13 @@ const pwa = {
 
     async install() {
         if (!deferredPrompt) return;
-        // Mostra il prompt nativo
         deferredPrompt.prompt();
-        // Attendi la risposta dell'utente
         const { outcome } = await deferredPrompt.userChoice;
         console.log(`User response to the install prompt: ${outcome}`);
         deferredPrompt = null;
-        // Chiudi il menu mobile se aperto
         ui.toggleMenu();
     }
 };
 
-
-// --- MODIFICA ALLA INITIALIZZAZIONE ---
-// Aggiungi pwa.init() dentro app.init o chiamalo alla fine
-pwa.init(); 
-// (Lascia app.init() dov'era)
-
+// Inizializzazione App
 app.init();
