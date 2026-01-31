@@ -13,17 +13,26 @@ const state = { cart: [], products: [], packs: [], packComponents: [], user: nul
 
 // --- LOADER ---
 const loader = {
-    phrases: ["Sto calcolando l'azimut...", "Sto orientando la cartina...", "Contemplo il fuoco...", "Imparo il Morse...", "Imparo i nodi...", "Ammiro le Stelle...","Preparo la legna...","Pulisco la gavetta...","Preparo lo zaino...","Guado il torrente...","Inseguo l'orizzonte...",],
+    phrases: ["Calcolo l'azimut...", "Oriento la carta...", "Controllo lo zaino...", "Allaccio gli scarponi...", "Cerco il Nord...", "Guado il torrente..."],
     show() {
         const el = document.getElementById('scout-loader');
         const txt = document.getElementById('loader-text');
-        txt.innerText = this.phrases[Math.floor(Math.random() * this.phrases.length)];
-        el.classList.remove('pointer-events-none', 'opacity-0');
+        // Cambio frase casuale
+        if(txt) txt.innerText = this.phrases[Math.floor(Math.random() * this.phrases.length)];
+        
+        if(el) {
+            el.classList.remove('hidden');
+            // Piccolo delay per permettere al browser di applicare la transizione opacity
+            setTimeout(() => el.classList.remove('opacity-0'), 10);
+        }
     },
     hide() {
-        setTimeout(() => {
-            document.getElementById('scout-loader').classList.add('opacity-0', 'pointer-events-none');
-        }, 2000); 
+        const el = document.getElementById('scout-loader');
+        if(el) {
+            el.classList.add('opacity-0');
+            // Aspetta 500ms (durata transizione CSS) prima di nascondere il div
+            setTimeout(() => el.classList.add('hidden'), 500);
+        }
     }
 };
 
@@ -693,9 +702,8 @@ const ui = {
 const wishlist = {
     async load() {
         // Carica le richieste non completate (o tutte se serve storico)
-        const { data, error } = await _sb.from('richieste').select('*').order('created_at', { ascending: false });
-        if (error) return;
-        this.render(data);
+    const { data } = await _sb.from('richieste').select('*').eq('tipo', 'armadio').order('created_at', { ascending: false });
+    this.render(data || []);
     },
     
     render(data) {
