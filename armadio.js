@@ -644,9 +644,12 @@ const auth = {
             // 2. Nascondi tasto login
             document.getElementById('btn-login-mobile').classList.add('hidden');
             
-            // 3. NASCONDI I MENU PUBBLICI (Nuova modifica)
-            document.getElementById('nav-btn-shop').classList.add('hidden');
-            document.getElementById('nav-btn-wish').classList.add('hidden');
+            // 3. NASCONDI I MENU PUBBLICI (Corretto con anche nav-btn-cambusa)
+            const publicBtns = ['nav-btn-shop', 'nav-btn-wish', 'nav-btn-cambusa'];
+            publicBtns.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.classList.add('hidden');
+            });
             
             // Vai alla dashboard admin
             app.nav('admin');
