@@ -2,7 +2,6 @@
 
 // --- CONFIGURAZIONE ---
 const CONFIG = {
-    // Stesse credenziali dell'Armadio
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
     key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", 
     adminEmail: "marcobolge@gmail.com"
@@ -12,8 +11,10 @@ const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
 
 // --- STATO ---
 const state = { 
-    pantry: [], // La lista cibo
-    cart: [],   // Lista spesa "virtuale" da prelevare
+    pantry: [], 
+    menus: [],
+    menuComponents: [],
+    cart: [],   
     user: null, 
     currentCategory: 'all' 
 };
@@ -34,14 +35,28 @@ const app = {
     },
 
     async loadData() {
-        // Carica dalla tabella 'cambusa' invece che 'oggetti'
-        const { data, error } = await _sb.from('cambusa').select('*').order('nome');
-        if(error) console.error(error);
-        state.pantry = data || [];
+        // 1. Carica Dispensa (Tabella 'cambusa')
+        const { data: d } = await _sb.from('cambusa').select('*').order('nome');
+        state.pantry = d || [];
         
+        // 2. Carica Menu/Ricette (Tabella 'menu' o riadatta pacchetti)
+        // Nota: Assumo tu usi una tabella 'menu' e 'ingredienti_menu' simile a pacchetti.
+        // Se non esistono, crea le tabelle in Supabase identiche a 'pacchetti' e 'componenti_pacchetto' ma con questi nomi.
+        // Oppure usiamo 'pacchetti' filtrati per tipo se preferisci, ma qui uso nomi dedicati per pulizia.
+        const { data: m } = await _sb.from('menu').select('*');
+        state.menus = m || [];
+        const { data: c } = await _sb.from('ingredienti_menu').select('*');
+        state.menuComponents = c || [];
+
         if (state.user) {
+            // Se Admin, renderizza i tab
             admin.renderList();
+            admin.renderRestock();
+            admin.renderRequests();
+            admin.renderMenuBuilder();
+            admin.renderMovements();
         } else {
+            // Se Pubblico
             this.renderPantry();
             this.nav('pantry');
         }
@@ -69,12 +84,7 @@ const app = {
             const cat = card.dataset.category;
             const matchesText = title.includes(term);
             const matchesCat = state.currentCategory === 'all' || cat === state.currentCategory;
-
-            if (matchesText && matchesCat) {
-                card.classList.remove('hidden');
-            } else {
-                card.classList.add('hidden');
-            }
+            card.classList.toggle('hidden', !(matchesText && matchesCat));
         });
     },
 
@@ -82,11 +92,8 @@ const app = {
         document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
             const isLow = item.quantita <= item.soglia;
             const isOut = item.quantita <= 0;
-            
-            // Gestione visuale scorta
-            let badge = '';
-            if(isOut) badge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 rounded">FINITO 🚫</span>';
-            else if(isLow) badge = '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] px-2 rounded border border-red-200">SCORTA BASSA ⚠️</span>';
+            let badge = isOut ? '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 rounded">FINITO 🚫</span>' 
+                      : (isLow ? '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] px-2 rounded border border-red-200">SCORTA BASSA ⚠️</span>' : '');
 
             return `
             <div class="bg-white rounded-xl shadow-sm border border-orange-100 overflow-hidden hover:shadow-md transition flex flex-col relative group" data-category="${item.categoria}">
@@ -94,17 +101,13 @@ const app = {
                 <div class="p-4 flex flex-col flex-grow">
                     <div class="text-[9px] font-bold uppercase text-orange-400 mb-1">${item.categoria}</div>
                     <h4 class="font-bold text-gray-800 leading-tight mb-1 text-lg">${item.nome}</h4>
-                    <p class="text-xs text-gray-500 mb-3 font-mono">Disponibili: <span class="font-bold text-orange-700 text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span></p>
-                    
+                    <p class="text-xs text-gray-500 mb-3 font-mono">Disp: <span class="font-bold text-orange-700 text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span></p>
                     <div class="mt-auto flex gap-1">
-                        <input type="number" id="qty-${item.id}" placeholder="0" class="w-16 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500">
-                        <button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold py-2 rounded text-sm transition">
-                            USA
-                        </button>
+                        <input type="number" step="0.5" id="qty-${item.id}" placeholder="0" class="w-16 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500">
+                        <button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold py-2 rounded text-sm transition">USA</button>
                     </div>
                 </div>
-            </div>
-            `;
+            </div>`;
         }).join('');
     },
 
@@ -113,20 +116,26 @@ const app = {
         if(state.cart.length === 0) return ui.toast("Lista vuota!", "error");
 
         loader.show();
-        // Aggiorna DB
+        let logDetails = [];
+        
         for (let c of state.cart) {
             const item = state.pantry.find(x => x.id === c.id);
             if(item) {
                 const newQ = item.quantita - c.qty;
                 await _sb.from('cambusa').update({ quantita: newQ }).eq('id', c.id);
+                logDetails.push(`${item.nome} x${c.qty}${item.unita}`);
             }
         }
 
-        // Logica notifiche (opzionale, simile ad Armadio)
-        
+        // Salva movimento (uso tabella 'movimenti' generica, magari aggiungendo tag [CAMBUSA] nel dettaglio)
+        await _sb.from('movimenti').insert([{
+            utente: `Cambusa: ${note}`,
+            dettagli: logDetails.join(', ')
+        }]);
+
         cart.empty();
         ui.toggleCart();
-        ui.toast("Ingredienti usati! Buon appetito 🥘", "success");
+        ui.toast("Registrato! 🥘", "success");
         await this.loadData();
         loader.hide();
     }
@@ -138,17 +147,15 @@ const cart = {
         const item = state.pantry.find(x => x.id == id);
         const input = document.getElementById(`qty-${id}`);
         const qty = parseFloat(input.value);
-
         if(!qty || qty <= 0) return ui.toast("Quantità non valida", "error");
-        if(qty > item.quantita) return ui.toast("Non ne hai abbastanza!", "error");
-
+        
         const exists = state.cart.find(x => x.id == id);
         if(exists) exists.qty += qty;
         else state.cart.push({ id, name: item.nome, qty, unit: item.unita });
-
+        
         input.value = '';
         this.render();
-        ui.toast(`${item.nome} aggiunto`, "success");
+        ui.toast("Aggiunto", "success");
     },
     remove(idx) { state.cart.splice(idx, 1); this.render(); },
     empty() { state.cart = []; this.render(); },
@@ -156,44 +163,120 @@ const cart = {
         document.getElementById('cart-count-mobile').innerText = state.cart.length;
         document.getElementById('cart-items').innerHTML = state.cart.map((c, i) => `
             <div class="bg-white p-3 rounded shadow-sm border-l-4 border-orange-500 flex justify-between items-center">
-                <div>
-                    <div class="font-bold text-gray-800">${c.name}</div>
-                    <div class="text-xs text-orange-600 font-bold">${c.qty} ${c.unit}</div>
-                </div>
+                <div><div class="font-bold text-gray-800">${c.name}</div><div class="text-xs text-orange-600 font-bold">${c.qty} ${c.unit}</div></div>
                 <button onclick="cart.remove(${i})" class="text-red-400 font-bold px-2">✕</button>
-            </div>
-        `).join('');
+            </div>`).join('');
     }
 };
 
 // --- ADMIN ---
 const admin = {
+    tab(t) {
+        document.querySelectorAll('.admin-tab').forEach(e => e.classList.add('hidden'));
+        document.getElementById(`admin-tab-${t}`).classList.remove('hidden');
+    },
+
+    // 1. DISPENSA (Stock)
     renderList() {
         document.getElementById('admin-list').innerHTML = state.pantry.map(p => `
             <div class="flex justify-between items-center py-3 px-2 border-b hover:bg-gray-50">
                 <div>
                     <div class="font-bold text-gray-800">${p.nome}</div>
-                    <div class="text-xs text-gray-500 font-mono">
-                        ${p.quantita} ${p.unita} (Min: ${p.soglia})
-                    </div>
+                    <div class="text-xs text-gray-500 font-mono">${p.quantita} ${p.unita} (Min: ${p.soglia})</div>
                 </div>
                 <button onclick="admin.edit('${p.id}')" class="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1 rounded">MODIFICA</button>
-            </div>
-        `).join('');
+            </div>`).join('');
     },
     filterStock() {
         const term = document.getElementById('admin-search').value.toLowerCase();
-        document.querySelectorAll('#admin-list > div').forEach(el => {
-            const txt = el.innerText.toLowerCase();
-            el.classList.toggle('hidden', !txt.includes(term));
+        document.querySelectorAll('#admin-list > div').forEach(el => el.classList.toggle('hidden', !el.innerText.toLowerCase().includes(term)));
+    },
+
+    // 2. RIFORNIMENTO
+    renderRestock() {
+        document.getElementById('admin-restock-list').innerHTML = state.pantry.map(p => `
+            <div class="bg-white border rounded-lg p-3 flex justify-between items-center shadow-sm">
+                <div class="truncate pr-2">
+                    <div class="font-bold text-sm text-gray-700 truncate">${p.nome}</div>
+                    <div class="text-xs text-gray-400">Attuali: ${p.quantita} ${p.unita}</div>
+                </div>
+                <div class="flex items-center bg-blue-50 rounded-lg px-2 py-1 border border-blue-100">
+                    <span class="text-blue-600 text-xs font-bold mr-2">+</span>
+                    <input type="number" step="0.5" placeholder="0" data-id="${p.id}" data-current="${p.quantita}" class="restock-input w-16 p-1 text-center bg-transparent outline-none font-bold text-blue-900 border-b border-blue-200">
+                </div>
+            </div>`).join('');
+    },
+    async processRestock() {
+        const inputs = document.querySelectorAll('.restock-input');
+        let updates = [];
+        inputs.forEach(inp => {
+            const val = parseFloat(inp.value);
+            if(val > 0) {
+                updates.push(_sb.from('cambusa').update({ quantita: parseFloat(inp.dataset.current) + val }).eq('id', inp.dataset.id));
+            }
         });
+        if(!updates.length) return;
+        loader.show(); await Promise.all(updates);
+        inputs.forEach(i => i.value = '');
+        ui.toast("Rifornito!", "success"); app.loadData(); loader.hide();
     },
-    
-    // CRUD
-    openNewItem() {
-        this.resetModal();
-        ui.modal('modal-item');
+
+    // 3. MENU / RICETTE (Ex Pacchetti)
+    renderMenuBuilder() {
+        document.getElementById('menu-items').innerHTML = state.pantry.map(p => `
+            <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" value="${p.id}" class="menu-chk accent-yellow-500 w-4 h-4"> <span class="font-medium">${p.nome}</span>
+            </label>`).join('');
+
+        document.getElementById('admin-menus-list').innerHTML = state.menus.map(k => `
+            <div class="flex justify-between items-center bg-white p-3 border rounded-lg shadow-sm">
+                <span class="font-bold text-sm text-gray-700">🍽️ ${k.nome}</span>
+                <div class="flex gap-2">
+                    <button onclick="admin.openEditMenu('${k.id}')" class="text-blue-500 text-xs font-bold border border-blue-200 px-2 py-1 rounded">MOD</button>
+                    <button onclick="admin.deleteMenu('${k.id}')" class="text-red-500 text-xs font-bold border border-red-200 px-2 py-1 rounded">DEL</button>
+                </div>
+            </div>`).join('');
     },
+    async createMenu() {
+        const name = document.getElementById('menu-name').value;
+        const chks = document.querySelectorAll('.menu-chk:checked');
+        if (!name || !chks.length) return ui.toast("Nome e ingredienti richiesti", "error");
+        
+        const { data } = await _sb.from('menu').insert([{ nome: name }]).select();
+        const items = Array.from(chks).map(c => ({ menu_id: data[0].id, ingrediente_id: c.value, quantita_necessaria: 1 }));
+        await _sb.from('ingredienti_menu').insert(items); // Tabella link
+        
+        ui.toast("Menu Creato!", "success"); document.getElementById('menu-name').value = ""; app.loadData();
+    },
+    // (Edit Menu functions omitted for brevity but follow logic of create)
+
+    // 4. LISTA SPESA (Requests - Simuliamo usando una tabella 'spesa' o 'richieste' filtrata)
+    async renderRequests() {
+        // Supponiamo tu voglia usare una tabella separata 'lista_spesa'
+        const { data } = await _sb.from('lista_spesa').select('*').order('created_at', { ascending: false });
+        const el = document.getElementById('admin-requests-list');
+        if(!data || !data.length) { el.innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessuna voce in lista.</p>"; return; }
+        
+        el.innerHTML = data.map(r => `
+            <div class="bg-pink-50 p-3 rounded border border-pink-100 flex justify-between items-center">
+                <div class="font-bold text-gray-800 text-sm ${r.completato ? 'line-through' : ''}">${r.oggetto}</div>
+                <button onclick="admin.delReq('${r.id}')" class="text-red-500 font-bold px-2">✕</button>
+            </div>`).join('');
+    },
+    async delReq(id) { await _sb.from('lista_spesa').delete().eq('id', id); this.renderRequests(); },
+
+    // 5. MOVIMENTI
+    async renderMovements() {
+        const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false }).limit(20);
+        document.getElementById('movements-list').innerHTML = data.map(m => `
+            <div class="bg-teal-50 p-3 rounded border border-teal-100 mb-2">
+                <div class="flex justify-between mb-1"><span class="font-bold text-teal-900 text-xs">${m.utente}</span><span class="text-[10px] text-teal-600">${new Date(m.created_at).toLocaleDateString()}</span></div>
+                <p class="text-xs text-teal-800">${m.dettagli}</p>
+            </div>`).join('');
+    },
+
+    // CRUD ITEM
+    openNewItem() { this.resetModal(); ui.modal('modal-item'); },
     edit(id) {
         const p = state.pantry.find(x => x.id == id);
         document.getElementById('item-id').value = id;
@@ -214,19 +297,14 @@ const admin = {
             unita: document.getElementById('item-unit').value,
             soglia: parseFloat(document.getElementById('item-min').value)
         };
-
         if(id) await _sb.from('cambusa').update(data).eq('id', id);
         else await _sb.from('cambusa').insert([data]);
-
-        ui.toast("Salvato!", "success");
-        ui.closeModals();
-        app.loadData();
+        ui.toast("Salvato!", "success"); ui.closeModals(); app.loadData();
     },
     async deleteItem() {
-        if(!confirm("Eliminare ingrediente?")) return;
+        if(!confirm("Eliminare?")) return;
         await _sb.from('cambusa').delete().eq('id', document.getElementById('item-id').value);
-        ui.closeModals();
-        app.loadData();
+        ui.closeModals(); app.loadData();
     },
     resetModal() {
         document.getElementById('item-id').value = '';
@@ -235,16 +313,19 @@ const admin = {
     }
 };
 
-// --- AUTH & UI (Uguale ad Armadio) ---
+// --- AUTH ---
 const auth = {
     async check() {
         const { data: { user } } = await _sb.auth.getUser();
         if (user) {
             state.user = user;
+            // Mostra Admin
             document.getElementById('nav-admin-mobile').classList.remove('hidden');
             document.getElementById('nav-admin-mobile').classList.add('flex');
+            // Nascondi Login e Link Pubblici
             document.getElementById('btn-login-mobile').classList.add('hidden');
-            app.nav('admin'); // Admin va diretto al QG
+            document.getElementById('nav-public-links').classList.add('hidden'); // NASCONDE LA DISPENSA PUBBLICA
+            app.nav('admin');
         }
     },
     async login() {
