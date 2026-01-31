@@ -63,6 +63,9 @@
                         <button onclick="app.nav('pantry'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3 w-full mb-3">
                             <span>🥫</span> Dispensa
                         </button>
+                        <button onclick="app.nav('wishlist'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3 w-full mb-3">
+                            <span>📝</span> Lista Spesa
+                        </button>
                         <button onclick="window.location.href='armadio.html'" class="text-left w-full text-green-100 font-bold text-sm hover:text-white transition flex items-center justify-between gap-3 border border-green-700 bg-green-900/40 p-3 rounded-lg shadow-inner">
                             <span class="flex items-center gap-2"><span>🎒</span> Vai all'Armadio</span>
                             <span class="text-lg">→</span>
@@ -114,11 +117,30 @@
                     <button onclick="app.setCategory('all')" class="filter-btn active whitespace-nowrap px-4 py-1.5 rounded-full border border-orange-200 text-xs font-bold text-orange-800 bg-white transition" id="btn-cat-all">Tutto</button>
                     <button onclick="app.setCategory('colazione')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-yellow-300 text-xs font-bold text-yellow-800 bg-yellow-50 transition" id="btn-cat-colazione">🥛 Colazione</button>
                     <button onclick="app.setCategory('pranzo_cena')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-red-300 text-xs font-bold text-red-800 bg-red-50 transition" id="btn-cat-pranzo_cena">🍝 Pranzo/Cena</button>
+                    <button onclick="app.setCategory('merenda')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-pink-300 text-xs font-bold text-pink-800 bg-pink-50 transition" id="btn-cat-merenda">🍪 Merenda</button>
                     <button onclick="app.setCategory('condimenti')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-green-300 text-xs font-bold text-green-800 bg-green-50 transition" id="btn-cat-condimenti">🧂 Condimenti</button>
                     <button onclick="app.setCategory('extra')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-purple-300 text-xs font-bold text-purple-800 bg-purple-50 transition" id="btn-cat-extra">🍫 Extra</button>
                 </div>
             </div>
             <div id="pantry-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-4"></div>
+        </section>
+        <section id="view-wishlist" class="hidden fade-in max-w-4xl mx-auto">
+            <div class="mb-6 border-b border-orange-200 pb-2">
+                <h1 class="text-2xl font-extrabold text-orange-900">Lista Spesa</h1>
+                <p class="text-gray-500 text-xs mt-1">Cosa manca in cucina? Scrivilo qui per il Cambusiere.</p>
+            </div>
+        
+            <div class="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-8 shadow-sm">
+                <h3 class="font-bold text-orange-900 mb-3 flex items-center gap-2">💡 Richiedi Ingrediente</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <input type="text" id="wish-item" placeholder="Cosa serve? (es. 2kg Farina, Nutella...)" class="p-3 border rounded-lg text-sm font-bold w-full focus:ring-2 focus:ring-orange-200 outline-none">
+                    <input type="text" id="wish-name" placeholder="Chi sei? (es. Sq. Volpi)" class="p-3 border rounded-lg text-sm w-full focus:ring-2 focus:ring-orange-200 outline-none">
+                </div>
+                <button onclick="wishlist.add()" class="w-full bg-orange-600 text-white font-bold py-3 rounded-lg shadow hover:bg-orange-700 transition">INVIA RICHIESTA</button>
+            </div>
+        
+            <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide mb-4">Lista della Spesa Attiva</h3>
+            <div id="wishlist-items" class="grid gap-3 md:grid-cols-2"></div>
         </section>
 
         <section id="view-admin" class="hidden fade-in">
