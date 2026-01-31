@@ -69,12 +69,8 @@
                 </div>
 
                     <div class="flex flex-col gap-4">
-                        <button onclick="app.nav('home'); ui.toggleMenu()" class="text-left text-gray-300 font-bold text-sm mb-4 hover:text-white flex items-center gap-3">
-                            <span>🔙</span> Cambia Reparto
-                        </button>
-                    
                         <button id="nav-btn-shop" onclick="app.nav('shop'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3">
-                            <span id="menu-icon-shop">📦</span> <span id="menu-text-shop">Materiale</span>
+                            <span>📦</span> Armadio
                         </button>
                         <button id="nav-btn-wish" onclick="app.nav('wishlist'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3">
                             <span>✨</span> Lista Desideri
@@ -106,28 +102,7 @@
     </nav>
 
     <main class="flex-grow max-w-7xl mx-auto w-full px-3 py-4 overflow-y-auto scrollbar-hide pb-24">
-        <section id="view-home" class="fade-in flex flex-col items-center justify-center min-h-[80vh]">
-            <div class="text-center mb-10">
-                <h1 class="text-4xl font-extrabold text-green-900 mb-2 tracking-widest">AZIMUT.ARCH</h1>
-                <p class="text-gray-500 font-mono text-sm">Scegli la tua destinazione</p>
-            </div>
-        
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl px-4">
-                <button onclick="app.setScope('armadio')" class="group relative bg-white p-8 rounded-2xl shadow-xl border-b-8 border-green-700 hover:-translate-y-2 transition duration-300 flex flex-col items-center overflow-hidden">
-                    <div class="absolute top-0 left-0 w-full h-2 bg-green-700"></div>
-                    <span class="text-6xl mb-4 group-hover:scale-110 transition">⛺</span>
-                    <h2 class="text-2xl font-bold text-gray-800 uppercase tracking-wide">Armadio</h2>
-                    <p class="text-xs text-gray-400 mt-2 font-mono">Tende, Pali, Materiale</p>
-                </button>
-        
-                <button onclick="app.setScope('cambusa')" class="group relative bg-white p-8 rounded-2xl shadow-xl border-b-8 border-orange-600 hover:-translate-y-2 transition duration-300 flex flex-col items-center overflow-hidden">
-                    <div class="absolute top-0 left-0 w-full h-2 bg-orange-600"></div>
-                    <span class="text-6xl mb-4 group-hover:scale-110 transition">🍝</span>
-                    <h2 class="text-2xl font-bold text-gray-800 uppercase tracking-wide">Cambusa</h2>
-                    <p class="text-xs text-gray-400 mt-2 font-mono">Cibo, Scatolame, Consumabili</p>
-                </button>
-            </div>
-        </section>
+
         <section id="view-shop" class="hidden fade-in">
             <div class="mb-4 border-b border-gray-200 pb-2">
                 <h1 class="text-2xl md:text-4xl font-extrabold text-green-900">Armadio</h1>
@@ -197,11 +172,7 @@
                     <button onclick="admin.tab('packs')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-yellow-500 transition">🎁 Gestione Kit</button>
                     <button onclick="admin.tab('movements')" class="w-full text-left p-3 rounded bg-white hover:bg-green-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-teal-500 transition">📊 Movimenti</button>
                 </div>
-                    <div class="flex justify-end mb-4">
-                        <button onclick="admin.switchScopeFromAdmin()" class="bg-gray-800 text-white px-4 py-2 rounded shadow text-xs font-bold hover:bg-gray-700 transition flex items-center gap-2">
-                            🔄 Cambia Magazzino
-                        </button>
-                    </div>
+
                 <div class="lg:col-span-4 space-y-4">
                     
                     <div id="admin-tab-stock" class="admin-tab bg-white p-6 rounded-xl shadow border-t-4 border-green-600">
