@@ -1,4 +1,4 @@
-// cambusa.js - Versione Debug & Fix
+// cambusa.js - Versione 4.1 Fix "Dispensa Vuota"
 
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
@@ -17,14 +17,13 @@ const app = {
     async init() {
         try {
             loader.show();
-            console.log("Inizio inizializzazione..."); // DEBUG
+            console.log("Inizio inizializzazione...");
             await auth.check();
             await this.loadData();
         } catch (error) {
             console.error("ERRORE FATALE:", error);
             ui.toast("Errore caricamento: " + (error.message || error), "error");
         } finally {
-            // Nasconde il loader SEMPRE, anche se c'è un errore
             loader.hide();
         }
         
@@ -32,7 +31,7 @@ const app = {
     },
 
     async loadData() {
-        console.log("Caricamento dati..."); // DEBUG
+        console.log("Caricamento dati...");
 
         // 1. Carica CAMBUSA
         const { data: d, error: e1 } = await _sb.from('cambusa').select('*').order('nome');
@@ -41,18 +40,14 @@ const app = {
 
         // 2. Carica RICETTE
         const { data: r, error: e2 } = await _sb.from('ricette').select('*').order('nome');
-        if (e2) {
-            console.warn("Tabella ricette non trovata o vuota (potrebbe non essere stata creata)");
-            state.recipes = [];
-        } else {
-            state.recipes = r || [];
-        }
+        // Se la tabella non esiste, gestiamo l'errore silenziosamente
+        state.recipes = r || [];
 
         // 3. Carica INGREDIENTI_RICETTE
         const { data: i, error: e3 } = await _sb.from('ingredienti_ricette').select('*');
         state.recipeIngs = i || [];
 
-        console.log("Dati caricati:", state.pantry.length, "prodotti"); // DEBUG
+        console.log("Dati caricati:", state.pantry.length, "prodotti");
 
         this.renderPantry();
         this.renderRecipeCreatorIngredients();
@@ -79,25 +74,45 @@ const app = {
         if(btn) btn.classList.add('active');
         this.filterPantry();
     },
+
+    // *** FIX QUI SOTTO ***
     filterPantry() {
         const term = document.getElementById('search-bar').value.toLowerCase().trim();
-        document.querySelectorAll('#pantry-grid > div').forEach(card => {
-            const matches = card.dataset.name.toLowerCase().includes(term) && 
-                            (state.currentCategory === 'all' || card.dataset.category === state.currentCategory);
-            card.classList.toggle('hidden', !matches);
+        const cards = document.querySelectorAll('#pantry-grid > div');
+        
+        cards.forEach(card => {
+            // CONTROLLO DI SICUREZZA:
+            // Se il div non ha un nome (es. è il messaggio "Dispensa Vuota"), lo ignoriamo
+            if (!card.dataset.name) return; 
+
+            const name = card.dataset.name.toLowerCase();
+            const cat = card.dataset.category;
+
+            const matchesText = name.includes(term);
+            const matchesCat = state.currentCategory === 'all' || cat === state.currentCategory;
+
+            card.classList.toggle('hidden', !(matchesText && matchesCat));
         });
     },
+
     renderPantry() {
         const grid = document.getElementById('pantry-grid');
+        
+        // Se vuoto, mostriamo messaggio (che non ha dataset.name, quindi verrà ignorato dal filtro)
         if(state.pantry.length === 0) {
-            grid.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10">La dispensa è vuota o c'è un errore di connessione.</div>`;
+            grid.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10 font-bold">
+                📭 La dispensa è vuota.<br>
+                <span class="text-xs font-normal">Aggiungi prodotti dal pannello Admin o carica avanzi.</span>
+            </div>`;
             return;
         }
 
         grid.innerHTML = state.pantry.map(i => {
             const isOut = i.quantita <= 0;
             return `
-            <div class="bg-white rounded-xl shadow border border-orange-100 p-3 flex flex-col relative group ${isOut?'opacity-60 grayscale':''}" data-name="${i.nome}" data-category="${i.categoria}">
+            <div class="bg-white rounded-xl shadow border border-orange-100 p-3 flex flex-col relative group ${isOut?'opacity-60 grayscale':''}" 
+                 data-name="${i.nome}" 
+                 data-category="${i.categoria}">
                 ${isOut ? '<span class="absolute top-2 right-2 bg-black text-white text-[10px] px-1 rounded">FINITO</span>' : ''}
                 <span class="text-[9px] font-bold uppercase text-orange-400">${i.categoria}</span>
                 <h4 class="font-bold text-gray-800 text-sm md:text-base mb-1 truncate">${i.nome}</h4>
