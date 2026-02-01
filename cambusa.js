@@ -1,4 +1,4 @@
-// cambusa.js - Versione 4.0 Final
+// cambusa.js - Versione Debug & Fix
 
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
@@ -15,18 +15,44 @@ const state = {
 
 const app = {
     async init() {
-        await auth.check();
-        await this.loadData();
+        try {
+            loader.show();
+            console.log("Inizio inizializzazione..."); // DEBUG
+            await auth.check();
+            await this.loadData();
+        } catch (error) {
+            console.error("ERRORE FATALE:", error);
+            ui.toast("Errore caricamento: " + (error.message || error), "error");
+        } finally {
+            // Nasconde il loader SEMPRE, anche se c'è un errore
+            loader.hide();
+        }
+        
         if(!state.user) this.nav('pantry');
     },
 
     async loadData() {
-        const { data: d } = await _sb.from('cambusa').select('*').order('nome');
+        console.log("Caricamento dati..."); // DEBUG
+
+        // 1. Carica CAMBUSA
+        const { data: d, error: e1 } = await _sb.from('cambusa').select('*').order('nome');
+        if (e1) throw new Error("Errore Cambusa: " + e1.message);
         state.pantry = d || [];
-        const { data: r } = await _sb.from('ricette').select('*').order('nome');
-        state.recipes = r || [];
-        const { data: i } = await _sb.from('ingredienti_ricette').select('*');
+
+        // 2. Carica RICETTE
+        const { data: r, error: e2 } = await _sb.from('ricette').select('*').order('nome');
+        if (e2) {
+            console.warn("Tabella ricette non trovata o vuota (potrebbe non essere stata creata)");
+            state.recipes = [];
+        } else {
+            state.recipes = r || [];
+        }
+
+        // 3. Carica INGREDIENTI_RICETTE
+        const { data: i, error: e3 } = await _sb.from('ingredienti_ricette').select('*');
         state.recipeIngs = i || [];
+
+        console.log("Dati caricati:", state.pantry.length, "prodotti"); // DEBUG
 
         this.renderPantry();
         this.renderRecipeCreatorIngredients();
@@ -40,7 +66,8 @@ const app = {
 
     nav(view) {
         document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
-        document.getElementById(`view-${view}`).classList.remove('hidden');
+        const el = document.getElementById(`view-${view}`);
+        if(el) el.classList.remove('hidden');
         if(view === 'recipes') this.renderRecipesList();
     },
 
@@ -48,7 +75,8 @@ const app = {
     setCategory(cat) {
         state.currentCategory = cat;
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById(`btn-cat-${cat}`).classList.add('active');
+        const btn = document.getElementById(`btn-cat-${cat}`);
+        if(btn) btn.classList.add('active');
         this.filterPantry();
     },
     filterPantry() {
@@ -60,7 +88,13 @@ const app = {
         });
     },
     renderPantry() {
-        document.getElementById('pantry-grid').innerHTML = state.pantry.map(i => {
+        const grid = document.getElementById('pantry-grid');
+        if(state.pantry.length === 0) {
+            grid.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10">La dispensa è vuota o c'è un errore di connessione.</div>`;
+            return;
+        }
+
+        grid.innerHTML = state.pantry.map(i => {
             const isOut = i.quantita <= 0;
             return `
             <div class="bg-white rounded-xl shadow border border-orange-100 p-3 flex flex-col relative group ${isOut?'opacity-60 grayscale':''}" data-name="${i.nome}" data-category="${i.categoria}">
@@ -76,7 +110,7 @@ const app = {
         }).join('');
     },
 
-    // --- CARICO AVANZI (WIZARD CORRETTO) ---
+    // --- CARICO AVANZI ---
     searchLeftoverItem() {
         const term = document.getElementById('leftover-search').value.toLowerCase();
         const resDiv = document.getElementById('leftover-results');
@@ -135,24 +169,33 @@ const app = {
         if(!qty) return ui.toast("Manca la quantità", "error");
 
         let id = document.getElementById('leftover-id').value;
-        let name = isNew ? document.getElementById('leftover-name-new').value : document.getElementById('leftover-title').innerText;
         
-        if(isNew) {
-            const cat = document.getElementById('leftover-cat-new').value;
-            const unit = document.getElementById('leftover-unit').value;
-            const { data, error } = await _sb.from('cambusa').insert([{ nome: name, quantita: qty, unita: unit, categoria: cat }]).select();
-            if(error) return ui.toast("Errore creazione", "error");
-            id = data[0].id; // Ottieni ID appena creato
-        } else {
-            const current = state.pantry.find(p => p.id === id);
-            await _sb.from('cambusa').update({ quantita: current.quantita + qty }).eq('id', id);
+        try {
+            if(isNew) {
+                const name = document.getElementById('leftover-name-new').value;
+                const cat = document.getElementById('leftover-cat-new').value;
+                const unit = document.getElementById('leftover-unit').value;
+                const { data, error } = await _sb.from('cambusa').insert([{ nome: name, quantita: qty, unita: unit, categoria: cat }]).select();
+                if(error) throw error;
+                id = data[0].id;
+            } else {
+                const current = state.pantry.find(p => p.id === id);
+                const { error } = await _sb.from('cambusa').update({ quantita: current.quantita + qty }).eq('id', id);
+                if(error) throw error;
+            }
+            await _sb.from('movimenti').insert([{ utente: 'AVANZI', dettagli: `Caricato avanzi` }]);
+            ui.toast("Caricato!", "success"); this.resetLeftoverWizard(); await this.loadData();
+        } catch(e) {
+            ui.toast("Errore salvataggio: " + e.message, "error");
         }
-        await _sb.from('movimenti').insert([{ utente: 'AVANZI', dettagli: `Caricato: ${name} (+${qty})` }]);
-        ui.toast("Caricato!", "success"); this.resetLeftoverWizard(); await this.loadData();
     },
 
-    // --- RICETTE (LISTA & CREAZIONE) ---
+    // --- RICETTE ---
     renderRecipesList() {
+        if(!state.recipes.length) {
+            document.getElementById('recipes-list').innerHTML = `<p class="text-center text-gray-400 col-span-full">Nessuna ricetta creata.</p>`;
+            return;
+        }
         document.getElementById('recipes-list').innerHTML = state.recipes.map(r => `
             <div class="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-400 hover:shadow-lg transition flex justify-between items-center">
                 <div><h3 class="font-bold text-gray-800">${r.nome}</h3><div class="text-xs text-gray-500">${r.tags||''}</div></div>
@@ -160,7 +203,6 @@ const app = {
             </div>`).join('');
     },
     renderRecipeCreatorIngredients() {
-        // Popola la lista ingredienti nel modale creazione
         document.getElementById('new-rec-ing-list').innerHTML = state.pantry.map(p => `
             <label class="flex items-center gap-2 p-1 hover:bg-white rounded cursor-pointer" data-name="${p.nome}">
                 <input type="checkbox" value="${p.id}" class="accent-yellow-500 new-rec-chk"> 
@@ -179,28 +221,35 @@ const app = {
         const chks = document.querySelectorAll('.new-rec-chk:checked');
         if(!name || !chks.length) return ui.toast("Nome e ingredienti obbligatori", "error");
 
-        const { data } = await _sb.from('ricette').insert([{ nome: name, tags: tags }]).select();
-        const rid = data[0].id;
-        const items = Array.from(chks).map(c => ({ ricetta_id: rid, ingrediente_id: c.value, quantita_necessaria: 0.1 })); // Dose default
-        await _sb.from('ingredienti_ricette').insert(items);
-        
-        ui.toast("Ricetta creata!", "success"); ui.closeModals(); await this.loadData();
+        try {
+            const { data, error } = await _sb.from('ricette').insert([{ nome: name, tags: tags }]).select();
+            if(error) throw error;
+            const rid = data[0].id;
+            const items = Array.from(chks).map(c => ({ ricetta_id: rid, ingrediente_id: c.value, quantita_necessaria: 0.1 })); 
+            const { error: e2 } = await _sb.from('ingredienti_ricette').insert(items);
+            if(e2) throw e2;
+            
+            ui.toast("Ricetta creata!", "success"); ui.closeModals(); await this.loadData();
+        } catch(e) { ui.toast("Errore: " + e.message, "error"); }
     },
 
     // --- CARRELLO ---
     async checkout() {
         const note = document.getElementById('checkout-note').value;
         if(!state.cart.length || !note) return ui.toast("Carrello vuoto o nome mancante", "error");
-        for (let c of state.cart) {
-            const item = state.pantry.find(x => x.id === c.id);
-            if(item) await _sb.from('cambusa').update({ quantita: Math.max(0, item.quantita - c.qty) }).eq('id', c.id);
-        }
-        await _sb.from('movimenti').insert([{ utente: note, dettagli: state.cart.map(c=>`${c.name} x${c.qty}`).join(', ') }]);
-        cart.empty(); ui.toggleCart(); ui.toast("Prelevato!", "success"); await this.loadData();
-    }
+        try {
+            loader.show();
+            for (let c of state.cart) {
+                const item = state.pantry.find(x => x.id === c.id);
+                await _sb.from('cambusa').update({ quantita: Math.max(0, item.quantita - c.qty) }).eq('id', c.id);
+            }
+            await _sb.from('movimenti').insert([{ utente: note, dettagli: state.cart.map(c=>`${c.name} x${c.qty}`).join(', ') }]);
+            cart.empty(); ui.toggleCart(); ui.toast("Prelevato!", "success"); await this.loadData();
+        } catch(e) { ui.toast("Errore checkout", "error"); } finally { loader.hide(); }
+    },
 };
 
-// --- CAMP PLANNER & SHOPPING MODE ---
+// --- CAMP PLANNER & SHOPPING ---
 const camp = {
     togglePlanner() {
         document.getElementById('view-recipes').classList.add('hidden');
@@ -226,14 +275,12 @@ const camp = {
     clear() { state.campMenu = []; this.calculate(); },
     calculate() {
         const people = parseInt(document.getElementById('camp-people').value) || 1;
-        // Render List Sidebar
         document.getElementById('camp-menu-list').innerHTML = state.campMenu.map((m,i) => `
             <div class="flex justify-between border-b pb-1 text-xs">
                 <div><b>${new Date(m.date).toLocaleDateString()}</b> ${m.meal} - ${m.name}</div>
                 <button onclick="state.campMenu.splice(${i},1); camp.calculate()" class="text-red-500 font-bold">x</button>
             </div>`).join('');
         
-        // Calculate Totals
         let totals = {};
         state.campMenu.forEach(m => {
             const ings = state.recipeIngs.filter(x => x.ricetta_id === m.id);
@@ -247,14 +294,13 @@ const camp = {
         });
         
         const tbody = document.getElementById('camp-calc-body');
-        state.shoppingList = []; // Reset shopping logic list
+        state.shoppingList = []; 
         let html = '';
         
         Object.values(totals).forEach(t => {
             const p = t.obj;
             const miss = Math.max(0, t.needed - p.quantita);
             if(miss > 0) state.shoppingList.push({ id: p.id, name: p.nome, qty: miss, unit: p.unita });
-            
             html += `<tr class="border-b">
                 <td class="p-2 font-bold">${p.nome}</td>
                 <td class="p-2">${t.needed.toFixed(1)} ${p.unita}</td>
@@ -271,7 +317,6 @@ const shopping = {
         if(!state.shoppingList.length) return ui.toast("Nulla da comprare!", "error");
         document.getElementById('view-planner').classList.add('hidden');
         document.getElementById('view-shopping').classList.remove('hidden');
-        
         document.getElementById('shopping-list').innerHTML = state.shoppingList.map((item, i) => `
             <label class="flex items-center p-3 bg-gray-50 rounded border cursor-pointer hover:bg-green-50">
                 <input type="checkbox" class="shop-chk w-5 h-5 accent-green-600 mr-3" value="${i}">
@@ -285,21 +330,21 @@ const shopping = {
     async complete() {
         const chks = document.querySelectorAll('.shop-chk:checked');
         if(!chks.length) return ui.toast("Spunta cosa hai preso", "error");
+        if(!confirm(`Confermi ${chks.length} prodotti?`)) return;
         
-        if(!confirm(`Confermi di aver comprato ${chks.length} prodotti? Verranno caricati in dispensa.`)) return;
-        
-        for (let chk of chks) {
-            const idx = parseInt(chk.value);
-            const item = state.shoppingList[idx];
-            // Carica in DB
-            const p = state.pantry.find(x => x.id === item.id);
-            await _sb.from('cambusa').update({ quantita: p.quantita + item.qty }).eq('id', item.id);
-        }
-        
-        await _sb.from('movimenti').insert([{ utente: 'SPESA', dettagli: `Carico automatico spesa campo` }]);
-        ui.toast("Spesa Caricata!", "success");
-        app.nav('pantry');
-        await app.loadData();
+        loader.show();
+        try {
+            for (let chk of chks) {
+                const idx = parseInt(chk.value);
+                const item = state.shoppingList[idx];
+                const p = state.pantry.find(x => x.id === item.id);
+                await _sb.from('cambusa').update({ quantita: p.quantita + item.qty }).eq('id', item.id);
+            }
+            await _sb.from('movimenti').insert([{ utente: 'SPESA', dettagli: `Carico Spesa` }]);
+            ui.toast("Spesa Caricata!", "success");
+            app.nav('pantry');
+            await app.loadData();
+        } catch(e) { ui.toast("Errore spesa", "error"); } finally { loader.hide(); }
     }
 };
 
@@ -350,12 +395,14 @@ const admin = {
             unita: document.getElementById('edit-unit').value,
             categoria: document.getElementById('edit-cat').value 
         };
-        if(id) await _sb.from('cambusa').update(data).eq('id', id);
-        else await _sb.from('cambusa').insert([data]);
-        ui.closeModals(); app.loadData();
+        try {
+            if(id) await _sb.from('cambusa').update(data).eq('id', id);
+            else await _sb.from('cambusa').insert([data]);
+            ui.closeModals(); app.loadData();
+        } catch(e) { ui.toast("Errore salvataggio", "error"); }
     },
-    renderRecipesAdmin() { /* Implementato simile a v3 */ },
-    renderStats() { /* Implementato simile a v3 */ }
+    renderRecipesAdmin() { /* Placeholder */ },
+    renderStats() { /* Placeholder */ }
 };
 
 const auth = {
@@ -376,6 +423,11 @@ const ui = {
         const t = document.createElement('div'); t.className = `px-6 py-3 rounded-full text-white font-bold animate-bounce ${type==='error'?'bg-red-500':'bg-orange-800'}`;
         t.innerText = msg; document.getElementById('toast-container').appendChild(t); setTimeout(()=>t.remove(), 3000);
     }
+};
+
+const loader = {
+    show() { document.getElementById('cambusa-loader').classList.remove('opacity-0', 'pointer-events-none'); },
+    hide() { setTimeout(() => document.getElementById('cambusa-loader').classList.add('opacity-0', 'pointer-events-none'), 800); }
 };
 
 app.init();
