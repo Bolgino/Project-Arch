@@ -3,28 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Azimut.Arch | Cambusa 3.0</title>
+    <title>Azimut.Arch | Cambusa Ops</title>
     <link rel="icon" type="image/png" href="icon-192.png">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <style>
-        body { 
-            font-family: 'Outfit', sans-serif; 
-            background-color: #fff7ed;
-            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239a3412' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-        }
-        .fade-in { animation: fadeIn 0.4s ease-out; }
+        body { font-family: 'Outfit', sans-serif; background-color: #fff7ed; user-select: none; }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        /* Nascondi scrollbar ma mantieni funzionalità */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .filter-btn.active { background-color: #c2410c; color: white; border-color: #c2410c; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         
         @media print {
-            body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; }
-            #print-area { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; }
             .no-print { display: none !important; }
+            #view-planner, #print-area { display: block !important; visibility: visible; }
+            body { background: white; }
         }
     </style>
 </head>
@@ -32,377 +28,258 @@
 
     <div id="cambusa-loader" class="fixed inset-0 bg-orange-900 z-[100] flex flex-col items-center justify-center text-white transition-opacity duration-500">
         <div class="text-6xl mb-4 animate-bounce">🥘</div>
-        <h2 class="text-2xl font-bold tracking-widest mb-2">AZIMUT.ARCH</h2>
-        <p id="loader-text" class="text-orange-200 font-mono text-sm">Accendo i fornelli...</p>
+        <h2 class="text-2xl font-bold tracking-widest">AZIMUT.ARCH</h2>
+        <p class="text-orange-200 text-xs mt-2 font-mono">Carico scorte e ricette...</p>
     </div>
 
-    <nav class="bg-orange-800 text-white sticky top-0 z-50 shadow-xl border-b-4 border-yellow-500 shrink-0 no-print">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-2 font-bold text-xl tracking-wider cursor-pointer select-none" onclick="window.location.href='index.html'">
-                    <img src="icon-192.png" alt="Logo" class="h-10 w-10 object-contain drop-shadow-md">
-                    <div class="leading-none hidden md:block">AZIMUT.ARCH</div>
-                </div>
-
-                <div class="flex items-center gap-4">
-                    <button onclick="ui.toggleCart()" class="relative">
-                        <span class="text-2xl">🛒</span>
-                        <span id="cart-count-mobile" class="absolute -top-1 -right-2 bg-yellow-400 text-orange-900 text-[10px] font-bold px-1.5 rounded-full shadow-sm">0</span>
-                    </button>
-                    <button onclick="ui.toggleMenu()" class="text-yellow-400 hover:text-white transition transform active:scale-95">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                    </button>
-                </div>
+    <nav class="bg-orange-900 text-white shadow-xl shrink-0 no-print z-50">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2 font-bold text-xl cursor-pointer" onclick="window.location.href='index.html'">
+                <span>⛺</span> <span class="tracking-wider">CAMBUSA</span>
             </div>
-        </div>
-
-        <div id="mobile-menu" class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm hidden transition-opacity" onclick="ui.toggleMenu()">
-            <div class="absolute right-0 top-0 h-full w-80 bg-orange-900 shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col p-6" id="mobile-menu-panel" onclick="event.stopPropagation()">
-                <div class="flex justify-between items-center mb-8 border-b border-orange-700 pb-4">
-                    <span class="font-bold text-xl text-white tracking-widest">CAMBUSA</span>
-                    <button onclick="ui.toggleMenu()" class="text-orange-300 hover:text-white text-2xl">&times;</button>
-                </div>
-
-                <div class="flex flex-col gap-3">
-                    <div id="nav-public-links">
-                        <button onclick="app.nav('pantry'); ui.toggleMenu()" class="nav-item text-white font-bold text-lg hover:text-yellow-400 flex items-center gap-3 w-full p-2 rounded hover:bg-orange-800 transition">
-                            <span>🥫</span> Dispensa
-                        </button>
-                        <button onclick="app.nav('leftovers'); ui.toggleMenu()" class="nav-item text-white font-bold text-lg hover:text-yellow-400 flex items-center gap-3 w-full p-2 rounded hover:bg-orange-800 transition">
-                            <span>🥡</span> Carico Avanzi
-                        </button>
-                        <button onclick="app.nav('recipes'); ui.toggleMenu()" class="nav-item text-white font-bold text-lg hover:text-yellow-400 flex items-center gap-3 w-full p-2 rounded hover:bg-orange-800 transition">
-                            <span>👨‍🍳</span> Menu & Campi
-                        </button>
-                    </div>
-
-                    <hr class="border-orange-700 my-2">
-                
-                    <div id="nav-admin-mobile" class="hidden flex-col gap-2">
-                        <div class="bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/30">
-                            <span class="text-yellow-400 text-xs font-bold uppercase tracking-widest mb-2 block">Area Admin</span>
-                            <button onclick="app.nav('admin'); ui.toggleMenu()" class="text-white font-bold w-full mb-2 hover:underline flex items-center gap-2">
-                                <span>🥘</span> Gestione Cambusa
-                            </button>
-                            <button onclick="auth.logout()" class="text-red-300 text-xs font-bold w-full hover:text-red-200 mt-2 text-left">Disconnetti</button>
-                        </div>
-                    </div>
-
-                    <button id="btn-login-mobile" onclick="ui.modal('login-modal'); ui.toggleMenu()" class="text-orange-200 font-bold text-sm hover:text-white flex items-center gap-3 bg-orange-800 p-3 rounded border border-orange-700 mt-auto">
-                        <span>🔐</span> Accesso Admin
-                    </button>
-                </div>
+            <div class="flex gap-4">
+                <button onclick="ui.toggleCart()" class="relative">
+                    <span class="text-2xl">🛒</span>
+                    <span id="cart-count-mobile" class="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 rounded-full">0</span>
+                </button>
+                <button onclick="ui.toggleMenu()" class="text-2xl">☰</button>
             </div>
         </div>
     </nav>
 
-    <main class="flex-grow max-w-7xl mx-auto w-full px-3 py-4 overflow-y-auto scrollbar-hide pb-24" id="main-container">
+    <div id="mobile-menu" class="fixed inset-0 bg-black/50 z-40 hidden" onclick="ui.toggleMenu()">
+        <div class="absolute right-0 top-0 h-full w-64 bg-orange-800 p-6 flex flex-col gap-4 shadow-2xl" onclick="event.stopPropagation()">
+            <h2 class="text-white font-bold text-xl mb-4 border-b border-orange-600 pb-2">Menu</h2>
+            <button onclick="app.nav('pantry'); ui.toggleMenu()" class="text-white text-left font-bold py-2">🥫 Dispensa</button>
+            <button onclick="app.nav('leftovers'); ui.toggleMenu()" class="text-white text-left font-bold py-2">📥 Carico Avanzi</button>
+            <button onclick="app.nav('recipes'); ui.toggleMenu()" class="text-white text-left font-bold py-2">📖 Ricette & Campi</button>
+            <hr class="border-orange-600">
+            <button onclick="app.nav('admin'); ui.toggleMenu()" class="text-yellow-400 text-left font-bold py-2">🔧 Admin</button>
+            <button onclick="auth.logout()" class="text-red-300 text-left text-sm mt-auto">Esci</button>
+        </div>
+    </div>
 
-        <section id="view-pantry" class="hidden fade-in">
-            <div class="mb-4 border-b border-orange-200 pb-2">
-                <h1 class="text-3xl font-extrabold text-orange-900">Dispensa</h1>
-                <p class="text-gray-500 text-xs">Consulta le scorte in tempo reale.</p>
+    <main class="flex-grow overflow-y-auto scrollbar-hide p-4 pb-20 max-w-5xl mx-auto w-full">
+
+        <section id="view-pantry" class="fade-in">
+            <div class="flex justify-between items-end mb-4">
+                <div>
+                    <h1 class="text-2xl font-black text-orange-900 uppercase">Dispensa</h1>
+                    <p class="text-xs text-gray-500">Gestisci i consumi quotidiani</p>
+                </div>
             </div>
             
-            <div class="mb-4 sticky top-0 bg-[#fff7ed] z-30 py-2">
-                 <div class="relative group mb-3">
-                    <input type="text" id="search-bar" onkeyup="app.filterPantry()" placeholder="🔍 Cerca ingrediente..." class="w-full pl-4 p-3 border border-orange-200 rounded-xl focus:border-orange-600 outline-none shadow-sm bg-white font-bold text-sm">
-                </div>
-                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    <button onclick="app.setCategory('all')" class="filter-btn active whitespace-nowrap px-4 py-1.5 rounded-full border border-orange-200 text-xs font-bold text-orange-800 bg-white transition" id="btn-cat-all">Tutto</button>
-                    <button onclick="app.setCategory('colazione')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-yellow-300 text-xs font-bold text-yellow-800 bg-yellow-50 transition" id="btn-cat-colazione">🥛 Colazione</button>
-                    <button onclick="app.setCategory('pranzo_cena')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-red-300 text-xs font-bold text-red-800 bg-red-50 transition" id="btn-cat-pranzo_cena">🍝 Pasti</button>
-                    <button onclick="app.setCategory('condimenti')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-green-300 text-xs font-bold text-green-800 bg-green-50 transition" id="btn-cat-condimenti">🧂 Condimenti</button>
-                </div>
+            <input type="text" id="search-bar" onkeyup="app.filterPantry()" placeholder="🔍 Cerca prodotto..." class="w-full p-3 border rounded-xl shadow-sm mb-4 font-bold bg-white">
+            
+            <div class="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-hide">
+                <button onclick="app.setCategory('all')" id="btn-cat-all" class="filter-btn active px-4 py-1 rounded-full bg-white border border-orange-200 text-xs font-bold text-orange-800">Tutto</button>
+                <button onclick="app.setCategory('colazione')" id="btn-cat-colazione" class="filter-btn px-4 py-1 rounded-full bg-white border border-orange-200 text-xs font-bold text-orange-800">Colazione</button>
+                <button onclick="app.setCategory('pranzo_cena')" id="btn-cat-pranzo_cena" class="filter-btn px-4 py-1 rounded-full bg-white border border-orange-200 text-xs font-bold text-orange-800">Pasti</button>
             </div>
 
-            <div id="pantry-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3"></div>
+            <div id="pantry-grid" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
         </section>
 
-        <section id="view-leftovers" class="hidden fade-in max-w-xl mx-auto">
-            <div class="mb-6 border-b border-orange-200 pb-2">
-                <h1 class="text-3xl font-extrabold text-green-800">Carico Avanzi</h1>
-                <p class="text-gray-500 text-xs">Non si spreca nulla. Riporta qui cosa avanza.</p>
-            </div>
-            
-            <div class="bg-white p-6 rounded-3xl shadow-xl border-t-8 border-green-600 relative overflow-hidden">
-                <div class="absolute -right-6 -top-6 text-green-100 opacity-50 transform rotate-12">
-                    <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 20 20"><path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z" /></svg>
-                </div>
+        <section id="view-leftovers" class="hidden fade-in">
+            <h1 class="text-2xl font-black text-green-900 uppercase mb-2">Carico Scorte</h1>
+            <p class="text-xs text-gray-500 mb-6">Aggiungi materiale in dispensa (avanzi o spesa extra).</p>
 
-                <div id="leftover-step-1" class="relative z-10">
-                    <h3 class="font-bold text-xl mb-4 text-gray-800">1. Cosa vuoi caricare?</h3>
-                    <div class="relative mb-6">
-                        <input type="text" id="leftover-search" onkeyup="app.searchLeftoverItem()" placeholder="Es. Pasta, Pane, Latte..." class="w-full p-4 border-2 border-green-100 rounded-xl bg-gray-50 font-bold text-lg focus:border-green-500 outline-none transition">
-                        <div id="leftover-results" class="absolute top-full left-0 w-full bg-white border border-green-100 rounded-b-xl shadow-xl max-h-48 overflow-y-auto hidden z-50 divide-y"></div>
-                    </div>
+            <div class="bg-white p-6 rounded-2xl shadow-lg border-t-4 border-green-600">
+                <div id="leftover-step-1">
+                    <label class="text-xs font-bold text-gray-400 uppercase">Cerca Prodotto Esistente</label>
+                    <input type="text" id="leftover-search" onkeyup="app.searchLeftoverItem()" placeholder="Es. Pasta..." class="w-full p-3 border rounded-lg mb-4 font-bold bg-gray-50">
+                    <div id="leftover-results" class="hidden border rounded-lg divide-y mb-4 max-h-40 overflow-y-auto"></div>
                     
-                    <div id="leftover-create-btn" class="hidden text-center animate-pulse">
-                        <p class="text-gray-400 text-sm mb-2">Ingrediente non trovato?</p>
-                        <button onclick="app.showLeftoverFormNew()" class="bg-green-100 text-green-700 font-bold py-2 px-6 rounded-full hover:bg-green-200 transition">
-                            + Crea Nuovo Ingrediente
-                        </button>
+                    <div id="btn-new-product" class="hidden text-center mt-4">
+                        <p class="text-xs text-gray-400 mb-2">Non trovato in archivio?</p>
+                        <button onclick="app.setupNewLeftover()" class="bg-green-100 text-green-800 font-bold py-2 px-6 rounded-full text-sm">+ Crea Nuovo</button>
                     </div>
                 </div>
 
-                <div id="leftover-step-2" class="hidden relative z-10 fade-in">
-                    <button onclick="app.resetLeftoverWizard()" class="absolute top-0 right-0 text-gray-400 hover:text-gray-600 font-bold text-sm">Cambia ↺</button>
-                    <h3 class="font-bold text-xl mb-4 text-green-900 flex items-center gap-2">
-                        <span id="leftover-display-name"></span>
-                    </h3>
+                <div id="leftover-step-2" class="hidden">
+                    <div class="flex justify-between mb-4">
+                        <h3 class="font-bold text-lg" id="leftover-title">...</h3>
+                        <button onclick="app.resetLeftoverWizard()" class="text-xs text-gray-400">Indietro</button>
+                    </div>
+                    <input type="hidden" id="leftover-id"><input type="hidden" id="leftover-is-new">
                     
-                    <input type="hidden" id="leftover-id">
-                    <input type="hidden" id="leftover-is-new" value="false">
-
-                    <div id="leftover-new-fields" class="hidden mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                        <label class="text-[10px] font-bold text-green-800 uppercase">Nome Prodotto</label>
-                        <input type="text" id="leftover-name" class="w-full p-2 border rounded mb-2 font-bold">
-                        <label class="text-[10px] font-bold text-green-800 uppercase">Categoria</label>
-                        <select id="leftover-cat" class="w-full p-2 border rounded bg-white text-sm">
-                            <option value="extra">Scegli...</option>
-                            <option value="colazione">Colazione</option>
-                            <option value="pranzo_cena">Pranzo/Cena</option>
-                            <option value="condimenti">Condimenti</option>
-                        </select>
+                    <div id="leftover-new-fields" class="hidden grid grid-cols-2 gap-2 mb-3">
+                        <input type="text" id="leftover-name-new" placeholder="Nome" class="p-2 border rounded col-span-2 font-bold">
+                        <select id="leftover-cat-new" class="p-2 border rounded bg-white text-sm"><option value="extra">Extra</option><option value="pranzo_cena">Pasti</option></select>
+                        <select id="leftover-unit-new" class="p-2 border rounded bg-white text-sm"><option value="pz">Pz</option><option value="kg">Kg</option><option value="gr">Gr</option></select>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="text-xs font-bold text-gray-500 uppercase">Quantità</label>
-                            <input type="number" step="0.1" id="leftover-qty" class="w-full p-3 border-2 border-green-500/30 rounded-lg font-mono font-bold text-2xl text-green-700 text-center focus:border-green-600 outline-none">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500 uppercase">Unità</label>
-                            <select id="leftover-unit" class="w-full h-[54px] border rounded-lg bg-white font-bold text-gray-600 text-center">
-                                <option value="pz">Pz</option><option value="kg">Kg</option><option value="lt">Lt</option><option value="conf">Conf</option>
-                            </select>
-                        </div>
+                    <label class="text-xs font-bold text-green-700 uppercase">Quantità da Aggiungere</label>
+                    <div class="flex gap-2 mb-4">
+                        <input type="number" step="0.1" id="leftover-qty" class="w-full p-3 border-2 border-green-500 rounded-lg text-2xl font-bold text-center text-green-700">
+                        <div class="flex items-center justify-center bg-gray-100 rounded-lg px-4 font-bold text-gray-500" id="leftover-unit-display">pz</div>
                     </div>
-
-                    <label class="text-xs font-bold text-gray-500 uppercase">Scadenza (Opzionale)</label>
-                    <input type="date" id="leftover-date" class="w-full p-3 border rounded-lg mb-6 text-gray-600 bg-gray-50">
-
-                    <button onclick="app.submitLeftover()" class="w-full bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-800 transition transform active:scale-95 text-lg">
-                        CONFERMA CARICO 📥
-                    </button>
+                    <button onclick="app.submitLeftover()" class="w-full bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg">CARICA IN DISPENSA</button>
                 </div>
             </div>
         </section>
 
         <section id="view-recipes" class="hidden fade-in">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-orange-200 pb-2">
-                <div>
-                    <h1 class="text-3xl font-extrabold text-yellow-900">Menu & Ricette</h1>
-                    <p class="text-gray-500 text-xs">Community delle ricette e pianificazione campi.</p>
-                </div>
-                <div class="flex gap-2 mt-2 md:mt-0">
-                    <button onclick="app.togglePublicRecipeForm()" class="bg-white text-yellow-600 border border-yellow-500 font-bold px-4 py-2 rounded-lg shadow hover:bg-yellow-50 flex items-center gap-2">
-                        <span>➕</span> Crea Ricetta
-                    </button>
-                    <button onclick="camp.togglePlanner()" class="bg-yellow-500 text-white font-bold px-4 py-2 rounded-lg shadow hover:bg-yellow-600 flex items-center gap-2">
-                        <span>⛺</span> Pianifica Campo
-                    </button>
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-black text-yellow-900 uppercase">Menu Campo</h1>
+                <div class="flex gap-2">
+                    <button onclick="app.openRecipeBuilder()" class="bg-white border border-yellow-500 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold shadow">+ Nuova Ricetta</button>
+                    <button onclick="camp.togglePlanner()" class="bg-yellow-500 text-white px-3 py-1 rounded-lg text-xs font-bold shadow">Vai al Piano ⛺</button>
                 </div>
             </div>
-
-            <div id="public-recipe-form" class="hidden bg-yellow-50 p-6 rounded-2xl mb-6 border border-yellow-200 shadow-inner">
-                <div class="flex justify-between mb-4">
-                    <h3 class="font-bold text-yellow-900">Nuova Ricetta Community</h3>
-                    <button onclick="app.togglePublicRecipeForm()" class="text-gray-400">✕</button>
-                </div>
-                <input type="text" id="pub-rec-name" placeholder="Nome del piatto (es. Carbonara Scout)" class="w-full p-3 border rounded-lg mb-2 font-bold">
-                <input type="text" id="pub-rec-tags" placeholder="Tag (es. Primo, Veloce)" class="w-full p-2 border rounded-lg mb-4 text-xs">
-                
-                <p class="text-xs font-bold text-gray-500 mb-1">Seleziona Ingredienti Principali:</p>
-                <div id="pub-rec-ing-list" class="h-40 overflow-y-auto bg-white border p-2 rounded-lg mb-4 grid grid-cols-2 gap-2 text-xs"></div>
-                
-                <button onclick="app.submitPublicRecipe()" class="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg shadow">SALVA RICETTA</button>
-            </div>
-
-            <div id="recipes-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            <div id="recipes-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
         </section>
 
-        <section id="view-planner" class="hidden fade-in bg-white p-4 rounded-xl shadow-xl min-h-[80vh]">
-            <div class="flex justify-between items-center mb-4 border-b pb-2 no-print">
-                <h2 class="text-2xl font-bold text-orange-900">⛺ Pianificatore Campo</h2>
-                <button onclick="app.nav('recipes')" class="text-gray-400 hover:text-gray-600 font-bold">Chiudi ✕</button>
+        <section id="view-planner" class="hidden fade-in bg-white min-h-screen relative">
+            <div class="p-4 border-b flex justify-between items-center no-print">
+                <h2 class="font-bold text-xl text-orange-900">⛺ Pianificatore</h2>
+                <button onclick="app.nav('recipes')" class="text-gray-400">Chiudi</button>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="md:col-span-1 bg-orange-50 p-4 rounded-lg no-print">
-                    <h3 class="font-bold text-orange-800 mb-3">1. Impostazioni</h3>
-                    <label class="block text-xs font-bold text-gray-500 uppercase">Numero Persone</label>
-                    <input type="number" id="camp-people" value="25" min="1" class="w-full p-2 border rounded mb-4 font-bold text-lg text-center" onchange="camp.calculate()">
-
-                    <h3 class="font-bold text-orange-800 mb-3">2. Menu del Campo</h3>
-                    <div id="camp-menu-list" class="space-y-3 mb-4 max-h-[50vh] overflow-y-auto pr-1">
-                        <p class="text-gray-400 text-xs italic">Nessuna ricetta aggiunta.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-4">
+                <div class="no-print md:col-span-1 bg-orange-50 p-4 rounded-xl">
+                    <label class="block text-xs font-bold text-orange-800 uppercase mb-1">Partecipanti</label>
+                    <input type="number" id="camp-people" value="20" min="1" class="w-full p-2 border rounded text-center text-xl font-bold mb-4" onchange="camp.calculate()">
+                    
+                    <h3 class="font-bold text-gray-700 mb-2 border-b pb-1">Menu Selezionato</h3>
+                    <div id="camp-menu-list" class="space-y-2 mb-4 text-sm max-h-40 overflow-y-auto"></div>
+                    
+                    <div class="flex flex-col gap-2">
+                        <button onclick="shopping.startMode()" class="bg-green-600 text-white font-bold py-2 rounded shadow">🛒 VAI A FARE LA SPESA</button>
+                        <button onclick="window.print()" class="bg-blue-100 text-blue-700 font-bold py-2 rounded">🖨️ Stampa PDF</button>
+                        <button onclick="camp.clear()" class="text-red-400 text-xs font-bold py-1">Resetta Tutto</button>
                     </div>
-                    <button onclick="camp.print()" class="w-full bg-blue-600 text-white font-bold py-3 rounded shadow hover:bg-blue-700 mb-2">🖨️ Stampa Menu & Spesa</button>
-                    <button onclick="camp.clear()" class="w-full text-red-500 text-xs font-bold hover:underline">Resetta Tutto</button>
                 </div>
 
                 <div class="md:col-span-2" id="print-area">
-                    <div class="text-center mb-6 hidden print-header">
-                        <h1 class="text-4xl font-bold">Menu Campo Scout</h1>
-                        <p class="text-gray-600 text-sm mt-1">Lista generata automaticamente da Azimut.Arch</p>
+                    <div class="hidden print-header text-center mb-6">
+                        <h1 class="text-3xl font-bold">Lista Spesa Campo</h1>
+                        <p class="text-sm text-gray-500">Generata da Azimut.Arch</p>
+                    </div>
+                    
+                    <div class="mb-6 border-b pb-4 print-only">
+                        <h3 class="font-bold text-lg mb-2">📅 Calendario Pasti</h3>
+                        <div id="print-calendar" class="text-sm grid gap-2"></div>
                     </div>
 
-                    <div class="mb-8 print-only">
-                        <h3 class="font-bold text-xl mb-4 border-b pb-1">📅 Calendario Menu</h3>
-                        <div id="print-calendar-view" class="grid grid-cols-1 gap-4 text-sm"></div>
-                    </div>
-
-                    <h3 class="font-bold text-green-800 mb-2 border-b border-green-200">🥗 Totale Lista della Spesa</h3>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm text-left">
-                            <thead class="bg-gray-100 text-gray-600 uppercase text-xs">
-                                <tr>
-                                    <th class="p-2">Ingrediente</th>
-                                    <th class="p-2">Serve (Tot)</th>
-                                    <th class="p-2">In Dispensa</th>
-                                    <th class="p-2 text-red-600">DA COMPRARE</th>
-                                </tr>
-                            </thead>
-                            <tbody id="camp-calc-body" class="divide-y divide-gray-100">
-                                <tr><td colspan="4" class="p-4 text-center text-gray-400">Aggiungi ricette per calcolare...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    <h3 class="font-bold text-lg text-green-900 mb-2">Riepilogo Spesa</h3>
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-100 text-gray-500 uppercase text-[10px]">
+                            <tr>
+                                <th class="p-2">Prodotto</th>
+                                <th class="p-2">Serve (Tot)</th>
+                                <th class="p-2">In Cambusa</th>
+                                <th class="p-2 text-red-600">DA COMPRARE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="camp-calc-body" class="divide-y divide-gray-100"></tbody>
+                    </table>
                 </div>
             </div>
         </section>
 
-        <section id="view-admin" class="hidden fade-in">
-            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div class="lg:col-span-1 flex flex-col gap-2">
-                    <div class="bg-white p-3 rounded-lg shadow text-center border-l-4 border-orange-600 mb-2">
-                        <h2 class="font-bold text-gray-800">Q.G. Cambusa</h2>
-                    </div>
-                    <button onclick="admin.tab('stock')" class="admin-nav-btn w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow border-l-4 border-transparent">🥘 Dispensa</button>
-                    <button onclick="admin.tab('recipes')" class="admin-nav-btn w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow border-l-4 border-transparent">📖 Ricette & Dosi</button>
-                    <button onclick="admin.tab('stats')" class="admin-nav-btn w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow border-l-4 border-transparent">📊 Statistiche</button>
+        <section id="view-shopping" class="hidden fade-in bg-white min-h-screen p-4 flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <div>
+                    <h1 class="text-2xl font-black text-green-700 uppercase">Missione Spesa</h1>
+                    <p class="text-xs text-gray-500">Spunta ciò che metti nel carrello reale.</p>
                 </div>
-
-                <div class="lg:col-span-4 space-y-4">
-                    <div id="admin-tab-stock" class="admin-tab bg-white p-6 rounded-xl shadow border-t-4 border-orange-600">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-xl text-orange-900">Gestione Scorte</h3>
-                            <button onclick="admin.openNewItem()" class="bg-orange-600 text-white px-4 py-2 rounded text-sm font-bold shadow">+ Nuovo</button>
-                        </div>
-                        <div id="expiry-alerts" class="hidden mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                            <h4 class="font-bold text-red-800 flex items-center gap-2">⚠️ In Scadenza</h4>
-                            <ul id="expiry-list" class="list-disc list-inside text-sm text-red-700 mt-2"></ul>
-                        </div>
-                        <input type="text" onkeyup="admin.filterStock()" id="admin-search-stock" placeholder="Cerca..." class="w-full p-2 border rounded mb-2 bg-gray-50">
-                        <div id="admin-stock-list" class="divide-y text-sm max-h-[60vh] overflow-y-auto"></div>
-                    </div>
-
-                    <div id="admin-tab-recipes" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-yellow-500">
-                        <h3 class="font-bold text-xl text-yellow-900 mb-4">Gestione Ricette & Dosi</h3>
-                        <p class="text-xs text-gray-500 mb-2">Qui puoi calibrare le dosi per persona di ogni ricetta.</p>
-                        <div id="admin-recipes-list" class="grid grid-cols-1 gap-3"></div>
-                    </div>
-
-                    <div id="admin-tab-stats" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-blue-500">
-                        <h3 class="font-bold text-xl text-blue-900 mb-4">Movimenti</h3>
-                        <div id="admin-movements-list" class="space-y-2 text-xs text-gray-600 max-h-[70vh] overflow-y-auto"></div>
-                    </div>
-                </div>
+                <button onclick="app.nav('recipes')" class="text-gray-400 font-bold">X</button>
             </div>
+            
+            <div id="shopping-list-interactive" class="flex-grow overflow-y-auto space-y-3 mb-4"></div>
+            
+            <button onclick="shopping.commit()" class="w-full bg-green-700 text-white font-bold py-4 rounded-xl shadow-xl text-lg animate-pulse">
+                ✅ SPESA FATTA (CARICA IN DISPENSA)
+            </button>
+        </section>
+
+        <section id="view-admin" class="hidden fade-in">
+             <div class="bg-white p-4 rounded shadow border-l-4 border-orange-600">
+                <h2 class="font-bold text-xl mb-4">Pannello Admin</h2>
+                <div class="flex gap-2 mb-4 border-b">
+                    <button onclick="admin.renderStock()" class="p-2 font-bold text-sm text-orange-800">Dispensa</button>
+                    <button onclick="admin.renderStats()" class="p-2 font-bold text-sm text-blue-800">Movimenti</button>
+                </div>
+                <div id="admin-content" class="text-sm"></div>
+             </div>
         </section>
 
     </main>
 
-    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-full md:w-96 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-[60] flex flex-col no-print">
-        <div class="p-4 border-b flex justify-between items-center bg-orange-900 text-white shadow-md">
-            <div class="flex items-center gap-3">
-                <span class="text-2xl">🛒</span>
-                <h2 class="font-extrabold text-xl uppercase">Carrello</h2>
-            </div>
-            <button onclick="ui.toggleCart()" class="text-2xl text-orange-200 hover:text-white">&times;</button>
+    <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-[70] flex flex-col no-print">
+        <div class="p-4 bg-orange-900 text-white flex justify-between items-center">
+            <h2 class="font-bold">CONSUMO RAPIDO</h2>
+            <button onclick="ui.toggleCart()" class="text-2xl">&times;</button>
         </div>
-        <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50"></div>
-        <div class="p-4 border-t bg-white">
-            <button onclick="cart.empty()" class="w-full text-red-400 text-xs font-bold mb-2">SVUOTA</button>
-            <input type="text" id="checkout-note" placeholder="Chi preleva?" class="w-full p-3 border rounded mb-2 font-bold text-sm">
-            <button onclick="app.checkout()" class="w-full bg-orange-700 text-white font-bold py-3 rounded shadow-lg hover:bg-orange-800">PRELEVA</button>
+        <div id="cart-items" class="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-2"></div>
+        <div class="p-4 bg-white border-t">
+            <input type="text" id="checkout-note" placeholder="Chi consuma? (es. Squadriglia)" class="w-full p-2 border rounded mb-2 text-sm">
+            <button onclick="cart.checkout()" class="w-full bg-orange-700 text-white font-bold py-2 rounded">PRELEVA</button>
         </div>
     </div>
 
-    <div id="modal-item" class="hidden fixed inset-0 bg-black/50 z-[70] flex items-center justify-center backdrop-blur-sm p-4 no-print">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md">
-            <h3 class="font-bold text-lg mb-4 text-orange-900">Ingrediente</h3>
-            <input type="hidden" id="edit-id">
-            <input type="text" id="edit-name" placeholder="Nome" class="w-full p-2 border rounded mb-2 font-bold">
-            <div class="flex gap-2 mb-2">
-                <input type="number" step="0.1" id="edit-qty" placeholder="Qtà" class="w-1/2 p-2 border rounded">
-                <select id="edit-unit" class="w-1/2 p-2 border rounded bg-white">
-                    <option value="pz">Pz</option><option value="kg">Kg</option><option value="lt">Lt</option><option value="conf">Conf</option>
-                </select>
+    <div id="modal-recipe-builder" class="hidden fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-2 no-print">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+            <div class="p-4 bg-yellow-400 flex justify-between items-center">
+                <h3 class="font-bold text-yellow-900">Nuova Ricetta</h3>
+                <button onclick="ui.closeModals()" class="text-2xl opacity-50">&times;</button>
             </div>
-            <div class="flex gap-2 mb-2">
-                 <div class="w-1/2">
-                    <label class="text-[10px] font-bold uppercase text-gray-500">Soglia Min</label>
-                    <input type="number" step="0.1" id="edit-min" class="w-full p-2 border rounded">
-                 </div>
-                 <div class="w-1/2">
-                    <label class="text-[10px] font-bold uppercase text-gray-500">Scadenza</label>
-                    <input type="date" id="edit-date" class="w-full p-2 border rounded text-xs">
-                 </div>
+            
+            <div class="p-4 overflow-y-auto flex-grow">
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <div class="col-span-2">
+                        <label class="text-[10px] font-bold uppercase text-gray-500">Nome Piatto</label>
+                        <input type="text" id="builder-name" placeholder="es. Carbonara" class="w-full p-2 border rounded font-bold">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold uppercase text-gray-500">Tags</label>
+                        <input type="text" id="builder-tags" placeholder="Primo, Veloce" class="w-full p-2 border rounded text-xs">
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-3 rounded-lg border mb-4">
+                    <h4 class="font-bold text-sm text-gray-700 mb-2">Aggiungi Ingredienti</h4>
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" id="builder-search" onkeyup="app.searchBuilderIng()" placeholder="Cerca ingrediente..." class="flex-grow p-2 border rounded text-sm">
+                    </div>
+                    <div id="builder-results" class="max-h-32 overflow-y-auto bg-white border rounded hidden mb-2"></div>
+                    
+                    <p class="text-[10px] font-bold uppercase text-gray-400 mb-1">Ingredienti nella ricetta (DOSE PER 1 PERSONA):</p>
+                    <div id="builder-selected" class="space-y-2">
+                        <p class="text-gray-400 text-xs italic text-center py-2">Nessun ingrediente aggiunto.</p>
+                    </div>
+                </div>
             </div>
-            <select id="edit-cat" class="w-full p-2 border rounded mb-4 bg-white"><option value="extra">Extra</option><option value="colazione">Colazione</option><option value="pranzo_cena">Pranzo/Cena</option><option value="condimenti">Condimenti</option></select>
-            <button onclick="admin.saveItem()" class="w-full bg-orange-600 text-white font-bold py-2 rounded mb-2">Salva</button>
-            <button onclick="admin.deleteItem()" class="w-full text-red-500 text-xs">Elimina</button>
+
+            <div class="p-4 border-t bg-gray-50">
+                <button onclick="app.saveRecipe()" class="w-full bg-yellow-500 text-white font-bold py-3 rounded shadow hover:bg-yellow-600">SALVA RICETTA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-add-menu" class="hidden fixed inset-0 bg-black/50 z-[90] flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-xl w-full max-w-sm">
+            <h3 class="font-bold text-lg mb-2">Aggiungi al Menu</h3>
+            <p id="menu-add-name" class="text-sm text-gray-600 mb-4 font-bold"></p>
+            <input type="date" id="menu-add-date" class="w-full p-2 border rounded mb-2">
+            <select id="menu-add-meal" class="w-full p-2 border rounded mb-4"><option>Pranzo</option><option>Cena</option><option>Colazione</option></select>
+            <button onclick="camp.confirmAdd()" class="w-full bg-orange-600 text-white font-bold py-2 rounded">Conferma</button>
             <button onclick="ui.closeModals()" class="w-full text-gray-400 text-xs mt-2">Annulla</button>
         </div>
     </div>
-
-    <div id="modal-recipe-doses" class="hidden fixed inset-0 bg-black/50 z-[75] flex items-center justify-center backdrop-blur-sm p-4 no-print">
-        <div class="bg-white p-5 rounded-xl shadow-2xl w-full max-w-lg h-[80vh] flex flex-col">
-            <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 class="font-bold text-lg text-yellow-900" id="dose-modal-title">Modifica Dosi</h3>
-                <button onclick="ui.closeModals()" class="text-2xl text-gray-400">&times;</button>
-            </div>
-            <p class="text-xs text-gray-500 mb-2 bg-yellow-50 p-2 rounded">Definisci la quantità necessaria <b>per 1 persona</b>. Il sistema moltiplicherà poi per il numero di partecipanti.</p>
-            <input type="hidden" id="dose-recipe-id">
-            <div id="dose-list" class="flex-grow overflow-y-auto space-y-2 mb-4 pr-2"></div>
-            <button onclick="admin.saveDoses()" class="w-full bg-yellow-500 text-white font-bold py-3 rounded shadow hover:bg-yellow-600">Salva Dosi</button>
+    
+    <div id="login-modal" class="hidden fixed inset-0 bg-orange-900/90 z-[100] flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded w-full max-w-xs">
+            <h2 class="font-bold mb-4">Login</h2>
+            <input type="email" id="l-email" placeholder="Email" class="w-full p-2 border rounded mb-2">
+            <input type="password" id="l-pass" placeholder="Pass" class="w-full p-2 border rounded mb-4">
+            <button onclick="auth.login()" class="w-full bg-orange-800 text-white py-2 rounded font-bold">Entra</button>
+            <button onclick="ui.closeModals()" class="w-full mt-2 text-xs text-gray-400">Chiudi</button>
         </div>
     </div>
 
-    <div id="modal-camp-date" class="hidden fixed inset-0 bg-black/50 z-[90] flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
-            <h3 class="font-bold text-lg mb-2 text-orange-900">Quando si mangia?</h3>
-            <p id="modal-camp-recipe-name" class="text-sm font-bold text-gray-600 mb-4"></p>
-            
-            <label class="text-xs font-bold text-gray-400 uppercase">Giorno</label>
-            <input type="date" id="camp-add-date" class="w-full p-3 border rounded mb-3">
-            
-            <label class="text-xs font-bold text-gray-400 uppercase">Pasto</label>
-            <select id="camp-add-meal" class="w-full p-3 border rounded mb-6 bg-white">
-                <option value="Pranzo">Pranzo</option>
-                <option value="Cena">Cena</option>
-                <option value="Colazione">Colazione</option>
-                <option value="Merenda">Merenda</option>
-            </select>
-            
-            <button onclick="camp.confirmAddRecipe()" class="w-full bg-orange-600 text-white font-bold py-3 rounded-lg shadow">Aggiungi al Menu</button>
-            <button onclick="ui.closeModals()" class="w-full text-gray-400 text-xs mt-3">Annulla</button>
-        </div>
-    </div>
-
-    <div id="login-modal" class="hidden fixed inset-0 bg-orange-900/80 z-[80] flex items-center justify-center backdrop-blur-sm p-4">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm relative">
-            <button onclick="ui.closeModals()" class="absolute top-4 right-4 text-2xl text-gray-300">&times;</button>
-            <h2 class="text-center font-extrabold text-2xl mb-2 text-orange-900">Area Admin</h2>
-            <input type="email" id="log-mail" placeholder="Email" class="w-full p-3 border rounded mb-3">
-            <input type="password" id="log-pass" placeholder="Password" class="w-full p-3 border rounded mb-6">
-            <button onclick="auth.login()" class="w-full bg-orange-800 text-white font-bold py-3 rounded hover:bg-orange-900">Entra</button>
-        </div>
-    </div>
-
-    <div id="toast-container" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-[150] w-max max-w-sm text-center no-print"></div>
+    <div id="toast-container" class="fixed bottom-4 left-0 right-0 flex justify-center z-[200] pointer-events-none"></div>
 
     <script src="cambusa.js"></script>
 </body>
