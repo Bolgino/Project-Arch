@@ -60,15 +60,17 @@
 
                 <div class="flex flex-col gap-4">
                     <div id="nav-public-links">
-                        <button onclick="app.nav('pantry'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3 w-full mb-3">
+                        <button onclick="app.nav('pantry'); ui.toggleMenu()" class="text-left text-white font-bold text-lg mb-3 flex items-center gap-3">
                             <span>🥫</span> Dispensa
                         </button>
-                        <button onclick="app.nav('wishlist'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3 w-full mb-3">
-                            <span>📝</span> Lista Spesa
+                        <button onclick="app.nav('restock-public'); ui.toggleMenu()" class="text-left text-white font-bold text-lg mb-3 flex items-center gap-3">
+                            <span>📦</span> Aggiungi/Rifornisci
                         </button>
-                        <button onclick="window.location.href='armadio.html'" class="text-left w-full text-green-100 font-bold text-sm hover:text-white transition flex items-center justify-between gap-3 border border-green-700 bg-green-900/40 p-3 rounded-lg shadow-inner">
-                            <span class="flex items-center gap-2"><span>🎒</span> Vai all'Armadio</span>
-                            <span class="text-lg">→</span>
+                        <button onclick="app.nav('recipes'); ui.toggleMenu()" class="text-left text-white font-bold text-lg mb-3 flex items-center gap-3">
+                            <span>📖</span> Ricettario
+                        </button>
+                        <button onclick="app.nav('planner'); ui.toggleMenu()" class="text-left text-white font-bold text-lg mb-3 flex items-center gap-3">
+                            <span>🍽️</span> Crea Menu & Spesa
                         </button>
                     </div>
 
@@ -100,114 +102,121 @@
 
     <main class="flex-grow max-w-7xl mx-auto w-full px-3 py-4 overflow-y-auto scrollbar-hide pb-24">
 
-        <section id="view-pantry" class="hidden fade-in">
-            <div class="mb-4 border-b border-orange-200 pb-2">
-                <h1 class="text-2xl md:text-4xl font-extrabold text-orange-900">Dispensa</h1>
-                <p class="text-gray-500 text-xs md:text-sm mt-1">Cosa bolle in pentola? Controlla le scorte.</p>
-            </div>
-            <div class="mb-6 sticky top-0 bg-[#fff7ed] z-30 py-2">
-                 <div class="relative group mb-3">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span class="text-gray-400 text-lg">🔎</span>
-                    </div>
-                    <input type="text" id="search-bar" onkeyup="app.filterPantry()" placeholder="Cerca ingredienti..." class="w-full pl-10 p-3 border border-orange-200 rounded-xl focus:border-orange-600 focus:ring-2 focus:ring-orange-100 outline-none transition shadow-sm bg-white text-gray-700 font-bold text-sm">
-                    <button onclick="document.getElementById('search-bar').value = ''; app.filterPantry()" class="absolute inset-y-0 right-0 pr-4 text-gray-300 hover:text-red-500 font-bold cursor-pointer">✕</button>
-                </div>
-                <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    <button onclick="app.setCategory('all')" class="filter-btn active whitespace-nowrap px-4 py-1.5 rounded-full border border-orange-200 text-xs font-bold text-orange-800 bg-white transition" id="btn-cat-all">Tutto</button>
-                    <button onclick="app.setCategory('colazione')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-yellow-300 text-xs font-bold text-yellow-800 bg-yellow-50 transition" id="btn-cat-colazione">🥛 Colazione</button>
-                    <button onclick="app.setCategory('pranzo_cena')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-red-300 text-xs font-bold text-red-800 bg-red-50 transition" id="btn-cat-pranzo_cena">🍝 Pranzo/Cena</button>
-                    <button onclick="app.setCategory('merenda')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-pink-300 text-xs font-bold text-pink-800 bg-pink-50 transition" id="btn-cat-merenda">🍪 Merenda</button>
-                    <button onclick="app.setCategory('condimenti')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-green-300 text-xs font-bold text-green-800 bg-green-50 transition" id="btn-cat-condimenti">🧂 Condimenti</button>
-                    <button onclick="app.setCategory('extra')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-purple-300 text-xs font-bold text-purple-800 bg-purple-50 transition" id="btn-cat-extra">🍫 Extra</button>
-                </div>
-            </div>
-            <div id="pantry-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-4"></div>
-        </section>
-        <section id="view-wishlist" class="hidden fade-in max-w-4xl mx-auto">
-            <div class="mb-6 border-b border-orange-200 pb-2">
-                <h1 class="text-2xl font-extrabold text-orange-900">Lista Spesa</h1>
-                <p class="text-gray-500 text-xs mt-1">Cosa manca in cucina? Scrivilo qui per il Cambusiere.</p>
-            </div>
+    <section id="view-pantry" class="hidden fade-in">
+        <div class="mb-4 border-b border-orange-200 pb-2">
+            <h1 class="text-2xl font-extrabold text-orange-900">Dispensa</h1>
+            <p class="text-xs text-gray-500">Magazzino attuale.</p>
+        </div>
+        <div id="pantry-grid" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+    </section>
+
+    <section id="view-restock-public" class="hidden fade-in max-w-2xl mx-auto">
+        <div class="mb-4 border-b border-orange-200 pb-2">
+            <h1 class="text-2xl font-extrabold text-blue-900">Carico Magazzino</h1>
+            <p class="text-xs text-gray-500">Hai comprato qualcosa o trovato oggetti non segnati? Aggiungili qui.</p>
+        </div>
         
-            <div class="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-8 shadow-sm">
-                <h3 class="font-bold text-orange-900 mb-3 flex items-center gap-2">💡 Richiedi Ingrediente</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                    <input type="text" id="wish-item" placeholder="Cosa serve? (es. 2kg Farina, Nutella...)" class="p-3 border rounded-lg text-sm font-bold w-full focus:ring-2 focus:ring-orange-200 outline-none">
-                    <input type="text" id="wish-name" placeholder="Chi sei? (es. Sq. Volpi)" class="p-3 border rounded-lg text-sm w-full focus:ring-2 focus:ring-orange-200 outline-none">
-                </div>
-                <button onclick="wishlist.add()" class="w-full bg-orange-600 text-white font-bold py-3 rounded-lg shadow hover:bg-orange-700 transition">INVIA RICHIESTA</button>
+        <div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-600">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cosa hai trovato/comprato?</label>
+            
+            <div class="relative mb-3">
+                <input type="text" id="restock-name" placeholder="Es. Pasta, Nutella..." 
+                       class="w-full p-3 border rounded font-bold" onkeyup="restock.searchExisting()">
+                <div id="restock-suggestions" class="hidden absolute top-full left-0 w-full bg-white border shadow-xl z-50 max-h-40 overflow-y-auto"></div>
             </div>
-        
-            <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide mb-4">Lista della Spesa Attiva</h3>
-            <div id="wishlist-items" class="grid gap-3 md:grid-cols-2"></div>
-        </section>
 
-        <section id="view-admin" class="hidden fade-in">
-            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                <div class="lg:col-span-1 grid grid-cols-2 lg:flex lg:flex-col gap-2 h-fit">
-                    <div class="col-span-2 lg:col-auto bg-white p-3 rounded-lg shadow text-center border-l-4 border-orange-600 mb-0 lg:mb-2">
-                        <h2 class="font-bold text-gray-800">Q.G. Cambusa</h2>
-                    </div>
-                    <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-orange-600 transition">🥘 Dispensa</button>
-                    <button onclick="admin.tab('requests')" class="w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-pink-500 transition">📝 Lista Spesa</button>
-                    <button onclick="admin.tab('restock')" class="w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-blue-500 transition">🚛 Rifornimento</button>
-                    <button onclick="admin.tab('menus')" class="w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-yellow-500 transition">🍽️ Menu/Ricette</button>
-                    <button onclick="admin.tab('movements')" class="w-full text-left p-3 rounded bg-white hover:bg-orange-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-teal-500 transition">📊 Movimenti</button>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Quantità</label>
+                    <input type="number" id="restock-qty" step="0.1" class="w-full p-3 border rounded font-mono font-bold">
                 </div>
-
-                <div class="lg:col-span-4 space-y-4">
-                    
-                    <div id="admin-tab-stock" class="admin-tab bg-white p-6 rounded-xl shadow border-t-4 border-orange-600">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-xl text-orange-900">Dispensa</h3>
-                            <button onclick="admin.openNewItem()" class="bg-orange-600 text-white px-4 py-2 rounded text-sm font-bold shadow hover:bg-orange-700">+ Ingrediente</button>
-                        </div>
-                        <div class="relative mb-4">
-                             <input type="text" id="admin-search" onkeyup="admin.filterStock()" placeholder="Cerca in dispensa..." class="w-full p-2 border rounded text-sm bg-gray-50">
-                        </div>
-                        <div id="admin-list" class="divide-y text-sm max-h-[65vh] overflow-y-auto"></div>
-                    </div>
-
-                    <div id="admin-tab-requests" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-pink-500">
-                        <h3 class="font-bold text-xl text-pink-900 mb-2">Lista Spesa</h3>
-                        <p class="text-xs text-gray-500 mb-4">Cose da comprare o richieste dai ragazzi.</p>
-                        <div id="admin-requests-list" class="space-y-2 max-h-[70vh] overflow-y-auto"></div>
-                    </div>
-
-                    <div id="admin-tab-restock" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-blue-500">
-                        <h3 class="font-bold text-xl text-blue-900 mb-4">Carico Cambusa</h3>
-                        <div class="bg-blue-50 p-4 rounded mb-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-                            <span class="font-bold text-blue-900">Modifiche pronte</span>
-                            <button onclick="admin.processRestock()" class="bg-blue-600 text-white px-6 py-2 rounded font-bold shadow hover:bg-blue-700 transition">CONFERMA CARICO 🚛</button>
-                        </div>
-                        <input type="text" id="search-restock" onkeyup="admin.filterRestock()" placeholder="🔍 Cerca ingrediente..." class="w-full p-3 border rounded mb-4 shadow-sm text-sm font-bold bg-blue-50 focus:bg-white transition">
-                        <div id="admin-restock-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto"></div>
-                    </div>
-
-                    <div id="admin-tab-menus" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-yellow-500">
-                        <h3 class="font-bold text-xl text-yellow-900 mb-4">Gestione Menu & Ricette</h3>
-                        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100 mb-6">
-                            <h4 class="font-bold text-yellow-800 text-sm mb-2 uppercase">Nuova Ricetta / Menu</h4>
-                            <input type="text" id="menu-name" placeholder="Nome (es. Pasta al Sugo)" class="w-full p-3 border rounded mb-3 font-bold bg-white">
-                            <input type="text" id="search-menu-create" onkeyup="admin.filterMenuCreation()" placeholder="🔍 Cerca ingrediente..." class="w-full p-2 border rounded mb-2 text-xs font-bold bg-gray-50">
-                            <div id="menu-items" class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto mb-3 border p-2 rounded bg-white"></div>
-                            <button onclick="admin.createMenu()" class="w-full bg-yellow-400 font-bold py-2 rounded text-yellow-900 hover:bg-yellow-500 shadow">Salva Ricetta</button>
-                        </div>
-                        <h4 class="font-bold text-gray-800 text-sm mb-3 uppercase border-b pb-1">Ricette Salvate</h4>
-                        <div id="admin-menus-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-                    </div>
-
-                    <div id="admin-tab-movements" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-teal-500">
-                        <h3 class="font-bold text-xl text-teal-900 mb-4">Registro Consumi</h3>
-                        <input type="text" id="movements-search" onkeyup="admin.filterMovements()" placeholder="Cerca chi ha mangiato cosa..." class="w-full p-2 border rounded text-sm mb-4 bg-teal-50">
-                        <div id="movements-list" class="space-y-2 max-h-[70vh] overflow-y-auto"></div>
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Unità</label>
+                    <select id="restock-unit" class="w-full p-3 border rounded bg-white">
+                        <option value="pz">Pezzi</option>
+                        <option value="kg">Kg</option>
+                        <option value="lt">Litri</option>
+                        <option value="conf">Confezioni</option>
+                    </select>
                 </div>
             </div>
-        </section>
+            
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria (Se nuovo)</label>
+            <select id="restock-cat" class="w-full p-3 border rounded bg-white mb-4">
+                <option value="extra">Scegli...</option>
+                <option value="pranzo_cena">Pranzo/Cena</option>
+                <option value="colazione">Colazione</option>
+                <option value="condimenti">Condimenti</option>
+                <option value="merenda">Merenda</option>
+                <option value="extra">Extra</option>
+            </select>
 
-    </main>
+            <button onclick="restock.submit()" class="w-full bg-blue-600 text-white font-bold py-3 rounded shadow hover:bg-blue-700">INVIA AD ADMIN 📤</button>
+        </div>
+    </section>
+
+    <section id="view-recipes" class="hidden fade-in">
+        <div class="flex justify-between items-end mb-4 border-b border-orange-200 pb-2">
+            <div>
+                <h1 class="text-2xl font-extrabold text-red-900">Ricettario</h1>
+                <p class="text-xs text-gray-500">Crea e consulta le ricette.</p>
+            </div>
+            <button onclick="recipes.openModal()" class="bg-red-600 text-white px-4 py-2 rounded text-xs font-bold shadow">+ Crea Ricetta</button>
+        </div>
+        <div id="recipes-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+    </section>
+
+    <section id="view-planner" class="hidden fade-in">
+        <div class="mb-4 border-b border-green-200 pb-2">
+            <h1 class="text-2xl font-extrabold text-green-900">Menu & Spesa</h1>
+            <p class="text-xs text-gray-500">Pianifica il campo e calcola cosa comprare.</p>
+        </div>
+
+        <div class="bg-green-50 p-4 rounded-xl border border-green-200 mb-6">
+            <h3 class="font-bold text-green-900 mb-2">1. Componi il Menu</h3>
+            <div class="flex gap-2 mb-2">
+                <select id="planner-recipe-select" class="flex-grow p-2 border rounded text-sm bg-white"></select>
+                <input type="number" id="planner-multiplier" value="1" placeholder="x" class="w-16 p-2 border rounded text-center font-bold">
+                <button onclick="planner.addRecipe()" class="bg-green-600 text-white px-3 rounded font-bold">+</button>
+            </div>
+            <div id="planner-current-list" class="space-y-2 mb-4 bg-white p-2 rounded border min-h-[50px]"></div>
+            
+            <button onclick="planner.calculate()" class="w-full bg-yellow-400 text-yellow-900 font-bold py-3 rounded shadow-lg uppercase tracking-wide">
+                🛒 Calcola Lista Spesa
+            </button>
+        </div>
+
+        <div id="planner-result" class="hidden bg-white p-4 rounded-xl shadow-xl border-t-8 border-yellow-400 relative">
+            <button onclick="document.getElementById('planner-result').classList.add('hidden')" class="absolute top-2 right-2 text-gray-400 font-bold">X</button>
+            <h3 class="font-bold text-xl mb-4 text-gray-800">📝 Lista della Spesa</h3>
+            <div id="planner-shopping-list" class="space-y-3 divide-y"></div>
+        </div>
+    </section>
+
+    <section id="view-admin" class="hidden fade-in">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+             <div class="lg:col-span-1 space-y-2">
+                <button onclick="admin.tab('approvals')" class="w-full text-left p-3 rounded bg-white font-bold border-l-4 border-blue-500 shadow-sm">🔔 Approvazioni <span id="badge-approvals" class="bg-red-500 text-white text-[10px] px-2 rounded-full hidden">!</span></button>
+                <button onclick="admin.tab('movements')" class="w-full text-left p-3 rounded bg-white font-bold border-l-4 border-teal-500 shadow-sm">📊 Movimenti</button>
+                <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white font-bold border-l-4 border-orange-500 shadow-sm">✏️ Gestione Dispensa</button>
+            </div>
+
+            <div class="lg:col-span-3">
+                <div id="admin-tab-approvals" class="admin-tab bg-white p-6 rounded-xl shadow">
+                    <h3 class="font-bold text-xl text-blue-900 mb-4">Richieste di Rifornimento</h3>
+                    <div id="admin-approval-list" class="space-y-3"></div>
+                </div>
+
+                <div id="admin-tab-movements" class="admin-tab hidden bg-white p-6 rounded-xl shadow">
+                     <div id="movements-list"></div>
+                </div>
+                <div id="admin-tab-stock" class="admin-tab hidden bg-white p-6 rounded-xl shadow">
+                     <div id="admin-list" class="divide-y max-h-[60vh] overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
 
     <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-full md:w-96 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-[60] flex flex-col">
         <div class="p-4 border-b flex justify-between items-center bg-orange-900 text-white shadow-md">
@@ -287,7 +296,39 @@
             <button onclick="admin.saveEditMenu()" class="w-full bg-orange-700 text-white font-bold py-3 rounded-lg shadow hover:bg-orange-800">Salva Modifiche</button>
         </div>
     </div>
+    <div id="modal-recipe" class="hidden fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] flex flex-col">
+            <h3 class="font-bold text-xl mb-4 text-red-900">Nuova Ricetta</h3>
+            <input type="text" id="new-recipe-name" placeholder="Nome Piatto (es. Carbonara)" class="w-full p-3 border rounded mb-4 font-bold">
+            
+            <div class="bg-gray-50 p-3 rounded mb-4 flex-grow overflow-y-auto">
+                <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Ingredienti</h4>
+                <div id="recipe-ingredients-list" class="space-y-2 mb-2"></div>
+                
+                <div class="flex gap-2 items-end border-t pt-2">
+                    <div class="flex-grow">
+                        <label class="text-[10px] font-bold">Ingrediente</label>
+                        <input type="text" id="rec-ing-name" placeholder="Cerca o scrivi..." class="w-full p-2 border rounded text-sm" list="pantry-datalist">
+                    </div>
+                    <div class="w-20">
+                        <label class="text-[10px] font-bold">Qtà</label>
+                        <input type="number" id="rec-ing-qty" class="w-full p-2 border rounded text-sm text-center">
+                    </div>
+                    <div class="w-20">
+                        <label class="text-[10px] font-bold">Unità</label>
+                        <select id="rec-ing-unit" class="w-full p-2 border rounded text-sm bg-white">
+                            <option value="kg">kg</option><option value="gr">gr</option><option value="lt">lt</option><option value="pz">pz</option>
+                        </select>
+                    </div>
+                    <button onclick="recipes.addIng()" class="bg-red-500 text-white p-2 rounded font-bold">+</button>
+                </div>
+            </div>
+            <button onclick="recipes.save()" class="w-full bg-red-700 text-white font-bold py-3 rounded shadow">SALVA RICETTA</button>
+            <button onclick="ui.modal('modal-recipe')" class="mt-2 text-center text-gray-400 text-sm">Annulla</button>
+        </div>
+    </div>
 
+    <datalist id="pantry-datalist"></datalist>
     <div id="login-modal" class="hidden fixed inset-0 bg-orange-900/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm relative">
             <button onclick="ui.closeModals()" class="absolute top-4 right-4 text-2xl text-gray-300">&times;</button>
