@@ -103,55 +103,49 @@
     <main class="flex-grow max-w-7xl mx-auto w-full px-3 py-4 overflow-y-auto scrollbar-hide pb-24">
 
     <section id="view-pantry" class="hidden fade-in">
-        <div class="mb-4 border-b border-orange-200 pb-2">
-            <h1 class="text-2xl font-extrabold text-orange-900">Dispensa</h1>
-            <p class="text-xs text-gray-500">Magazzino attuale.</p>
+        <div class="mb-4">
+            <h1 class="text-2xl font-extrabold text-orange-900 px-1">Dispensa</h1>
+            <p class="text-xs text-gray-500 px-1 mb-3">Gestione consumi.</p>
+            
+            <input type="text" id="search-bar" onkeyup="app.filterPantry()" placeholder="🔍 Cerca in dispensa..." class="w-full p-3 border rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 outline-none mb-3">
+            
+            <div id="pantry-filters" class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-2">
+                </div>
         </div>
-        <div id="pantry-grid" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+        <div id="pantry-grid" class="grid grid-cols-2 md:grid-cols-4 gap-2 pb-20"></div>
     </section>
 
-    <section id="view-restock-public" class="hidden fade-in max-w-2xl mx-auto">
-        <div class="mb-4 border-b border-orange-200 pb-2">
-            <h1 class="text-2xl font-extrabold text-blue-900">Carico Magazzino</h1>
-            <p class="text-xs text-gray-500">Hai comprato qualcosa o trovato oggetti non segnati? Aggiungili qui.</p>
+    <section id="view-restock-public" class="hidden fade-in max-w-2xl mx-auto h-full flex flex-col">
+        <div class="mb-4 border-b border-blue-200 pb-2 shrink-0">
+            <h1 class="text-2xl font-extrabold text-blue-900">Rifornimento</h1>
+            <p class="text-xs text-gray-500">Aggiungi spesa o nuovi acquisti.</p>
         </div>
-        
-        <div class="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-600">
-            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cosa hai trovato/comprato?</label>
-            
-            <div class="relative mb-3">
-                <input type="text" id="restock-name" placeholder="Es. Pasta, Nutella..." 
-                       class="w-full p-3 border rounded font-bold" onkeyup="restock.searchExisting()">
-                <div id="restock-suggestions" class="hidden absolute top-full left-0 w-full bg-white border shadow-xl z-50 max-h-40 overflow-y-auto"></div>
-            </div>
 
-            <div class="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Quantità</label>
-                    <input type="number" id="restock-qty" step="0.1" class="w-full p-3 border rounded font-mono font-bold">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Unità</label>
-                    <select id="restock-unit" class="w-full p-3 border rounded bg-white">
-                        <option value="pz">Pezzi</option>
-                        <option value="kg">Kg</option>
-                        <option value="lt">Litri</option>
-                        <option value="conf">Confezioni</option>
-                    </select>
-                </div>
+        <div id="restock-step-1" class="flex-grow flex flex-col overflow-hidden">
+            <div class="flex gap-2 mb-3 shrink-0">
+                <input type="text" id="restock-search" onkeyup="restock.renderSearch()" placeholder="Cerca per aggiungere..." class="flex-grow p-3 border rounded-l-lg shadow-sm">
+                <button onclick="restock.openNewModal()" class="bg-blue-600 text-white px-4 rounded-r-lg font-bold text-xs shadow-sm whitespace-nowrap">+ NUOVO</button>
             </div>
             
-            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria (Se nuovo)</label>
-            <select id="restock-cat" class="w-full p-3 border rounded bg-white mb-4">
-                <option value="extra">Scegli...</option>
-                <option value="pranzo_cena">Pranzo/Cena</option>
-                <option value="colazione">Colazione</option>
-                <option value="condimenti">Condimenti</option>
-                <option value="merenda">Merenda</option>
-                <option value="extra">Extra</option>
-            </select>
+            <div id="restock-search-results" class="flex-grow overflow-y-auto space-y-2 pb-4 pr-1">
+                </div>
 
-            <button onclick="restock.submit()" class="w-full bg-blue-600 text-white font-bold py-3 rounded shadow hover:bg-blue-700">INVIA AD ADMIN 📤</button>
+            <div class="mt-auto pt-4 border-t shrink-0">
+                <button onclick="restock.goToStep2()" class="w-full bg-blue-800 text-white font-bold py-3 rounded-lg shadow-lg flex justify-between px-6 items-center">
+                    <span>VAI AL RIEPILOGO</span>
+                    <span id="restock-count-badge" class="bg-yellow-400 text-blue-900 text-xs px-2 py-1 rounded-full font-bold">0</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="restock-step-2" class="hidden flex-grow flex flex-col h-full">
+            <h3 class="font-bold text-lg text-gray-700 mb-3 shrink-0">🛒 Riepilogo Carico</h3>
+            <div id="restock-summary-list" class="flex-grow overflow-y-auto space-y-2 bg-gray-50 p-2 rounded border mb-4"></div>
+            
+            <div class="grid grid-cols-2 gap-3 shrink-0 mt-auto">
+                <button onclick="restock.backToStep1()" class="bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">INDIETRO</button>
+                <button onclick="restock.submitTotal()" class="bg-green-600 text-white font-bold py-3 rounded-lg shadow-lg">CONFERMA INVIO 🚀</button>
+            </div>
         </div>
     </section>
 
@@ -294,6 +288,39 @@
             <div id="edit-menu-items" class="grid grid-cols-2 gap-2 overflow-y-auto border p-2 rounded bg-gray-50 flex-grow"></div>
 
             <button onclick="admin.saveEditMenu()" class="w-full bg-orange-700 text-white font-bold py-3 rounded-lg shadow hover:bg-orange-800">Salva Modifiche</button>
+        </div>
+    </div>
+    <div id="modal-new-restock" class="hidden fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+            <h3 class="font-bold text-lg mb-4 text-blue-900">✨ Nuovo Prodotto</h3>
+            
+            <label class="text-xs font-bold text-gray-500 uppercase">Nome</label>
+            <input type="text" id="new-res-name" class="w-full p-2 border rounded mb-3 font-bold">
+            
+            <div class="grid grid-cols-2 gap-2 mb-3">
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase">Quantità</label>
+                    <input type="number" id="new-res-qty" class="w-full p-2 border rounded font-mono">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase">Unità</label>
+                    <select id="new-res-unit" class="w-full p-2 border rounded bg-white">
+                         <option value="pz">Pezzi</option><option value="kg">Kg</option><option value="lt">Litri</option><option value="conf">Conf</option>
+                    </select>
+                </div>
+            </div>
+
+            <label class="text-xs font-bold text-gray-500 uppercase">Categoria</label>
+            <select id="new-res-cat" class="w-full p-2 border rounded mb-6 bg-white">
+                <option value="colazione">Colazione</option>
+                <option value="pranzo_cena">Pranzo/Cena</option>
+                <option value="condimenti">Condimenti</option>
+                <option value="merenda">Merenda</option>
+                <option value="extra">Extra</option>
+            </select>
+
+            <button onclick="restock.addNewItemToCart()" class="w-full bg-blue-600 text-white font-bold py-3 rounded mb-2 shadow">AGGIUNGI AL CARICO</button>
+            <button onclick="document.getElementById('modal-new-restock').classList.add('hidden')" class="w-full text-gray-400 text-xs py-2">Annulla</button>
         </div>
     </div>
     <div id="modal-recipe" class="hidden fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
