@@ -63,17 +63,20 @@ const app = {
         const { data: k } = await _sb.from('pacchetti').select('*');
         state.packs = k || [];
         
-        // NUOVO: Carichiamo le ricette dei kit per calcolare la disponibilità reale
         const { data: c } = await _sb.from('componenti_pacchetto').select('*');
         state.packComponents = c || [];
         
+        // RENDERIZZA SEMPRE LA PARTE PUBBLICA (Così l'admin la vede se ci clicca)
+        this.renderShop();
+
         if (state.user) {
+            // Se sei admin, carica ANCHE la parte admin
             admin.renderStock();
             admin.renderRestock();
             admin.renderPackBuilder();
             admin.renderMovements(); 
         } else {
-            this.renderShop();
+            // Se sei utente normale, vai subito allo shop
             this.nav('shop');
         }
     },
