@@ -15,7 +15,7 @@ const state = {
     pantry: [], 
     recipes: [], 
     cart: [],    
-    restockCart: [], // NUOVO: carrello per il ricarico
+    restockCart: {}, // MODIFICATO: Oggetto mappa per modifiche rapide
     user: null, 
     currentCategory: 'all' 
 };
@@ -60,6 +60,7 @@ const app = {
         document.getElementById(`view-${view}`).classList.remove('hidden');
         // Aggiungi questa riga:
         if(view === 'wishlist') wishlist.load();
+        if(view === 'restock-public') restock.init();
     },
 
     setCategory(cat) {
@@ -189,159 +190,119 @@ const app = {
     }
 };
 // --- RIFORNIMENTO PUBBLICO (A STEP CON GRIGLIA) ---
+// --- RIFORNIMENTO (LISTA RAPIDA) ---
 const restock = {
     init() {
-        state.restockCart = [];
-        this.renderBadge();
-        this.backToStep1();
+        state.restockCart = {}; // Reset modifiche
         this.renderList();
     },
 
-    // STEP 1: Mostra TUTTO (o filtrato) in una griglia
     renderList() {
         const term = document.getElementById('restock-search').value.toLowerCase();
-        const container = document.getElementById('restock-grid');
+        const container = document.getElementById('restock-full-list');
         
-        // Filtra
-        let matches = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
-        
-        // Ordina: prima quelli già nel carrello ricarico, poi alfabetico
-        matches.sort((a, b) => {
-            const aInCart = state.restockCart.some(x => x.nome === a.nome);
-            const bInCart = state.restockCart.some(x => x.nome === b.nome);
-            if (aInCart && !bInCart) return -1;
-            if (!aInCart && bInCart) return 1;
-            return a.nome.localeCompare(b.nome);
-        });
+        // Filtra prodotti
+        const matches = state.pantry.filter(p => 
+            p.nome.toLowerCase().includes(term) || 
+            p.categoria.toLowerCase().includes(term)
+        );
 
-        container.innerHTML = matches.map(p => {
-            const inCart = state.restockCart.find(x => x.nome === p.nome);
-            const val = inCart ? inCart.quantita : '';
-            const isSelected = !!inCart;
+        container.innerHTML = matches.map(item => {
+            // Se esiste una modifica in memoria usala, altrimenti default vuoto
+            const mod = state.restockCart[item.id] || { addQty: '', newExpiry: '' };
+            const isModified = mod.addQty !== '' || mod.newExpiry !== '';
             
-            // Stile Card
-            const bgClass = isSelected ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-200' : 'bg-white border-gray-200';
-            
+            // Stile per evidenziare se modificato
+            const borderClass = isModified ? 'border-orange-500 ring-1 ring-orange-200 bg-orange-50' : 'border-gray-200 bg-white';
+
             return `
-            <div class="rounded-xl shadow-sm border ${bgClass} p-3 flex flex-col justify-between transition group hover:shadow-md h-full">
-                <div>
-                    <div class="text-[10px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${p.categoria}</div>
-                    <div class="font-bold text-gray-800 text-sm leading-tight mb-2">${p.nome}</div>
+            <div class="rounded-xl shadow-sm border ${borderClass} p-4 transition">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">${item.categoria}</div>
+                        <div class="font-extrabold text-gray-800 text-lg leading-tight">${item.nome}</div>
+                    </div>
+                    <div class="text-right">
+                         <div class="text-[10px] text-gray-400 font-bold uppercase">Attuale</div>
+                        <div class="font-mono font-bold text-gray-600">${item.quantita} <span class="text-xs">${item.unita}</span></div>
+                    </div>
                 </div>
                 
-                <div class="mt-2">
-                    <div class="flex items-center bg-gray-100 rounded-lg p-1 border">
-                        <span class="text-blue-600 font-bold text-xs pl-2 mr-2">+</span>
-                        <input type="number" step="0.5" placeholder="0" value="${val}"
-                            onchange="restock.updateCart('${p.nome}', this.value, '${p.unita}', '${p.categoria}')"
-                            class="w-full bg-transparent text-center font-bold text-blue-900 outline-none text-sm p-1">
-                        <span class="text-[10px] text-gray-500 font-mono pr-2">${p.unita}</span>
+                <div class="grid grid-cols-2 gap-3 bg-white/50 p-2 rounded-lg">
+                    <div>
+                        <label class="text-[9px] font-bold text-orange-600 uppercase block mb-1">Aggiungi (+)</label>
+                        <input type="number" step="0.5" placeholder="0" value="${mod.addQty}" 
+                            oninput="restock.trackChange('${item.id}', 'addQty', this.value)"
+                            class="w-full p-2 text-center border rounded-lg font-bold text-gray-800 focus:border-orange-500 focus:bg-orange-50 outline-none transition">
+                    </div>
+                    
+                    <div>
+                        <label class="text-[9px] font-bold text-gray-500 uppercase block mb-1">Nuova Scadenza</label>
+                        <input type="date" value="${mod.newExpiry || (item.scadenza ? item.scadenza : '')}" 
+                            onchange="restock.trackChange('${item.id}', 'newExpiry', this.value)"
+                            class="w-full p-2 border rounded-lg text-xs font-mono focus:border-orange-500 outline-none transition">
                     </div>
                 </div>
             </div>`;
         }).join('');
     },
 
-    updateCart(nome, qty, unita, categoria) {
-        const q = parseFloat(qty);
-        const idx = state.restockCart.findIndex(x => x.nome === nome);
+    // Salva le modifiche nell'oggetto temporaneo restockCart
+    trackChange(id, field, value) {
+        if (!state.restockCart[id]) state.restockCart[id] = { addQty: '', newExpiry: '' };
+        state.restockCart[id][field] = value;
         
-        if (!qty || q <= 0) {
-            if (idx > -1) state.restockCart.splice(idx, 1);
-        } else {
-            if (idx > -1) state.restockCart[idx].quantita = q;
-            else state.restockCart.push({ nome, quantita: q, unita, categoria, isNew: false });
-        }
-        this.renderBadge();
-        // Non ricarico tutta la lista per non perdere il focus, cambio solo stile se necessario
-        // (Opzionale: potresti chiamare renderList() qui ma farebbe saltare il focus dell'input)
+        // Aggiorna visivamente il bordo (opzionale, ma carino)
+        // Nota: non ricarico tutta la lista per non perdere il focus dell'input
     },
 
-    renderBadge() {
-        document.getElementById('restock-count-badge').innerText = state.restockCart.length;
-    },
+    async submitUpdates() {
+        // Filtra solo gli item che hanno effettivamente dati modificati
+        const updates = Object.keys(state.restockCart).filter(id => {
+            const m = state.restockCart[id];
+            return (m.addQty !== '' && parseFloat(m.addQty) > 0) || m.newExpiry !== '';
+        });
 
-    openNewModal() {
-        document.getElementById('new-res-name').value = '';
-        document.getElementById('new-res-qty').value = '';
-        document.getElementById('modal-new-restock').classList.remove('hidden');
-    },
+        if (updates.length === 0) return ui.toast("Nessuna modifica inserita", "error");
 
-    addNewItemToCart() {
-        const nome = document.getElementById('new-res-name').value;
-        const qty = parseFloat(document.getElementById('new-res-qty').value);
-        const unita = document.getElementById('new-res-unit').value;
-        const cat = document.getElementById('new-res-cat').value;
+        if (!confirm(`Confermi l'aggiornamento di ${updates.length} prodotti?`)) return;
 
-        if (!nome || !qty) return ui.toast("Dati mancanti", "error");
-
-        this.updateCart(nome, qty, unita, cat);
-        
-        document.getElementById('modal-new-restock').classList.add('hidden');
-        document.getElementById('restock-search').value = nome; 
-        this.renderList();
-        ui.toast("Aggiunto!", "success");
-    },
-
-    goToStep2() {
-        if (state.restockCart.length === 0) return ui.toast("Seleziona almeno un prodotto", "error");
-        document.getElementById('restock-step-1').classList.add('hidden');
-        document.getElementById('restock-step-2').classList.remove('hidden');
-        this.renderSummary();
-    },
-
-    backToStep1() {
-        document.getElementById('restock-step-2').classList.add('hidden');
-        document.getElementById('restock-step-1').classList.remove('hidden');
-        this.renderList();
-    },
-
-    renderSummary() {
-        document.getElementById('restock-summary-list').innerHTML = state.restockCart.map((item, idx) => `
-            <div class="flex justify-between items-center bg-white p-3 rounded-lg border-b last:border-0 hover:bg-gray-50">
-                <div class="flex items-center gap-3">
-                    <div class="bg-blue-100 text-blue-600 font-bold rounded-full w-8 h-8 flex items-center justify-center text-xs">
-                        ${idx + 1}
-                    </div>
-                    <div>
-                        <div class="font-bold text-gray-800">${item.nome}</div>
-                        <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">${item.categoria}</div>
-                    </div>
-                </div>
-                <div class="text-right flex items-center gap-3">
-                    <div class="bg-blue-50 px-3 py-1 rounded text-blue-900 font-bold border border-blue-100">
-                        +${item.quantita} <span class="text-xs font-normal">${item.unita}</span>
-                    </div>
-                    <button onclick="state.restockCart.splice(${idx},1); restock.renderSummary(); restock.renderBadge()" class="text-red-400 hover:text-red-600 font-bold p-1">✕</button>
-                </div>
-            </div>
-        `).join('');
-    },
-
-    async submitTotal() {
-        if (state.restockCart.length === 0) return;
         loader.show();
-        const user = state.user ? state.user.email : 'Pubblico';
-        
-        const payload = state.restockCart.map(item => ({
-            nome: item.nome,
-            quantita: item.quantita,
-            unita: item.unita,
-            categoria: item.categoria,
-            utente: user,
-            stato: 'pending'
-        }));
+        let successCount = 0;
 
-        const { error } = await _sb.from('proposte_rifornimento').insert(payload);
-        loader.hide();
-        
-        if(error) {
-            ui.toast("Errore invio dati", "error");
-        } else {
-            ui.toast(`Richiesta inviata per ${state.restockCart.length} prodotti!`, "success");
-            this.init(); 
-            document.getElementById('restock-search').value = '';
+        try {
+            for (const id of updates) {
+                const mod = state.restockCart[id];
+                const original = state.pantry.find(p => p.id == id);
+                
+                const payload = {};
+                
+                // Gestione Quantità: somma quella inserita a quella attuale
+                if (mod.addQty && parseFloat(mod.addQty) > 0) {
+                    payload.quantita = original.quantita + parseFloat(mod.addQty);
+                }
+                
+                // Gestione Scadenza: aggiorna se cambiata
+                if (mod.newExpiry) {
+                    payload.scadenza = mod.newExpiry;
+                }
+
+                if (Object.keys(payload).length > 0) {
+                    const { error } = await _sb.from('cambusa').update(payload).eq('id', id);
+                    if (!error) successCount++;
+                }
+            }
+
+            ui.toast(`Aggiornati ${successCount} prodotti!`, "success");
+            state.restockCart = {}; // Reset
+            await app.loadData(); // Ricarica dati aggiornati
+            this.renderList(); // Pulisci input
+
+        } catch (e) {
+            console.error(e);
+            ui.toast("Errore durante il salvataggio", "error");
         }
+        loader.hide();
     }
 };
 // --- CARRELLO ---
