@@ -20,8 +20,6 @@
         const GLOBAL_MAINTENANCE = false; // <--- METTI TRUE PER BLOCCARE IL SITO
     </script>
 
-    <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2v6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
-
     <div id="main-portal" class="z-10 text-center w-full max-w-md transition-opacity duration-300">
         <div class="mb-8">
             <img src="icon-192.png" alt="Logo" class="w-24 h-24 mx-auto mb-4 drop-shadow-xl animate-bounce">
@@ -73,18 +71,18 @@
     </div>
 
     <script>
-        // 1. Service Worker
+        // Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js');
         }
 
-        // 2. Logica Manutenzione
+        // Logica Manutenzione
         if (typeof GLOBAL_MAINTENANCE !== 'undefined' && GLOBAL_MAINTENANCE) {
             document.getElementById('maintenance-overlay').classList.remove('hidden');
-            document.getElementById('main-portal').classList.add('hidden'); // Nasconde il contenuto principale
+            document.getElementById('main-portal').classList.add('hidden');
         }
 
-        // 3. Funzioni Accesso Tecnico (Login)
+        // Funzioni Accesso
         function enableTechLogin() {
             document.getElementById('btn-tech-init').classList.add('hidden');
             document.getElementById('tech-login-form').classList.remove('hidden');
@@ -93,7 +91,6 @@
 
         function verifyTechAccess() {
             const pass = document.getElementById('tech-pass').value;
-            // Password richiesta
             if (pass === 'el.Archivio12') {
                 document.getElementById('maintenance-overlay').classList.add('hidden');
                 document.getElementById('main-portal').classList.remove('hidden');
