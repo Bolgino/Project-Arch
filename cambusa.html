@@ -106,7 +106,16 @@
     </nav>
 
     <main class="flex-grow max-w-7xl mx-auto w-full px-3 py-4 overflow-y-auto scrollbar-hide pb-24">
-
+    <section id="view-maintenance" class="hidden h-full flex flex-col items-center justify-center text-center p-6">
+            <div class="bg-white p-8 rounded-3xl shadow-2xl border-b-8 border-orange-500 max-w-sm">
+                <div class="text-6xl mb-4 animate-bounce">🚧</div>
+                <h1 class="text-2xl font-extrabold text-orange-900 mb-2">Stiamo cucinando!</h1>
+                <p class="text-gray-500 mb-6">La cambusa è momentaneamente chiusa per inventario e aggiornamento del sistema.</p>
+                <div class="text-xs font-mono bg-orange-50 p-3 rounded text-orange-800">Torneremo operativi a breve.</div>
+                
+                <button onclick="ui.modal('login-modal')" class="mt-8 text-gray-300 text-xs hover:text-orange-500 transition">Area Riservata</button>
+            </div>
+        </section>
     <section id="view-pantry" class="hidden fade-in">
         <div class="mb-4">
             <h1 class="text-2xl font-extrabold text-orange-900 px-1">Dispensa</h1>
