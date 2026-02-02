@@ -1,5 +1,5 @@
 // cambusa.js
-
+const MAINTENANCE_MODE = true; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
 // --- CONFIGURAZIONE ---
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
@@ -56,9 +56,17 @@ const app = {
     },
 
     nav(view) {
+        // LOGICA MANUTENZIONE
+        // Se la manutenzione è attiva E l'utente NON è admin E sta cercando di vedere pagine pubbliche
+        if (MAINTENANCE_MODE && !state.user && ['pantry', 'restock-public', 'recipes', 'planner'].includes(view)) {
+            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-maintenance').classList.remove('hidden');
+            return;
+        }
+
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         document.getElementById(`view-${view}`).classList.remove('hidden');
-        // Aggiungi questa riga:
+        
         if(view === 'wishlist') wishlist.load();
         if(view === 'restock-public') restock.init();
     },
@@ -222,97 +230,110 @@ const app = {
 };
 // --- RIFORNIMENTO PUBBLICO (A STEP CON GRIGLIA) ---
 // --- RIFORNIMENTO (LISTA RAPIDA) ---
+// --- RIFORNIMENTO (LISTA RAPIDA) ---
 const restock = {
     init() {
-        state.restockCart = {}; // Reset modifiche
+        // Assicuriamoci che sia un oggetto vuoto all'avvio
+        state.restockCart = {}; 
+        // Pulisce la ricerca quando si entra
+        const searchInput = document.getElementById('restock-search');
+        if(searchInput) searchInput.value = '';
+        
         this.renderList();
     },
 
-    // 1. DISPENSA (Stock)
     renderList() {
-        document.getElementById('admin-list').innerHTML = state.pantry.map(p => {
-            // Formattazione data scadenza
-            const expiry = p.scadenza ? new Date(p.scadenza).toLocaleDateString() : '<span class="text-red-300">No Data</span>';
+        const searchInput = document.getElementById('restock-search');
+        // Protezione se l'input non esiste ancora nel DOM
+        const term = searchInput ? searchInput.value.toLowerCase() : '';
+        const container = document.getElementById('restock-full-list');
+        
+        if (!container) return;
+
+        // Filtra prodotti
+        const matches = state.pantry.filter(p => 
+            p.nome.toLowerCase().includes(term) || 
+            p.categoria.toLowerCase().includes(term)
+        );
+
+        if (matches.length === 0) {
+            container.innerHTML = `<div class="text-center py-10 text-gray-400 italic">Nessun prodotto trovato.<br>Usa il tasto in alto per aggiungerlo.</div>`;
+            return;
+        }
+
+        container.innerHTML = matches.map(item => {
+            // Recupera stato modifica o inizializza vuoto
+            const mod = state.restockCart[item.id] || { addQty: '', newExpiry: '' };
+            const isModified = (mod.addQty !== '' && mod.addQty != 0) || mod.newExpiry !== '';
             
+            const borderClass = isModified ? 'border-orange-500 ring-1 ring-orange-200 bg-orange-50' : 'border-gray-200 bg-white';
+
+            // Formattazione data esistente per il campo date (YYYY-MM-DD)
+            const currentExpiry = item.scadenza ? item.scadenza.split('T')[0] : '';
+
             return `
-            <div class="flex justify-between items-center py-3 px-2 border-b hover:bg-gray-50">
-                <div>
-                    <div class="font-bold text-gray-800">${p.nome}</div>
-                    <div class="text-xs text-gray-500 font-mono flex gap-2">
-                        <span>${p.quantita} ${p.unita}</span>
-                        <span class="text-gray-300">|</span>
-                        <span class="text-orange-600 font-bold">Scade: ${expiry}</span>
+            <div class="rounded-xl shadow-sm border ${borderClass} p-4 transition mb-3">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">${item.categoria}</div>
+                        <div class="font-extrabold text-gray-800 text-lg leading-tight">${item.nome}</div>
+                    </div>
+                    <div class="text-right">
+                         <div class="text-[10px] text-gray-400 font-bold uppercase">Attuale</div>
+                        <div class="font-mono font-bold text-gray-600">${item.quantita} <span class="text-xs">${item.unita}</span></div>
                     </div>
                 </div>
-                <button onclick="admin.edit('${p.id}')" class="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1 rounded">MODIFICA</button>
+                
+                <div class="grid grid-cols-2 gap-3 bg-white/50 p-2 rounded-lg">
+                    <div>
+                        <label class="text-[9px] font-bold text-orange-600 uppercase block mb-1">Aggiungi (+)</label>
+                        <input type="number" step="0.5" placeholder="0" value="${mod.addQty}" 
+                            oninput="restock.trackChange('${item.id}', 'addQty', this.value)"
+                            class="w-full p-2 text-center border rounded-lg font-bold text-gray-800 focus:border-orange-500 focus:bg-orange-50 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-bold text-gray-500 uppercase block mb-1">Nuova Scadenza</label>
+                        <input type="date" value="${mod.newExpiry || currentExpiry}" 
+                            onchange="restock.trackChange('${item.id}', 'newExpiry', this.value)"
+                            class="w-full p-2 border rounded-lg text-xs font-mono focus:border-orange-500 outline-none transition">
+                    </div>
+                </div>
             </div>`;
         }).join('');
     },
-    // Salva le modifiche nell'oggetto temporaneo restockCart
+
     trackChange(id, field, value) {
         if (!state.restockCart[id]) state.restockCart[id] = { addQty: '', newExpiry: '' };
         state.restockCart[id][field] = value;
-        
-        // Aggiorna visivamente il bordo (opzionale, ma carino)
-        // Nota: non ricarico tutta la lista per non perdere il focus dell'input
+        // Non ricarichiamo tutta la lista per non perdere il focus
+        // Potremmo aggiungere una classe visuale al div padre qui se volessimo fare fine tuning
     },
 
-    // --- MODIFICA PENDING (Utente) ---
-    openEditPending(id) {
-        const item = state.pantry.find(x => x.id == id);
-        if(!item) return;
-        document.getElementById('pend-edit-id').value = id;
-        document.getElementById('pend-edit-name').value = item.nome;
-        document.getElementById('pend-edit-qty').value = item.quantita;
-        document.getElementById('pend-edit-date').value = item.scadenza;
-        ui.modal('modal-edit-pending');
-    },
-
-    async savePendingEdit() {
-        const id = document.getElementById('pend-edit-id').value;
-        const updates = {
-            nome: document.getElementById('pend-edit-name').value,
-            quantita: parseFloat(document.getElementById('pend-edit-qty').value),
-            scadenza: document.getElementById('pend-edit-date').value
-        };
-        
-        loader.show();
-        await _sb.from('cambusa').update(updates).eq('id', id);
-        ui.toast("Aggiornato!", "success");
-        ui.closeModals();
-        await app.loadData();
-        loader.hide();
-    },
-
-    // --- RIFORNIMENTO (Pop-up) ---
+    // --- POP-UP RIEPILOGO ---
     submitUpdates() {
-        // 1. Identifica le modifiche
         const updatesIDs = Object.keys(state.restockCart).filter(id => {
             const m = state.restockCart[id];
-            return (m.addQty !== '' && parseFloat(m.addQty) > 0) || m.newExpiry !== '';
+            return (m.addQty !== '' && parseFloat(m.addQty) > 0) || (m.newExpiry !== '' && m.newExpiry !== state.pantry.find(x=>x.id==id)?.scadenza);
         });
 
         if (updatesIDs.length === 0) return ui.toast("Nessuna modifica inserita", "error");
 
-        // 2. Prepara HTML del Riepilogo
         const listHTML = updatesIDs.map(id => {
             const item = state.pantry.find(p => p.id == id);
             const mod = state.restockCart[id];
             
             let details = '';
-            if (mod.addQty) details += `<span class="text-green-600 font-bold">+${mod.addQty} ${item.unita}</span>`;
-            if (mod.newExpiry) details += `<br><span class="text-xs text-red-500">Nuova Scad: ${new Date(mod.newExpiry).toLocaleDateString()}</span>`;
+            if (mod.addQty && parseFloat(mod.addQty) > 0) details += `<span class="text-green-600 font-bold">+${mod.addQty} ${item.unita}</span>`;
+            if (mod.newExpiry) details += `<div class="text-[10px] text-gray-500 mt-1">Scad: ${mod.newExpiry}</div>`;
             
             return `
-            <div class="flex justify-between items-center bg-white p-2 rounded border border-gray-200">
-                <span class="font-bold text-gray-700 text-sm">${item.nome}</span>
+            <div class="flex justify-between items-center bg-white p-3 rounded border border-gray-100 shadow-sm">
+                <span class="font-bold text-gray-700">${item.nome}</span>
                 <div class="text-right leading-tight">${details}</div>
             </div>`;
         }).join('');
 
         document.getElementById('restock-confirm-list').innerHTML = listHTML;
-        
-        // 3. Apri Modale
         ui.modal('modal-restock-summary');
     },
 
@@ -346,13 +367,15 @@ const restock = {
             state.restockCart = {}; 
             ui.closeModals();
             await app.loadData();
-            this.renderList();
+            this.renderList(); // Resetta i campi
         } catch (e) {
             console.error(e);
             ui.toast("Errore salvataggio", "error");
         }
         loader.hide();
     },
+
+    // --- NUOVO PRODOTTO (PENDING) ---
     async addNewProduct() {
         const nome = document.getElementById('new-prod-name').value.trim();
         const cat = document.getElementById('new-prod-cat').value;
@@ -366,7 +389,7 @@ const restock = {
 
         loader.show();
         
-        // .select() alla fine è fondamentale per recuperare l'ID creato
+        // 1. Inserisci e recupera ID
         const { data, error } = await _sb.from('cambusa').insert([{
             nome: nome,
             categoria: cat,
@@ -380,18 +403,16 @@ const restock = {
             console.error(error);
             ui.toast("Errore inserimento", "error");
         } else {
-            // --- LOGICA COOKIES/LOCALSTORAGE ---
-            // Salva l'ID del prodotto creato in una lista locale "miei prodotti"
+            // 2. Salva ID nel LocalStorage (I miei prodotti)
             const newId = data[0].id;
-            let myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
+            const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
             myProds.push(newId);
             localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
-            // -----------------------------------
 
             ui.toast("Richiesta inviata! Puoi modificarla finché è in attesa.", "success");
             ui.closeModals();
             
-            // Pulisci
+            // Pulisci campi
             document.getElementById('new-prod-name').value = '';
             document.getElementById('new-prod-qty').value = '';
             document.getElementById('new-prod-expiry').value = '';
@@ -400,6 +421,33 @@ const restock = {
         }
         loader.hide();
     },
+
+    // --- MODIFICA PENDING (Utente) ---
+    openEditPending(id) {
+        const item = state.pantry.find(x => x.id == id);
+        if(!item) return;
+        document.getElementById('pend-edit-id').value = id;
+        document.getElementById('pend-edit-name').value = item.nome;
+        document.getElementById('pend-edit-qty').value = item.quantita;
+        document.getElementById('pend-edit-date').value = item.scadenza;
+        ui.modal('modal-edit-pending');
+    },
+
+    async savePendingEdit() {
+        const id = document.getElementById('pend-edit-id').value;
+        const updates = {
+            nome: document.getElementById('pend-edit-name').value,
+            quantita: parseFloat(document.getElementById('pend-edit-qty').value),
+            scadenza: document.getElementById('pend-edit-date').value
+        };
+        
+        loader.show();
+        await _sb.from('cambusa').update(updates).eq('id', id);
+        ui.toast("Aggiornato!", "success");
+        ui.closeModals();
+        await app.loadData();
+        loader.hide();
+    }
 };
 // --- CARRELLO ---
 const cart = {
