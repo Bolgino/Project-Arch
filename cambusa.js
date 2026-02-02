@@ -40,17 +40,19 @@ const app = {
         const { data: d } = await _sb.from('cambusa').select('*').order('nome');
         state.pantry = d || [];
         
-        // 2. Carica Ricette (Nuovo)
+        // 2. Carica Ricette
         await recipes.load();
 
+        // RENDERIZZA SEMPRE LA PARTE PUBBLICA
+        this.renderPantry();
+
         if (state.user) {
-            // ADMIN: Carica liste stock e approvazioni
+            // ADMIN: Carica liste gestione
             admin.renderList();      
-            admin.loadApprovals();   
+            admin.loadApprovals();    
             admin.renderMovements(); 
         } else {
-            // PUBBLICO
-            this.renderPantry();
+            // PUBBLICO: Naviga alla dispensa
             this.nav('pantry'); 
         }
     },
