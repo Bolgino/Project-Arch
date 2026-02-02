@@ -17,14 +17,14 @@
 <body class="bg-green-900 h-screen flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
 
     <script>
-        const GLOBAL_MAINTENANCE = false; // <--- IMPOSTA A TRUE PER BLOCCARE IL SITO
+        const GLOBAL_MAINTENANCE = false; // <--- METTI TRUE PER BLOCCARE IL SITO
     </script>
 
-    <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+    <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2v6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
 
-    <div id="main-portal" class="z-10 text-center w-full max-w-md transition-opacity duration-500">
+    <div id="main-portal" class="z-10 text-center w-full max-w-md transition-opacity duration-300">
         <div class="mb-8">
-            <img src="icon-192.png" alt="Logo" class="h-24 w-24 mx-auto mb-4 drop-shadow-2xl hover:rotate-12 transition transform duration-500">
+            <img src="icon-192.png" alt="Logo" class="w-24 h-24 mx-auto mb-4 drop-shadow-xl animate-bounce">
             <h1 class="text-4xl font-extrabold tracking-widest text-yellow-400">AZIMUT.ARCH</h1>
             <p class="text-green-200 font-mono text-sm mt-2">Scegli la tua destinazione</p>
         </div>
@@ -47,12 +47,12 @@
             </a>
         </div>
 
-        <div class="mt-12 text-center">
-            <p class="text-[10px] text-green-400 uppercase tracking-widest">Scout Tagliamento 1</p>
+        <div class="mt-12 text-center opacity-60">
+            <p class="text-[10px] font-mono">"Estote Parati"</p>
         </div>
     </div>
 
-    <div id="global-maintenance-screen" class="hidden absolute inset-0 z-50 bg-green-900 flex flex-col items-center justify-center p-6 text-center">
+    <div id="maintenance-overlay" class="hidden absolute inset-0 z-50 bg-green-900 flex flex-col items-center justify-center p-6 text-center">
         <div class="bg-white text-green-900 p-8 rounded-2xl shadow-2xl w-full max-w-sm border-b-8 border-red-600">
             <div class="text-6xl mb-4 animate-bounce">⛔</div>
             <h2 class="text-2xl font-extrabold text-red-600 mb-2">Portale Chiuso</h2>
@@ -73,14 +73,18 @@
     </div>
 
     <script>
-        // Logica applicazione manutenzione
-        if (typeof GLOBAL_MAINTENANCE !== 'undefined' && GLOBAL_MAINTENANCE) {
-            document.getElementById('global-maintenance-screen').classList.remove('hidden');
-            // Nasconde il contenuto principale per evitare interazioni da tastiera (tab)
-            document.getElementById('main-portal').classList.add('hidden');
+        // 1. Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js');
         }
 
-        // Funzioni Accesso
+        // 2. Logica Manutenzione
+        if (typeof GLOBAL_MAINTENANCE !== 'undefined' && GLOBAL_MAINTENANCE) {
+            document.getElementById('maintenance-overlay').classList.remove('hidden');
+            document.getElementById('main-portal').classList.add('hidden'); // Nasconde il contenuto principale
+        }
+
+        // 3. Funzioni Accesso Tecnico (Login)
         function enableTechLogin() {
             document.getElementById('btn-tech-init').classList.add('hidden');
             document.getElementById('tech-login-form').classList.remove('hidden');
@@ -89,9 +93,9 @@
 
         function verifyTechAccess() {
             const pass = document.getElementById('tech-pass').value;
-            // Password inserita da te precedentemente
+            // Password richiesta
             if (pass === 'el.Archivio12') {
-                document.getElementById('global-maintenance-screen').classList.add('hidden');
+                document.getElementById('maintenance-overlay').classList.add('hidden');
                 document.getElementById('main-portal').classList.remove('hidden');
             } else {
                 document.getElementById('tech-error').classList.remove('hidden');
