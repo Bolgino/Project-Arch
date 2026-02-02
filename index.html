@@ -17,12 +17,12 @@
 <body class="bg-green-900 h-screen flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
 
     <script>
-        const GLOBAL_MAINTENANCE = false; // <--- METTI TRUE PER CHIUDERE TUTTO IL SITO
+        const GLOBAL_MAINTENANCE = false; // <--- IMPOSTA A TRUE PER BLOCCARE IL SITO
     </script>
 
-    <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2v6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+    <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
 
-    <div id="main-portal" class="z-10 text-center w-full max-w-md transition-all duration-500">
+    <div id="main-portal" class="z-10 text-center w-full max-w-md transition-opacity duration-500">
         <div class="mb-8">
             <img src="icon-192.png" alt="Logo" class="h-24 w-24 mx-auto mb-4 drop-shadow-2xl hover:rotate-12 transition transform duration-500">
             <h1 class="text-4xl font-extrabold tracking-widest text-yellow-400">AZIMUT.ARCH</h1>
@@ -30,7 +30,7 @@
         </div>
 
         <div class="grid grid-cols-1 gap-4">
-            <a href="armadio.html" class="btn-card bg-white text-green-900 p-6 rounded-2xl shadow-xl flex items-center justify-between border-b-8 border-green-700 hover:bg-gray-50 no-underline transition transform active:scale-95">
+            <a href="armadio.html" class="btn-card bg-white text-green-900 p-6 rounded-2xl shadow-xl flex items-center justify-between border-b-8 border-green-700 hover:bg-gray-50 no-underline">
                 <div class="text-left">
                     <h2 class="text-2xl font-extrabold uppercase">Armadio</h2>
                     <p class="text-xs text-gray-500 font-bold">MATERIALE & PATACCHE</p>
@@ -38,7 +38,7 @@
                 <span class="text-4xl">🎒</span>
             </a>
 
-            <a href="cambusa.html" class="btn-card bg-white text-orange-900 p-6 rounded-2xl shadow-xl flex items-center justify-between border-b-8 border-orange-700 hover:bg-gray-50 no-underline transition transform active:scale-95">
+            <a href="cambusa.html" class="btn-card bg-white text-orange-900 p-6 rounded-2xl shadow-xl flex items-center justify-between border-b-8 border-orange-700 hover:bg-gray-50 no-underline">
                 <div class="text-left">
                     <h2 class="text-2xl font-extrabold uppercase">Cambusa</h2>
                     <p class="text-xs text-gray-500 font-bold">VETTOVAGLIE & CIBO</p>
@@ -52,21 +52,20 @@
         </div>
     </div>
 
-    <div id="global-maintenance-screen" class="hidden absolute inset-0 z-50 bg-gray-900 flex flex-col items-center justify-center p-6 text-center">
-        <div class="bg-white text-gray-800 p-8 rounded-3xl shadow-2xl max-w-sm w-full border-b-8 border-red-600">
-            <div class="text-6xl mb-4 animate-pulse">⛔</div>
+    <div id="global-maintenance-screen" class="hidden absolute inset-0 z-50 bg-green-900 flex flex-col items-center justify-center p-6 text-center">
+        <div class="bg-white text-green-900 p-8 rounded-2xl shadow-2xl w-full max-w-sm border-b-8 border-red-600">
+            <div class="text-6xl mb-4 animate-bounce">⛔</div>
             <h2 class="text-2xl font-extrabold text-red-600 mb-2">Portale Chiuso</h2>
             <p class="text-sm text-gray-500 mb-6">Stiamo facendo un check-up completo al sistema.</p>
-            <div class="text-xs font-mono bg-gray-100 p-2 rounded text-gray-500">Torna più tardi.</div>
             
-            <div class="mt-6">
-                <button id="btn-tech-init" onclick="enableTechLogin()" class="text-[10px] text-gray-300 hover:text-red-500 uppercase tracking-widest">
+            <div class="mt-4 border-t pt-4">
+                <button id="btn-tech-init" onclick="enableTechLogin()" class="text-[10px] text-gray-400 hover:text-red-500 uppercase tracking-widest font-bold">
                     🔓 Accesso Tecnico
                 </button>
 
                 <div id="tech-login-form" class="hidden flex-col gap-2 mt-2">
-                    <input type="password" id="tech-pass" placeholder="Password Admin" class="text-xs p-2 border rounded text-gray-800 outline-none focus:border-red-500 text-center">
-                    <button onclick="verifyTechAccess()" class="bg-red-600 text-white text-xs font-bold py-2 rounded hover:bg-red-700">SBLOCCA</button>
+                    <input type="password" id="tech-pass" placeholder="Password" class="text-xs p-2 border rounded text-gray-800 outline-none focus:border-red-500 text-center bg-gray-50">
+                    <button onclick="verifyTechAccess()" class="bg-red-600 text-white text-xs font-bold py-2 rounded hover:bg-red-700 shadow">SBLOCCA</button>
                 </div>
                 <p id="tech-error" class="hidden text-red-500 text-[10px] font-bold mt-1">Password Errata!</p>
             </div>
@@ -74,12 +73,14 @@
     </div>
 
     <script>
-        // 1. Logica Manutenzione
+        // Logica applicazione manutenzione
         if (typeof GLOBAL_MAINTENANCE !== 'undefined' && GLOBAL_MAINTENANCE) {
             document.getElementById('global-maintenance-screen').classList.remove('hidden');
+            // Nasconde il contenuto principale per evitare interazioni da tastiera (tab)
+            document.getElementById('main-portal').classList.add('hidden');
         }
 
-        // 2. Funzioni Accesso Tecnico
+        // Funzioni Accesso
         function enableTechLogin() {
             document.getElementById('btn-tech-init').classList.add('hidden');
             document.getElementById('tech-login-form').classList.remove('hidden');
@@ -88,9 +89,10 @@
 
         function verifyTechAccess() {
             const pass = document.getElementById('tech-pass').value;
-            // PASSWORD SEMPLICE: "admin" (Puoi cambiarla qui sotto)
+            // Password inserita da te precedentemente
             if (pass === 'el.Archivio12') {
                 document.getElementById('global-maintenance-screen').classList.add('hidden');
+                document.getElementById('main-portal').classList.remove('hidden');
             } else {
                 document.getElementById('tech-error').classList.remove('hidden');
             }
