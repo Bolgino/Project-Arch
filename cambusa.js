@@ -371,21 +371,20 @@ const cart = {
     }
 };
 // --- RICETTE ---
-// --- RICETTE (DESIGN PULITO) ---
 const recipes = {
     tempIng: [], 
+    
     async load() {
         const { data } = await _sb.from('ricette').select('*, ingredienti_ricetta(*)');
         state.recipes = data || [];
         this.renderList();
         
+        // Aggiorna Select del Planner
         const sel = document.getElementById('planner-recipe-select');
         if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + state.recipes.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
-        
-        const dl = document.getElementById('pantry-datalist');
-        if(dl) dl.innerHTML = state.pantry.map(p => `<option value="${p.nome}">`).join('');
     },
     
+    // VISUALIZZAZIONE LISTA RICETTE (Card migliorate)
     renderList() {
         const term = document.getElementById('recipe-search') ? document.getElementById('recipe-search').value.toLowerCase() : '';
         const el = document.getElementById('recipes-list');
@@ -394,74 +393,146 @@ const recipes = {
         const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
 
         if(filtered.length === 0) {
-            el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata. Creane una nuova!</div>`;
+            el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata.</div>`;
             return;
         }
 
         el.innerHTML = filtered.map(r => {
-            const ingCount = r.ingredienti_ricetta.length;
-            // Anteprima ingredienti (primi 3)
-            const preview = r.ingredienti_ricetta.slice(0, 3).map(i => i.nome_ingrediente).join(', ') + (ingCount > 3 ? '...' : '');
+            // Usa il campo 'note' per le porzioni se non c'è una colonna dedicata, o una logica fallback
+            // Nota: Se hai aggiunto la colonna 'porzioni' al DB, usa r.porzioni. 
+            // Qui simulo l'uso di un campo 'porzioni' o un default.
+            const portions = r.porzioni || 4; // Default 4 se manca
 
             return `
-            <div class="bg-white rounded-2xl border border-red-100 shadow-sm hover:shadow-lg transition group relative overflow-hidden flex flex-col">
-                <div class="absolute top-0 left-0 w-2 h-full bg-red-500"></div>
-                
-                <div class="p-5 flex-grow">
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
+                <div class="h-2 bg-red-500 w-full"></div>
+                <div class="p-4 flex-grow">
                     <div class="flex justify-between items-start mb-2">
-                        <h3 class="font-extrabold text-gray-800 text-xl group-hover:text-red-700 transition">${r.nome}</h3>
-                        <span class="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-full font-bold border border-red-100">${ingCount} ingr.</span>
+                        <h3 class="font-extrabold text-gray-800 text-lg leading-tight group-hover:text-red-700 transition">${r.nome}</h3>
+                        <span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full border border-red-200 shadow-sm whitespace-nowrap">
+                            👥 x${portions}
+                        </span>
                     </div>
                     
-                    <p class="text-sm text-gray-500 italic mb-4 line-clamp-2">
-                        "${preview}"
-                    </p>
-
-                    <div class="bg-gray-50 rounded-lg p-3 text-sm border border-gray-100">
-                         <ul class="space-y-1">
+                    <div class="bg-gray-50 rounded-lg p-2 border border-gray-100 mt-3">
+                        <div class="text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Ingredienti necessari</div>
+                        <div class="flex flex-wrap gap-1">
                             ${r.ingredienti_ricetta.map(i => `
-                                <li class="flex justify-between border-b border-dashed border-gray-200 last:border-0 pb-1 last:pb-0">
-                                    <span class="text-gray-600">${i.nome_ingrediente}</span>
-                                    <span class="font-bold text-gray-800">${i.quantita_necessaria} <span class="text-[10px] text-gray-400">${i.unita}</span></span>
-                                </li>
+                                <span class="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-700 shadow-sm flex items-center gap-1">
+                                    <b>${i.quantita_necessaria}</b><small>${i.unita}</small> ${i.nome_ingrediente}
+                                </span>
                             `).join('')}
-                         </ul>
+                        </div>
                     </div>
                 </div>
             </div>`;
         }).join('');
     },
 
-    openModal() { this.tempIng = []; this.renderTempIng(); ui.modal('modal-recipe'); },
-    addIng() {
-        const nome = document.getElementById('rec-ing-name').value;
-        const qty = document.getElementById('rec-ing-qty').value;
-        const unit = document.getElementById('rec-ing-unit').value;
-        if(nome && qty) {
-            this.tempIng.push({ nome, qty, unit });
-            this.renderTempIng();
-            document.getElementById('rec-ing-name').value = '';
-            document.getElementById('rec-ing-qty').value = '';
+    // APERTURA MODALE E SELETTORE
+    openModal() { 
+        this.tempIng = []; 
+        document.getElementById('new-recipe-name').value = '';
+        document.getElementById('new-recipe-portions').value = ''; // Reset porzioni
+        this.renderSelector();
+        this.renderSelected();
+        ui.modal('modal-recipe'); 
+    },
+
+    // Renderizza la GRIGLIA di ingredienti nel modale (stile armadio)
+    renderSelector() {
+        const term = document.getElementById('recipe-ing-search').value.toLowerCase();
+        const container = document.getElementById('recipe-ing-grid');
+        
+        let matches = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
+        
+        container.innerHTML = matches.map(p => {
+            const isSelected = this.tempIng.some(x => x.nome === p.nome);
+            const style = isSelected ? 'border-red-500 bg-red-50 ring-1 ring-red-200' : 'border-gray-200 bg-white hover:border-red-300';
+            
+            return `
+            <div onclick="recipes.toggleIng('${p.nome}', '${p.unita}')" class="cursor-pointer rounded-lg border ${style} p-2 flex flex-col justify-between transition h-20 relative select-none">
+                <div class="font-bold text-xs text-gray-800 leading-tight line-clamp-2">${p.nome}</div>
+                <div class="text-[10px] text-gray-400 text-right">${p.unita}</div>
+                ${isSelected ? '<div class="absolute top-1 right-1 text-red-600 font-bold text-xs">✓</div>' : ''}
+            </div>`;
+        }).join('');
+    },
+
+    filterSelector() {
+        this.renderSelector();
+    },
+
+    toggleIng(nome, unita) {
+        const idx = this.tempIng.findIndex(x => x.nome === nome);
+        if (idx > -1) {
+            this.tempIng.splice(idx, 1);
+        } else {
+            // Aggiungi con quantità default 0, poi l'utente la cambia
+            this.tempIng.push({ nome, qty: 0, unita }); 
         }
+        this.renderSelector(); // Aggiorna stato visivo griglia
+        this.renderSelected(); // Aggiorna lista in alto
     },
-    renderTempIng() {
-        document.getElementById('recipe-ingredients-list').innerHTML = this.tempIng.map((i, idx) => `
-            <div class="flex justify-between text-sm bg-white p-2 rounded border mb-1 shadow-sm">
-                <span class="flex items-center gap-2">
-                    <span class="bg-red-100 text-red-700 font-bold px-2 rounded text-xs">${i.qty}${i.unita}</span> 
-                    <span class="font-medium">${i.nome}</span>
-                </span>
-                <button onclick="recipes.tempIng.splice(${idx},1); recipes.renderTempIng()" class="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
-            </div>`).join('');
+
+    // Renderizza le "pillole" in alto con input quantità
+    renderSelected() {
+        const container = document.getElementById('recipe-selected-list');
+        if (this.tempIng.length === 0) {
+            container.innerHTML = '<span class="text-xs text-gray-400 italic self-center px-2">Clicca gli ingredienti sotto per aggiungerli...</span>';
+            return;
+        }
+
+        container.innerHTML = this.tempIng.map((i, idx) => `
+            <div class="flex items-center gap-1 bg-red-50 border border-red-200 rounded-lg pl-2 pr-1 py-1 shrink-0 shadow-sm">
+                <span class="text-xs font-bold text-red-900">${i.nome}</span>
+                <input type="number" step="0.1" value="${i.qty || ''}" placeholder="Qtà" 
+                    onchange="recipes.tempIng[${idx}].qty = this.value"
+                    class="w-12 p-1 text-center text-xs border rounded outline-none focus:border-red-500 bg-white font-mono">
+                <span class="text-[10px] text-gray-500">${i.unita}</span>
+                <button onclick="recipes.toggleIng('${i.nome}')" class="text-red-400 hover:text-red-600 font-bold px-1 ml-1">×</button>
+            </div>
+        `).join('');
     },
+
     async save() {
         const nome = document.getElementById('new-recipe-name').value;
+        const portions = parseInt(document.getElementById('new-recipe-portions').value) || 4; // Default 4
+        
         if(!nome || !this.tempIng.length) return ui.toast("Nome o ingredienti mancanti", "error");
+        
+        // Controllo che le quantità siano state inserite
+        if(this.tempIng.some(i => !i.qty || i.qty <= 0)) return ui.toast("Inserisci le dosi per gli ingredienti scelti", "error");
+
         loader.show();
-        const { data: rec } = await _sb.from('ricette').insert([{ nome }]).select();
-        const ingData = this.tempIng.map(i => ({ ricetta_id: rec[0].id, nome_ingrediente: i.nome, quantita_necessaria: i.qty, unita: i.unit }));
+        
+        // 1. Crea Ricetta (Aggiungi campo porzioni se il DB lo supporta, altrimenti lo mettiamo in 'note' o lo ignoriamo per ora)
+        // Se non hai la colonna 'porzioni', modifica la query sotto togliendola o aggiungila su Supabase.
+        // Qui assumo che tu possa aggiungerla o che esista. Se fallisce, togli 'porzioni'.
+        const { data: rec, error } = await _sb.from('ricette').insert([{ nome, porzioni: portions }]).select();
+        
+        if (error) {
+            console.error(error);
+            loader.hide();
+            return ui.toast("Errore salvataggio (verificare DB)", "error");
+        }
+
+        const recId = rec[0].id;
+
+        // 2. Crea Ingredienti
+        const ingData = this.tempIng.map(i => ({
+            ricetta_id: recId,
+            nome_ingrediente: i.nome,
+            quantita_necessaria: i.qty,
+            unita: i.unita
+        }));
+        
         await _sb.from('ingredienti_ricetta').insert(ingData);
-        loader.hide(); ui.toast("Ricetta Salvata! 👨‍🍳", "success"); ui.closeModals(); this.load();
+
+        loader.hide();
+        ui.toast("Ricetta Salvata! 👨‍🍳", "success");
+        ui.closeModals();
+        this.load();
     }
 };
 
