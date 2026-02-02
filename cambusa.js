@@ -173,68 +173,79 @@ const app = {
         loader.hide();
     }
 };
-// --- RIFORNIMENTO PUBBLICO ---
-// --- RIFORNIMENTO PUBBLICO (A STEP) ---
+// --- RIFORNIMENTO PUBBLICO (A STEP CON GRIGLIA) ---
 const restock = {
-    // Inizializza o Resetta
     init() {
         state.restockCart = [];
         this.renderBadge();
         this.backToStep1();
-        this.renderSearch();
+        this.renderList();
     },
 
-    // STEP 1: LOGICA
-    renderSearch() {
+    // STEP 1: Mostra TUTTO (o filtrato) in una griglia
+    renderList() {
         const term = document.getElementById('restock-search').value.toLowerCase();
-        const container = document.getElementById('restock-search-results');
+        const container = document.getElementById('restock-grid');
         
-        // Filtra dispensa esistente
+        // Filtra
         let matches = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
-        if(!term) matches = state.pantry.slice(0, 10); // Mostra primi 10 se vuoto
+        
+        // Ordina: prima quelli già nel carrello ricarico, poi alfabetico
+        matches.sort((a, b) => {
+            const aInCart = state.restockCart.some(x => x.nome === a.nome);
+            const bInCart = state.restockCart.some(x => x.nome === b.nome);
+            if (aInCart && !bInCart) return -1;
+            if (!aInCart && bInCart) return 1;
+            return a.nome.localeCompare(b.nome);
+        });
 
         container.innerHTML = matches.map(p => {
-            // Controlla se è già nel carrello ricarico
             const inCart = state.restockCart.find(x => x.nome === p.nome);
             const val = inCart ? inCart.quantita : '';
-            const style = inCart ? 'border-l-4 border-blue-500 bg-blue-50' : 'bg-white';
-
+            const isSelected = !!inCart;
+            
+            // Stile Card
+            const bgClass = isSelected ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-200' : 'bg-white border-gray-200';
+            
             return `
-            <div class="flex items-center justify-between p-3 rounded shadow-sm border ${style}">
-                <div class="flex-grow">
-                    <div class="font-bold text-gray-800 text-sm">${p.nome}</div>
-                    <div class="text-[10px] text-gray-500 font-mono">${p.categoria} (${p.unita})</div>
+            <div class="rounded-xl shadow-sm border ${bgClass} p-3 flex flex-col justify-between transition group hover:shadow-md h-full">
+                <div>
+                    <div class="text-[10px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${p.categoria}</div>
+                    <div class="font-bold text-gray-800 text-sm leading-tight mb-2">${p.nome}</div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input type="number" step="0.5" placeholder="0" value="${val}"
-                        onchange="restock.updateCart('${p.nome}', this.value, '${p.unita}', '${p.categoria}')"
-                        class="w-20 p-2 text-center border rounded font-bold text-blue-900 outline-none focus:border-blue-500">
+                
+                <div class="mt-2">
+                    <div class="flex items-center bg-gray-100 rounded-lg p-1 border">
+                        <span class="text-blue-600 font-bold text-xs pl-2 mr-2">+</span>
+                        <input type="number" step="0.5" placeholder="0" value="${val}"
+                            onchange="restock.updateCart('${p.nome}', this.value, '${p.unita}', '${p.categoria}')"
+                            class="w-full bg-transparent text-center font-bold text-blue-900 outline-none text-sm p-1">
+                        <span class="text-[10px] text-gray-500 font-mono pr-2">${p.unita}</span>
+                    </div>
                 </div>
             </div>`;
         }).join('');
     },
 
-    // Aggiunge/Aggiorna item nel carrello temporaneo
     updateCart(nome, qty, unita, categoria) {
         const q = parseFloat(qty);
         const idx = state.restockCart.findIndex(x => x.nome === nome);
         
         if (!qty || q <= 0) {
-            // Rimuovi se 0 o vuoto
             if (idx > -1) state.restockCart.splice(idx, 1);
         } else {
-            // Aggiorna o Aggiungi
             if (idx > -1) state.restockCart[idx].quantita = q;
             else state.restockCart.push({ nome, quantita: q, unita, categoria, isNew: false });
         }
         this.renderBadge();
+        // Non ricarico tutta la lista per non perdere il focus, cambio solo stile se necessario
+        // (Opzionale: potresti chiamare renderList() qui ma farebbe saltare il focus dell'input)
     },
 
     renderBadge() {
         document.getElementById('restock-count-badge').innerText = state.restockCart.length;
     },
 
-    // NUOVO OGGETTO
     openNewModal() {
         document.getElementById('new-res-name').value = '';
         document.getElementById('new-res-qty').value = '';
@@ -249,20 +260,16 @@ const restock = {
 
         if (!nome || !qty) return ui.toast("Dati mancanti", "error");
 
-        // Aggiungi al carrello
         this.updateCart(nome, qty, unita, cat);
         
-        // Chiudi modale e pulisci ricerca
         document.getElementById('modal-new-restock').classList.add('hidden');
-        document.getElementById('restock-search').value = nome; // Filtra per il nuovo
-        this.renderSearch();
-        ui.toast("Aggiunto alla lista!", "success");
+        document.getElementById('restock-search').value = nome; 
+        this.renderList();
+        ui.toast("Aggiunto!", "success");
     },
 
-    // NAVIGAZIONE STEP
     goToStep2() {
         if (state.restockCart.length === 0) return ui.toast("Seleziona almeno un prodotto", "error");
-        
         document.getElementById('restock-step-1').classList.add('hidden');
         document.getElementById('restock-step-2').classList.remove('hidden');
         this.renderSummary();
@@ -271,32 +278,36 @@ const restock = {
     backToStep1() {
         document.getElementById('restock-step-2').classList.add('hidden');
         document.getElementById('restock-step-1').classList.remove('hidden');
-        this.renderSearch();
+        this.renderList();
     },
 
     renderSummary() {
         document.getElementById('restock-summary-list').innerHTML = state.restockCart.map((item, idx) => `
-            <div class="flex justify-between items-center bg-white p-3 rounded border-b">
-                <div>
-                    <div class="font-bold text-gray-800">${item.nome}</div>
-                    <div class="text-xs text-gray-500">${item.categoria}</div>
+            <div class="flex justify-between items-center bg-white p-3 rounded-lg border-b last:border-0 hover:bg-gray-50">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-100 text-blue-600 font-bold rounded-full w-8 h-8 flex items-center justify-center text-xs">
+                        ${idx + 1}
+                    </div>
+                    <div>
+                        <div class="font-bold text-gray-800">${item.nome}</div>
+                        <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">${item.categoria}</div>
+                    </div>
                 </div>
-                <div class="text-right">
-                    <span class="font-bold text-blue-600 text-lg">+${item.quantita}</span> <span class="text-xs">${item.unita}</span>
-                    <button onclick="state.restockCart.splice(${idx},1); restock.renderSummary(); restock.renderBadge()" class="text-red-400 font-bold ml-2">✕</button>
+                <div class="text-right flex items-center gap-3">
+                    <div class="bg-blue-50 px-3 py-1 rounded text-blue-900 font-bold border border-blue-100">
+                        +${item.quantita} <span class="text-xs font-normal">${item.unita}</span>
+                    </div>
+                    <button onclick="state.restockCart.splice(${idx},1); restock.renderSummary(); restock.renderBadge()" class="text-red-400 hover:text-red-600 font-bold p-1">✕</button>
                 </div>
             </div>
         `).join('');
     },
 
-    // INVIO DEFINITIVO
     async submitTotal() {
         if (state.restockCart.length === 0) return;
-
         loader.show();
         const user = state.user ? state.user.email : 'Pubblico';
         
-        // Prepara i dati per l'inserimento multiplo
         const payload = state.restockCart.map(item => ({
             nome: item.nome,
             quantita: item.quantita,
@@ -307,14 +318,13 @@ const restock = {
         }));
 
         const { error } = await _sb.from('proposte_rifornimento').insert(payload);
-        
         loader.hide();
         
         if(error) {
             ui.toast("Errore invio dati", "error");
         } else {
-            ui.toast(`Inviati ${state.restockCart.length} prodotti!`, "success");
-            this.init(); // Resetta tutto
+            ui.toast(`Richiesta inviata per ${state.restockCart.length} prodotti!`, "success");
+            this.init(); 
             document.getElementById('restock-search').value = '';
         }
     }
@@ -361,6 +371,7 @@ const cart = {
     }
 };
 // --- RICETTE ---
+// --- RICETTE (DESIGN PULITO) ---
 const recipes = {
     tempIng: [], 
     async load() {
@@ -368,22 +379,59 @@ const recipes = {
         state.recipes = data || [];
         this.renderList();
         
-        // Aggiorna Select del Planner
         const sel = document.getElementById('planner-recipe-select');
         if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + state.recipes.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
         
-        // Aggiorna Datalist Ingredienti
         const dl = document.getElementById('pantry-datalist');
         if(dl) dl.innerHTML = state.pantry.map(p => `<option value="${p.nome}">`).join('');
     },
+    
     renderList() {
+        const term = document.getElementById('recipe-search') ? document.getElementById('recipe-search').value.toLowerCase() : '';
         const el = document.getElementById('recipes-list');
-        if(el) el.innerHTML = state.recipes.map(r => `
-            <div class="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
-                <h3 class="font-bold text-red-900">${r.nome}</h3>
-                <div class="text-xs text-gray-500 mt-1">${r.ingredienti_ricetta.map(i => `${i.quantita_necessaria}${i.unita} ${i.nome_ingrediente}`).join(', ')}</div>
-            </div>`).join('');
+        if(!el) return;
+
+        const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
+
+        if(filtered.length === 0) {
+            el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata. Creane una nuova!</div>`;
+            return;
+        }
+
+        el.innerHTML = filtered.map(r => {
+            const ingCount = r.ingredienti_ricetta.length;
+            // Anteprima ingredienti (primi 3)
+            const preview = r.ingredienti_ricetta.slice(0, 3).map(i => i.nome_ingrediente).join(', ') + (ingCount > 3 ? '...' : '');
+
+            return `
+            <div class="bg-white rounded-2xl border border-red-100 shadow-sm hover:shadow-lg transition group relative overflow-hidden flex flex-col">
+                <div class="absolute top-0 left-0 w-2 h-full bg-red-500"></div>
+                
+                <div class="p-5 flex-grow">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-extrabold text-gray-800 text-xl group-hover:text-red-700 transition">${r.nome}</h3>
+                        <span class="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-full font-bold border border-red-100">${ingCount} ingr.</span>
+                    </div>
+                    
+                    <p class="text-sm text-gray-500 italic mb-4 line-clamp-2">
+                        "${preview}"
+                    </p>
+
+                    <div class="bg-gray-50 rounded-lg p-3 text-sm border border-gray-100">
+                         <ul class="space-y-1">
+                            ${r.ingredienti_ricetta.map(i => `
+                                <li class="flex justify-between border-b border-dashed border-gray-200 last:border-0 pb-1 last:pb-0">
+                                    <span class="text-gray-600">${i.nome_ingrediente}</span>
+                                    <span class="font-bold text-gray-800">${i.quantita_necessaria} <span class="text-[10px] text-gray-400">${i.unita}</span></span>
+                                </li>
+                            `).join('')}
+                         </ul>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
     },
+
     openModal() { this.tempIng = []; this.renderTempIng(); ui.modal('modal-recipe'); },
     addIng() {
         const nome = document.getElementById('rec-ing-name').value;
@@ -398,9 +446,12 @@ const recipes = {
     },
     renderTempIng() {
         document.getElementById('recipe-ingredients-list').innerHTML = this.tempIng.map((i, idx) => `
-            <div class="flex justify-between text-sm bg-white p-2 rounded border mb-1">
-                <span><b>${i.qty}${i.unit}</b> ${i.nome}</span>
-                <button onclick="recipes.tempIng.splice(${idx},1); recipes.renderTempIng()" class="text-red-500 font-bold">x</button>
+            <div class="flex justify-between text-sm bg-white p-2 rounded border mb-1 shadow-sm">
+                <span class="flex items-center gap-2">
+                    <span class="bg-red-100 text-red-700 font-bold px-2 rounded text-xs">${i.qty}${i.unita}</span> 
+                    <span class="font-medium">${i.nome}</span>
+                </span>
+                <button onclick="recipes.tempIng.splice(${idx},1); recipes.renderTempIng()" class="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
             </div>`).join('');
     },
     async save() {
@@ -410,7 +461,7 @@ const recipes = {
         const { data: rec } = await _sb.from('ricette').insert([{ nome }]).select();
         const ingData = this.tempIng.map(i => ({ ricetta_id: rec[0].id, nome_ingrediente: i.nome, quantita_necessaria: i.qty, unita: i.unit }));
         await _sb.from('ingredienti_ricetta').insert(ingData);
-        loader.hide(); ui.toast("Salvata!", "success"); ui.closeModals(); this.load();
+        loader.hide(); ui.toast("Ricetta Salvata! 👨‍🍳", "success"); ui.closeModals(); this.load();
     }
 };
 
