@@ -13,9 +13,8 @@ const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
 // --- STATO ---
 const state = { 
     pantry: [], 
-    menus: [],
-    menuComponents: [],
-    cart: [],   
+    recipes: [], 
+    cart: [],    
     user: null, 
     currentCategory: 'all' 
 };
@@ -36,30 +35,22 @@ const app = {
     },
 
     async loadData() {
-        // 1. Carica Dispensa (Tabella 'cambusa')
+        // 1. Carica Dispensa
         const { data: d } = await _sb.from('cambusa').select('*').order('nome');
         state.pantry = d || [];
         
-        // 2. Carica Menu/Ricette (Tabella 'menu' o riadatta pacchetti)
-        // Nota: Assumo tu usi una tabella 'menu' e 'ingredienti_menu' simile a pacchetti.
-        // Se non esistono, crea le tabelle in Supabase identiche a 'pacchetti' e 'componenti_pacchetto' ma con questi nomi.
-        // Oppure usiamo 'pacchetti' filtrati per tipo se preferisci, ma qui uso nomi dedicati per pulizia.
-        const { data: m } = await _sb.from('menu').select('*');
-        state.menus = m || [];
-        const { data: c } = await _sb.from('ingredienti_menu').select('*');
-        state.menuComponents = c || [];
+        // 2. Carica Ricette (Nuovo)
+        await recipes.load();
 
         if (state.user) {
-            // Se Admin, renderizza i tab
-            admin.renderList();
-            admin.renderRestock();
-            admin.renderRequests();
-            admin.renderMenuBuilder();
-            admin.renderMovements();
+            // ADMIN: Carica liste stock e approvazioni
+            admin.renderList();      
+            admin.loadApprovals();   
+            admin.renderMovements(); 
         } else {
-            // Se Pubblico
+            // PUBBLICO
             this.renderPantry();
-            this.nav('pantry');
+            this.nav('pantry'); 
         }
     },
 
@@ -143,7 +134,47 @@ const app = {
         loader.hide();
     }
 };
+// --- RIFORNIMENTO PUBBLICO ---
+const restock = {
+    searchExisting() {
+        const term = document.getElementById('restock-name').value.toLowerCase();
+        const sugg = document.getElementById('restock-suggestions');
+        if(term.length < 2) { sugg.classList.add('hidden'); return; }
+        
+        const matches = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
+        if(matches.length > 0) {
+            sugg.innerHTML = matches.map(p => `
+                <div onclick="restock.select('${p.nome}', '${p.unita}', '${p.categoria}')" class="p-2 hover:bg-gray-100 cursor-pointer text-sm border-b">
+                    <b>${p.nome}</b> <span class="text-xs text-gray-500">(${p.unita})</span>
+                </div>`).join('');
+            sugg.classList.remove('hidden');
+        } else { sugg.classList.add('hidden'); }
+    },
+    select(name, unit, cat) {
+        document.getElementById('restock-name').value = name;
+        document.getElementById('restock-unit').value = unit;
+        document.getElementById('restock-cat').value = cat;
+        document.getElementById('restock-suggestions').classList.add('hidden');
+    },
+    async submit() {
+        const data = {
+            nome: document.getElementById('restock-name').value,
+            quantita: parseFloat(document.getElementById('restock-qty').value),
+            unita: document.getElementById('restock-unit').value,
+            categoria: document.getElementById('restock-cat').value,
+            utente: state.user ? state.user.email : 'Pubblico',
+            stato: 'pending'
+        };
+        if(!data.nome || !data.quantita) return ui.toast("Dati mancanti", "error");
 
+        loader.show();
+        await _sb.from('proposte_rifornimento').insert([data]);
+        loader.hide();
+        ui.toast("Inviato ad Admin!", "success");
+        document.getElementById('restock-name').value = '';
+        document.getElementById('restock-qty').value = '';
+    }
+};
 // --- CARRELLO ---
 const cart = {
     add(id) {
@@ -171,7 +202,114 @@ const cart = {
             </div>`).join('');
     }
 };
+// --- RICETTE ---
+const recipes = {
+    tempIng: [], 
+    async load() {
+        const { data } = await _sb.from('ricette').select('*, ingredienti_ricetta(*)');
+        state.recipes = data || [];
+        this.renderList();
+        
+        // Aggiorna Select del Planner
+        const sel = document.getElementById('planner-recipe-select');
+        if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + state.recipes.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
+        
+        // Aggiorna Datalist Ingredienti
+        const dl = document.getElementById('pantry-datalist');
+        if(dl) dl.innerHTML = state.pantry.map(p => `<option value="${p.nome}">`).join('');
+    },
+    renderList() {
+        const el = document.getElementById('recipes-list');
+        if(el) el.innerHTML = state.recipes.map(r => `
+            <div class="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
+                <h3 class="font-bold text-red-900">${r.nome}</h3>
+                <div class="text-xs text-gray-500 mt-1">${r.ingredienti_ricetta.map(i => `${i.quantita_necessaria}${i.unita} ${i.nome_ingrediente}`).join(', ')}</div>
+            </div>`).join('');
+    },
+    openModal() { this.tempIng = []; this.renderTempIng(); ui.modal('modal-recipe'); },
+    addIng() {
+        const nome = document.getElementById('rec-ing-name').value;
+        const qty = document.getElementById('rec-ing-qty').value;
+        const unit = document.getElementById('rec-ing-unit').value;
+        if(nome && qty) {
+            this.tempIng.push({ nome, qty, unit });
+            this.renderTempIng();
+            document.getElementById('rec-ing-name').value = '';
+            document.getElementById('rec-ing-qty').value = '';
+        }
+    },
+    renderTempIng() {
+        document.getElementById('recipe-ingredients-list').innerHTML = this.tempIng.map((i, idx) => `
+            <div class="flex justify-between text-sm bg-white p-2 rounded border mb-1">
+                <span><b>${i.qty}${i.unit}</b> ${i.nome}</span>
+                <button onclick="recipes.tempIng.splice(${idx},1); recipes.renderTempIng()" class="text-red-500 font-bold">x</button>
+            </div>`).join('');
+    },
+    async save() {
+        const nome = document.getElementById('new-recipe-name').value;
+        if(!nome || !this.tempIng.length) return ui.toast("Nome o ingredienti mancanti", "error");
+        loader.show();
+        const { data: rec } = await _sb.from('ricette').insert([{ nome }]).select();
+        const ingData = this.tempIng.map(i => ({ ricetta_id: rec[0].id, nome_ingrediente: i.nome, quantita_necessaria: i.qty, unita: i.unit }));
+        await _sb.from('ingredienti_ricetta').insert(ingData);
+        loader.hide(); ui.toast("Salvata!", "success"); ui.closeModals(); this.load();
+    }
+};
 
+// --- PLANNER (CALCOLO SPESA) ---
+const planner = {
+    currentMenu: [],
+    addRecipe() {
+        const sel = document.getElementById('planner-recipe-select');
+        const mult = parseFloat(document.getElementById('planner-multiplier').value) || 1;
+        if(sel.value) {
+            this.currentMenu.push({ id: sel.value, name: sel.options[sel.selectedIndex].text, mult });
+            this.renderCurrent();
+        }
+    },
+    renderCurrent() {
+        document.getElementById('planner-current-list').innerHTML = this.currentMenu.map((item, idx) => `
+            <div class="flex justify-between items-center text-sm border-b py-1">
+                <span>🍽️ ${item.name} <span class="font-bold text-green-700">x${item.mult}</span></span>
+                <button onclick="planner.currentMenu.splice(${idx},1); planner.renderCurrent()" class="text-red-500 font-bold">x</button>
+            </div>`).join('');
+    },
+    calculate() {
+        if(!this.currentMenu.length) return ui.toast("Menu vuoto!", "error");
+        let totalNeeds = {};
+        
+        // 1. Somma fabbisogno
+        this.currentMenu.forEach(menuItem => {
+            const recipe = state.recipes.find(r => r.id == menuItem.id);
+            if(recipe) recipe.ingredienti_ricetta.forEach(ing => {
+                const key = ing.nome_ingrediente.toLowerCase().trim();
+                if(!totalNeeds[key]) totalNeeds[key] = { q: 0, u: ing.unita, name: ing.nome_ingrediente };
+                totalNeeds[key].q += (parseFloat(ing.quantita_necessaria) * menuItem.mult);
+            });
+        });
+
+        // 2. Confronta con dispensa e genera lista
+        let list = [];
+        for (let key in totalNeeds) {
+            const need = totalNeeds[key];
+            const inStock = state.pantry.find(p => p.nome.toLowerCase().trim() === key);
+            const qtyStock = inStock ? inStock.quantita : 0;
+            const diff = need.q - qtyStock;
+            if (diff > 0) list.push({ ...need, stock: qtyStock, toBuy: diff });
+        }
+        this.renderResult(list);
+    },
+    renderResult(list) {
+        document.getElementById('planner-result').classList.remove('hidden');
+        const el = document.getElementById('planner-shopping-list');
+        if(list.length === 0) el.innerHTML = '<div class="text-green-600 font-bold text-center">✅ Tutto presente in dispensa!</div>';
+        else el.innerHTML = list.map(i => `
+            <div class="py-2 flex justify-between border-b">
+                <div><div class="font-bold capitalize">${i.name}</div><div class="text-xs text-gray-500">Serve: ${i.q} | C'è: ${i.stock}</div></div>
+                <div class="text-right"><span class="block text-xs font-bold">COMPRARE</span><span class="text-xl font-bold text-red-600">${i.toBuy.toFixed(1)} <small>${i.u}</small></span></div>
+            </div>`).join('');
+    }
+};
 // --- ADMIN ---
 const admin = {
     tab(t) {
@@ -196,35 +334,7 @@ const admin = {
     },
 
     // 2. RIFORNIMENTO
-    renderRestock() {
-        document.getElementById('admin-restock-list').innerHTML = state.pantry.map(p => `
-            <div class="bg-white border rounded-lg p-3 flex justify-between items-center shadow-sm">
-                <div class="truncate pr-2">
-                    <div class="font-bold text-sm text-gray-700 truncate">${p.nome}</div>
-                    <div class="text-xs text-gray-400">Attuali: ${p.quantita} ${p.unita}</div>
-                </div>
-                <div class="flex items-center bg-blue-50 rounded-lg px-2 py-1 border border-blue-100">
-                    <span class="text-blue-600 text-xs font-bold mr-2">+</span>
-                    <input type="number" step="0.5" placeholder="0" data-id="${p.id}" data-current="${p.quantita}" class="restock-input w-16 p-1 text-center bg-transparent outline-none font-bold text-blue-900 border-b border-blue-200">
-                </div>
-            </div>`).join('');
-    },
-    async processRestock() {
-        const inputs = document.querySelectorAll('.restock-input');
-        let updates = [];
-        inputs.forEach(inp => {
-            const val = parseFloat(inp.value);
-            if(val > 0) {
-                updates.push(_sb.from('cambusa').update({ quantita: parseFloat(inp.dataset.current) + val }).eq('id', inp.dataset.id));
-            }
-        });
-        if(!updates.length) return;
-        loader.show(); await Promise.all(updates);
-        inputs.forEach(i => i.value = '');
-        ui.toast("Rifornito!", "success"); app.loadData(); loader.hide();
-    },
-
-    // 3. MENU / RICETTE (Ex Pacchetti)
+       // 3. MENU / RICETTE (Ex Pacchetti)
     renderMenuBuilder() {
         document.getElementById('menu-items').innerHTML = state.pantry.map(p => `
             <label class="flex items-center gap-2 text-xs p-2 border rounded hover:bg-gray-50 cursor-pointer">
@@ -240,45 +350,7 @@ const admin = {
                 </div>
             </div>`).join('');
     },
-    async createMenu() {
-        const name = document.getElementById('menu-name').value;
-        const chks = document.querySelectorAll('.menu-chk:checked');
-        if (!name || !chks.length) return ui.toast("Nome e ingredienti richiesti", "error");
-        
-        const { data } = await _sb.from('menu').insert([{ nome: name }]).select();
-        const items = Array.from(chks).map(c => ({ menu_id: data[0].id, ingrediente_id: c.value, quantita_necessaria: 1 }));
-        await _sb.from('ingredienti_menu').insert(items); // Tabella link
-        
-        ui.toast("Menu Creato!", "success"); document.getElementById('menu-name').value = ""; app.loadData();
-    },
-    // (Edit Menu functions omitted for brevity but follow logic of create)
-
-    // 4. LISTA SPESA (Requests - Simuliamo usando una tabella 'spesa' o 'richieste' filtrata)
-    async renderRequests() {
-        // Aggiunto .eq('tipo', 'cambusa')
-        const { data } = await _sb.from('richieste').select('*').eq('tipo', 'cambusa').order('created_at', { ascending: false });
-        const el = document.getElementById('admin-requests-list');
-        
-        if(!data || !data.length) { 
-            el.innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessuna voce in lista.</p>"; 
-            return; 
-        }
-        
-        el.innerHTML = data.map(r => `
-            <div class="bg-pink-50 p-3 rounded border border-pink-100 flex justify-between items-center">
-                <div class="text-sm">
-                    <div class="font-bold text-gray-800 ${r.completato ? 'line-through' : ''}">${r.oggetto}</div>
-                    <div class="text-[10px] text-gray-500">${r.richiedente || 'N/A'}</div>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="admin.reqAction('${r.id}', 'toggle', ${!r.completato})" class="px-2 py-1 rounded text-xs font-bold ${r.completato ? 'bg-yellow-100 text-yellow-700' : 'bg-green-600 text-white'}">${r.completato ? '↩️' : '✅'}</button>
-                    <button onclick="admin.reqAction('${r.id}', 'del')" class="text-red-500 font-bold px-2">✕</button>
-                </div>
-            </div>`).join('');
-    },
-    async delReq(id) { await _sb.from('lista_spesa').delete().eq('id', id); this.renderRequests(); },
-
-    // 5. MOVIMENTI
+       // 5. MOVIMENTI
     async renderMovements() {
         const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false }).limit(20);
         document.getElementById('movements-list').innerHTML = data.map(m => `
@@ -287,7 +359,58 @@ const admin = {
                 <p class="text-xs text-teal-800">${m.dettagli}</p>
             </div>`).join('');
     },
+    // NUOVO: Approva le richieste pubbliche
+    async loadApprovals() {
+        const { data } = await _sb.from('proposte_rifornimento').select('*').eq('stato', 'pending');
+        const list = document.getElementById('admin-approval-list');
+        const badge = document.getElementById('badge-approvals');
+        
+        if(data && data.length > 0) {
+            if(badge) badge.classList.remove('hidden');
+            list.innerHTML = data.map(p => `
+                <div class="bg-blue-50 border border-blue-200 p-3 rounded flex flex-col gap-2">
+                    <div class="flex justify-between font-bold text-blue-900"><span>${p.nome}</span> <span>${p.quantita} ${p.unita}</span></div>
+                    <div class="text-xs text-gray-500">Categoria: ${p.categoria} | Da: ${p.utente}</div>
+                    <div class="flex gap-2 items-center">
+                        <input type="number" id="approve-min-${p.id}" placeholder="Soglia Min." class="w-20 p-1 text-xs border rounded text-center">
+                        <button onclick="admin.approve(${p.id}, true)" class="flex-grow bg-green-600 text-white text-xs font-bold rounded py-1">APPROVA</button>
+                        <button onclick="admin.approve(${p.id}, false)" class="bg-red-500 text-white text-xs font-bold rounded px-2 py-1">X</button>
+                    </div>
+                </div>`).join('');
+        } else {
+            if(badge) badge.classList.add('hidden');
+            list.innerHTML = '<p class="text-gray-400 text-sm italic">Nessuna richiesta.</p>';
+        }
+    },
 
+    async approve(id, isApproved) {
+        loader.show();
+        if(!isApproved) {
+            await _sb.from('proposte_rifornimento').update({ stato: 'rejected' }).eq('id', id);
+        } else {
+            const { data: prop } = await _sb.from('proposte_rifornimento').select('*').eq('id', id).single();
+            const min = parseFloat(document.getElementById(`approve-min-${id}`).value) || 0;
+            
+            // Cerca item esistente per nome (case insensitive)
+            const { data: existing } = await _sb.from('cambusa').select('*').ilike('nome', prop.nome).maybeSingle();
+
+            if(existing) {
+                // Aggiorna esistente
+                const newQ = existing.quantita + prop.quantita;
+                // Aggiorna soglia solo se specificata dall'admin ora
+                const newMin = min > 0 ? min : existing.soglia;
+                await _sb.from('cambusa').update({ quantita: newQ, soglia: newMin }).eq('id', existing.id);
+            } else {
+                // Crea nuovo
+                await _sb.from('cambusa').insert([{ nome: prop.nome, categoria: prop.categoria, quantita: prop.quantita, unita: prop.unita, soglia: min }]);
+            }
+            await _sb.from('proposte_rifornimento').update({ stato: 'approved' }).eq('id', id);
+            await _sb.from('movimenti').insert([{ utente: 'ADMIN', dettagli: `Approvato: ${prop.nome} (+${prop.quantita})` }]);
+        }
+        await this.loadApprovals();
+        await app.loadData();
+        loader.hide();
+    },
     // CRUD ITEM
     openNewItem() { this.resetModal(); ui.modal('modal-item'); },
     edit(id) {
@@ -374,32 +497,5 @@ const ui = {
         setTimeout(() => t.remove(), 3000);
     }
 };
-const wishlist = {
-    async load() {
-        // Carica SOLO richieste tipo 'cambusa'
-        const { data } = await _sb.from('richieste').select('*').eq('tipo', 'cambusa').order('created_at', { ascending: false });
-        this.render(data || []);
-    },
-    render(data) {
-        const el = document.getElementById('wishlist-items');
-        if (!data.length) { el.innerHTML = '<p class="text-gray-400 italic text-center">Nessuna richiesta attiva!</p>'; return; }
-        el.innerHTML = data.map(item => `
-            <div class="bg-white p-3 rounded border-l-4 ${item.completato ? 'border-green-500 opacity-60' : 'border-orange-500'} flex justify-between items-center mb-2">
-                <div><div class="font-bold text-gray-800 ${item.completato ? 'line-through' : ''}">${item.oggetto}</div><div class="text-xs text-gray-500 font-mono">👤 ${item.richiedente || 'Anonimo'}</div></div>
-                ${item.completato ? '<span class="text-green-600 font-bold text-xs bg-green-50 px-2 py-1 rounded">PRESO!</span>' : '<span class="text-orange-400 text-xs italic">In attesa...</span>'}
-            </div>`).join('');
-    },
-    async add() {
-        const item = document.getElementById('wish-item').value;
-        const name = document.getElementById('wish-name').value;
-        if (!item || !name) return ui.toast("Cosa serve e chi sei?", "error");
-        
-        // SALVA CON TIPO 'cambusa'
-        await _sb.from('richieste').insert([{ oggetto: item, richiedente: name, tipo: 'cambusa' }]);
-        
-        ui.toast("Richiesta inviata!", "success"); 
-        document.getElementById('wish-item').value = ''; 
-        this.load();
-    }
-};
+
 app.init();
