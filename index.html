@@ -59,16 +59,41 @@
             <p class="text-sm text-gray-500 mb-6">Stiamo facendo un check-up completo al sistema.</p>
             <div class="text-xs font-mono bg-gray-100 p-2 rounded text-gray-500">Torna più tardi.</div>
             
-            <button onclick="document.getElementById('global-maintenance-screen').classList.add('hidden')" class="mt-6 text-[10px] text-gray-300 hover:text-red-500 uppercase tracking-widest">
-                🔓 Accesso Tecnico
-            </button>
+            <div class="mt-6">
+                <button id="btn-tech-init" onclick="enableTechLogin()" class="text-[10px] text-gray-300 hover:text-red-500 uppercase tracking-widest">
+                    🔓 Accesso Tecnico
+                </button>
+
+                <div id="tech-login-form" class="hidden flex-col gap-2 mt-2">
+                    <input type="password" id="tech-pass" placeholder="Password Admin" class="text-xs p-2 border rounded text-gray-800 outline-none focus:border-red-500 text-center">
+                    <button onclick="verifyTechAccess()" class="bg-red-600 text-white text-xs font-bold py-2 rounded hover:bg-red-700">SBLOCCA</button>
+                </div>
+                <p id="tech-error" class="hidden text-red-500 text-[10px] font-bold mt-1">Password Errata!</p>
+            </div>
         </div>
     </div>
 
     <script>
-        // Logica applicazione manutenzione all'avvio
+        // 1. Logica Manutenzione
         if (typeof GLOBAL_MAINTENANCE !== 'undefined' && GLOBAL_MAINTENANCE) {
             document.getElementById('global-maintenance-screen').classList.remove('hidden');
+        }
+
+        // 2. Funzioni Accesso Tecnico
+        function enableTechLogin() {
+            document.getElementById('btn-tech-init').classList.add('hidden');
+            document.getElementById('tech-login-form').classList.remove('hidden');
+            document.getElementById('tech-login-form').classList.add('flex');
+        }
+
+        function verifyTechAccess() {
+            const pass = document.getElementById('tech-pass').value;
+            // PASSWORD SEMPLICE: "admin" (Puoi cambiarla qui sotto)
+            if (pass === 'admin') {
+                document.getElementById('global-maintenance-screen').classList.add('hidden');
+            } else {
+                document.getElementById('tech-error').classList.remove('hidden');
+            }
         }
     </script>
 </body>
