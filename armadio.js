@@ -1,4 +1,5 @@
 // --- CONFIGURAZIONE ---
+const MAINTENANCE_MODE = false;
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
     key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", 
@@ -39,11 +40,21 @@ const loader = {
 // --- APP CONTROLLER ---
 const app = {
     async init() {
-        loader.show(); 
-        await auth.check();
-        await this.loadData();
-        loader.hide(); 
-    },
+    loader.show();
+    await auth.check(); // Controlla prima chi sei
+
+    // LOGICA BLOCCO MANUTENZIONE
+    if (MAINTENANCE_MODE && !state.user) {
+        // Se manutenzione attiva e utente NON loggato
+        document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+        document.getElementById('view-maintenance').classList.remove('hidden');
+        loader.hide();
+        return; // Ferma il caricamento dati
+    }
+
+    await this.loadData();
+    loader.hide();
+},
 
     async loadData() {
         const { data: p } = await _sb.from('oggetti').select('*').order('nome');
@@ -642,28 +653,24 @@ const admin = {
 // --- AUTH & UI ---
 const auth = {
     async check() {
-        const { data: { user } } = await _sb.auth.getUser();
-        if (user) {
-            state.user = user;
-            
-            // 1. Mostra menu staff
-            document.getElementById('nav-admin-mobile').classList.remove('hidden');
-            document.getElementById('nav-admin-mobile').classList.add('flex');
-            
-            // 2. Nascondi tasto login
-            document.getElementById('btn-login-mobile').classList.add('hidden');
-            
-            // 3. NASCONDI I MENU PUBBLICI (Corretto con anche nav-btn-cambusa)
-            const publicBtns = ['nav-btn-shop', 'nav-btn-wish', 'nav-btn-cambusa'];
-            publicBtns.forEach(id => {
-                const el = document.getElementById(id);
-                if(el) el.classList.add('hidden');
-            });
-            
-            // Vai alla dashboard admin
-            app.nav('admin');
+    const { data: { user } } = await _sb.auth.getUser();
+    if (user) {
+        state.user = user;
+        document.getElementById('nav-admin-mobile').classList.remove('hidden');
+        document.getElementById('nav-admin-mobile').classList.add('flex');
+        document.getElementById('btn-login-mobile').classList.add('hidden');
+
+        // LOGICA VISIBILITÀ LINK PUBBLICI PER ADMIN
+        if (MAINTENANCE_MODE) {
+            // Se c'è manutenzione, l'admin vede tutto per testare
+            document.getElementById('nav-public-links').classList.remove('hidden');
+        } else {
+            // Altrimenti vede solo admin
+            document.getElementById('nav-public-links').classList.add('hidden');
         }
-    },
+        app.nav('admin');
+    }
+},
     async login() {
         const { error } = await _sb.auth.signInWithPassword({
             email: document.getElementById('log-mail').value,
