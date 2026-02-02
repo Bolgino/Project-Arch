@@ -718,15 +718,28 @@ const admin = {
     },
 
     // 1. DISPENSA (Stock)
+    // 1. DISPENSA (Stock)
     renderList() {
-        document.getElementById('admin-list').innerHTML = state.pantry.map(p => `
+        document.getElementById('admin-list').innerHTML = state.pantry.map(p => {
+            // Formattazione data
+            const expiry = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT') : '<span class="text-red-300">--/--</span>';
+            // Controllo scadenza per evidenziare in rosso
+            const isExpiring = p.scadenza && (new Date(p.scadenza) - new Date()) / (1000 * 60 * 60 * 24) <= 12;
+            const dateClass = isExpiring ? 'text-red-600 font-bold' : 'text-gray-500';
+
+            return `
             <div class="flex justify-between items-center py-3 px-2 border-b hover:bg-gray-50">
                 <div>
                     <div class="font-bold text-gray-800">${p.nome}</div>
-                    <div class="text-xs text-gray-500 font-mono">${p.quantita} ${p.unita} (Min: ${p.soglia})</div>
+                    <div class="text-xs text-gray-500 font-mono flex gap-2 items-center">
+                        <span>${p.quantita} ${p.unita}</span>
+                        <span class="text-gray-300">|</span>
+                        <span class="${dateClass}">Scad: ${expiry}</span>
+                    </div>
                 </div>
-                <button onclick="admin.edit('${p.id}')" class="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1 rounded">MODIFICA</button>
-            </div>`).join('');
+                <button onclick="admin.edit('${p.id}')" class="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1 rounded border border-blue-100">MODIFICA</button>
+            </div>`;
+        }).join('');
     },
     filterStock() {
         const term = document.getElementById('admin-search').value.toLowerCase();
@@ -943,9 +956,17 @@ const auth = {
             // Mostra Admin
             document.getElementById('nav-admin-mobile').classList.remove('hidden');
             document.getElementById('nav-admin-mobile').classList.add('flex');
-            // Nascondi Login e Link Pubblici
             document.getElementById('btn-login-mobile').classList.add('hidden');
-            document.getElementById('nav-public-links').classList.add('hidden'); // NASCONDE LA DISPENSA PUBBLICA
+            
+            // LOGICA VISIBILITÀ LINK PUBBLICI PER ADMIN
+            if (typeof MAINTENANCE_MODE !== 'undefined' && MAINTENANCE_MODE === true) {
+                // In manutenzione: Admin vede ANCHE i link pubblici per testare
+                document.getElementById('nav-public-links').classList.remove('hidden');
+            } else {
+                // Operativo normale: Admin vede SOLO Admin (i link pubblici sono nascosti per pulizia)
+                document.getElementById('nav-public-links').classList.add('hidden'); 
+            }
+
             app.nav('admin');
         }
     },
