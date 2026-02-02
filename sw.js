@@ -1,4 +1,4 @@
-const CACHE_NAME = 'azimut-arch-v1';
+const CACHE_NAME = 'azimut-arch-v2';
 const urlsToCache = [
   './',
   './index.html',     // Il portale
