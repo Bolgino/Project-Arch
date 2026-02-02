@@ -111,7 +111,16 @@
     </nav>
 
     <main class="flex-grow max-w-7xl mx-auto w-full px-3 py-4 overflow-y-auto scrollbar-hide pb-24">
-
+    <section id="view-maintenance" class="hidden h-full flex flex-col items-center justify-center text-center p-6">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl border-b-8 border-green-600 max-w-sm">
+            <div class="text-6xl mb-4 animate-bounce">🎒</div>
+            <h1 class="text-2xl font-extrabold text-green-900 mb-2">Armadio Chiuso</h1>
+            <p class="text-gray-500 mb-6">Stiamo lucidando gli scarponi e contando le patacche.</p>
+            <div class="text-xs font-mono bg-green-50 p-3 rounded text-green-800">Manutenzione in corso.</div>
+            
+            <button onclick="ui.modal('login-modal')" class="mt-8 text-gray-300 text-xs hover:text-green-600 transition underline">Accesso Quartiermastro</button>
+        </div>
+    </section>
         <section id="view-shop" class="hidden fade-in">
             <div class="mb-4 border-b border-gray-200 pb-2">
                 <h1 class="text-2xl md:text-4xl font-extrabold text-green-900">Armadio</h1>
