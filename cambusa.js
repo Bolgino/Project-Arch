@@ -313,7 +313,7 @@ const restock = {
             ui.toast("Errore durante il salvataggio", "error");
         }
         loader.hide();
-    }
+    },
     async addNewProduct() {
         const nome = document.getElementById('new-prod-name').value.trim();
         const cat = document.getElementById('new-prod-cat').value;
