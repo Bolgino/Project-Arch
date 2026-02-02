@@ -103,11 +103,15 @@ const app = {
     renderPantry() {
         this.renderFilters();
         
+        // Recupera lista ID creati da questo browser
+        const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
+
         document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
             const isOut = item.quantita <= 0;
-            const isPending = item.stato === 'pending'; // Controllo stato
-            
-            // Logica Scadenza
+            const isPending = item.stato === 'pending';
+            const isMine = myProds.includes(item.id); // È mio?
+
+            // Calcolo scadenza
             let isExpiring = false;
             let daysToExpiry = null;
             if (item.scadenza) {
@@ -118,45 +122,62 @@ const app = {
             
             let badge = '';
             let borderClass = 'border-orange-100';
-            let overlayClass = ''; // Per oscurare se pending o esaurito
+            let overlayClass = '';
+            let actionButtons = '';
             
-            // Gestione Visuale Stati
             if (isPending) {
-                // STILE APPROVAZIONE
-                badge = '<span class="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[9px] px-2 py-1 rounded-bl-lg font-extrabold shadow z-10">IN APPROVAZIONE ⏳</span>';
-                borderClass = 'border-yellow-400 bg-yellow-50';
-                overlayClass = 'opacity-60 pointer-events-none grayscale-[0.5]'; // Disabilita interazione
+                if (isMine) {
+                    // SE È MIO: Badge diverso e NIENTE overlay bloccante
+                    badge = '<span class="absolute top-0 right-0 bg-yellow-100 text-yellow-800 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10 border border-yellow-300">IN ATTESA (TUO) ✏️</span>';
+                    borderClass = 'border-yellow-400 bg-yellow-50/50';
+                    // Tasto Modifica Speciale
+                    actionButtons = `
+                    <button onclick="restock.openEditPending('${item.id}')" class="w-full bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">
+                        MODIFICA RICHIESTA
+                    </button>`;
+                } else {
+                    // SE NON È MIO: Bloccato
+                    badge = '<span class="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10">IN APPROVAZIONE ⏳</span>';
+                    borderClass = 'border-gray-200 bg-gray-50';
+                    overlayClass = 'opacity-50 pointer-events-none grayscale-[0.8]';
+                }
             } else if (isOut) {
                 badge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow">ESAURITO 🚫</span>';
                 borderClass = 'border-gray-300 bg-gray-50 opacity-75';
-            } else if (isExpiring) {
-                badge = `<span class="absolute top-2 right-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow animate-pulse">SCADE TRA ${daysToExpiry} GG ⏳</span>`;
-                borderClass = 'border-red-400 bg-red-50';
+                actionButtons = `
+                <input type="number" disabled class="w-14 p-2 text-center border rounded bg-gray-100 text-sm">
+                <button disabled class="flex-1 bg-gray-200 text-gray-400 font-bold py-2 rounded text-xs">USA</button>`;
+            } else {
+                if(isExpiring) {
+                    badge = `<span class="absolute top-2 right-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow animate-pulse">SCADE TRA ${daysToExpiry} GG ⏳</span>`;
+                    borderClass = 'border-red-400 bg-red-50';
+                }
+                // Tasti normali per utenti attivi
+                actionButtons = `
+                <input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" 
+                    class="w-14 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500">
+                <button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-800 hover:bg-orange-200 font-bold py-2 rounded text-xs transition">USA</button>`;
             }
 
             return `
-            <div class="rounded-xl shadow-sm border ${borderClass} overflow-hidden hover:shadow-md transition flex flex-col relative group bg-white" data-category="${item.categoria}">
+            <div class="rounded-xl shadow-sm border ${borderClass} overflow-hidden hover:shadow-md transition flex flex-col relative group bg-white min-h-[140px]" data-category="${item.categoria}">
                 ${badge}
-                
-                <div class="p-3 flex flex-col flex-grow ${isPending ? overlayClass : ''}"> <div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div>
-                    <h4 class="font-bold text-gray-800 leading-tight mb-2 text-md">${item.nome}</h4>
+                <div class="p-3 flex flex-col flex-grow ${overlayClass}">
+                    <div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div>
+                    <h4 class="font-bold text-gray-800 leading-tight mb-2 text-md line-clamp-2">${item.nome}</h4>
                     
                     <div class="mt-auto">
-                        <p class="text-xs text-gray-500 mb-1 font-mono flex justify-between">
+                        <p class="text-xs text-gray-500 mb-1 font-mono flex justify-between items-center">
                             <span>Disp:</span> 
                             <span class="font-bold ${isOut ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span>
                         </p>
                         ${item.scadenza ? `<p class="text-[10px] text-gray-400 mb-2 italic">Scade il: ${new Date(item.scadenza).toLocaleDateString()}</p>` : ''}
                         
-                        <div class="flex gap-1 ${isOut ? 'opacity-50 pointer-events-none' : ''}">
-                            <input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" 
-                                class="w-14 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500">
-                            <button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-800 hover:bg-orange-200 font-bold py-2 rounded text-xs transition">USA</button>
+                        <div class="flex gap-1 mt-1">
+                            ${actionButtons}
                         </div>
                     </div>
                 </div>
-                
-                ${isPending ? '<div class="absolute bottom-2 left-0 right-0 text-center text-[9px] font-bold text-yellow-700 uppercase tracking-wide">In attesa di Admin</div>' : ''}
             </div>`;
         }).join('');
         
@@ -207,56 +228,26 @@ const restock = {
         this.renderList();
     },
 
+    // 1. DISPENSA (Stock)
     renderList() {
-        const term = document.getElementById('restock-search').value.toLowerCase();
-        const container = document.getElementById('restock-full-list');
-        
-        // Filtra prodotti
-        const matches = state.pantry.filter(p => 
-            p.nome.toLowerCase().includes(term) || 
-            p.categoria.toLowerCase().includes(term)
-        );
-
-        container.innerHTML = matches.map(item => {
-            // Se esiste una modifica in memoria usala, altrimenti default vuoto
-            const mod = state.restockCart[item.id] || { addQty: '', newExpiry: '' };
-            const isModified = mod.addQty !== '' || mod.newExpiry !== '';
+        document.getElementById('admin-list').innerHTML = state.pantry.map(p => {
+            // Formattazione data scadenza
+            const expiry = p.scadenza ? new Date(p.scadenza).toLocaleDateString() : '<span class="text-red-300">No Data</span>';
             
-            // Stile per evidenziare se modificato
-            const borderClass = isModified ? 'border-orange-500 ring-1 ring-orange-200 bg-orange-50' : 'border-gray-200 bg-white';
-
             return `
-            <div class="rounded-xl shadow-sm border ${borderClass} p-4 transition">
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">${item.categoria}</div>
-                        <div class="font-extrabold text-gray-800 text-lg leading-tight">${item.nome}</div>
-                    </div>
-                    <div class="text-right">
-                         <div class="text-[10px] text-gray-400 font-bold uppercase">Attuale</div>
-                        <div class="font-mono font-bold text-gray-600">${item.quantita} <span class="text-xs">${item.unita}</span></div>
+            <div class="flex justify-between items-center py-3 px-2 border-b hover:bg-gray-50">
+                <div>
+                    <div class="font-bold text-gray-800">${p.nome}</div>
+                    <div class="text-xs text-gray-500 font-mono flex gap-2">
+                        <span>${p.quantita} ${p.unita}</span>
+                        <span class="text-gray-300">|</span>
+                        <span class="text-orange-600 font-bold">Scade: ${expiry}</span>
                     </div>
                 </div>
-                
-                <div class="grid grid-cols-2 gap-3 bg-white/50 p-2 rounded-lg">
-                    <div>
-                        <label class="text-[9px] font-bold text-orange-600 uppercase block mb-1">Aggiungi (+)</label>
-                        <input type="number" step="0.5" placeholder="0" value="${mod.addQty}" 
-                            oninput="restock.trackChange('${item.id}', 'addQty', this.value)"
-                            class="w-full p-2 text-center border rounded-lg font-bold text-gray-800 focus:border-orange-500 focus:bg-orange-50 outline-none transition">
-                    </div>
-                    
-                    <div>
-                        <label class="text-[9px] font-bold text-gray-500 uppercase block mb-1">Nuova Scadenza</label>
-                        <input type="date" value="${mod.newExpiry || (item.scadenza ? item.scadenza : '')}" 
-                            onchange="restock.trackChange('${item.id}', 'newExpiry', this.value)"
-                            class="w-full p-2 border rounded-lg text-xs font-mono focus:border-orange-500 outline-none transition">
-                    </div>
-                </div>
+                <button onclick="admin.edit('${p.id}')" class="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1 rounded">MODIFICA</button>
             </div>`;
         }).join('');
     },
-
     // Salva le modifiche nell'oggetto temporaneo restockCart
     trackChange(id, field, value) {
         if (!state.restockCart[id]) state.restockCart[id] = { addQty: '', newExpiry: '' };
@@ -266,33 +257,82 @@ const restock = {
         // Nota: non ricarico tutta la lista per non perdere il focus dell'input
     },
 
-    async submitUpdates() {
-        // Filtra solo gli item che hanno effettivamente dati modificati
-        const updates = Object.keys(state.restockCart).filter(id => {
+    // --- MODIFICA PENDING (Utente) ---
+    openEditPending(id) {
+        const item = state.pantry.find(x => x.id == id);
+        if(!item) return;
+        document.getElementById('pend-edit-id').value = id;
+        document.getElementById('pend-edit-name').value = item.nome;
+        document.getElementById('pend-edit-qty').value = item.quantita;
+        document.getElementById('pend-edit-date').value = item.scadenza;
+        ui.modal('modal-edit-pending');
+    },
+
+    async savePendingEdit() {
+        const id = document.getElementById('pend-edit-id').value;
+        const updates = {
+            nome: document.getElementById('pend-edit-name').value,
+            quantita: parseFloat(document.getElementById('pend-edit-qty').value),
+            scadenza: document.getElementById('pend-edit-date').value
+        };
+        
+        loader.show();
+        await _sb.from('cambusa').update(updates).eq('id', id);
+        ui.toast("Aggiornato!", "success");
+        ui.closeModals();
+        await app.loadData();
+        loader.hide();
+    },
+
+    // --- RIFORNIMENTO (Pop-up) ---
+    submitUpdates() {
+        // 1. Identifica le modifiche
+        const updatesIDs = Object.keys(state.restockCart).filter(id => {
             const m = state.restockCart[id];
             return (m.addQty !== '' && parseFloat(m.addQty) > 0) || m.newExpiry !== '';
         });
 
-        if (updates.length === 0) return ui.toast("Nessuna modifica inserita", "error");
+        if (updatesIDs.length === 0) return ui.toast("Nessuna modifica inserita", "error");
 
-        if (!confirm(`Confermi l'aggiornamento di ${updates.length} prodotti?`)) return;
+        // 2. Prepara HTML del Riepilogo
+        const listHTML = updatesIDs.map(id => {
+            const item = state.pantry.find(p => p.id == id);
+            const mod = state.restockCart[id];
+            
+            let details = '';
+            if (mod.addQty) details += `<span class="text-green-600 font-bold">+${mod.addQty} ${item.unita}</span>`;
+            if (mod.newExpiry) details += `<br><span class="text-xs text-red-500">Nuova Scad: ${new Date(mod.newExpiry).toLocaleDateString()}</span>`;
+            
+            return `
+            <div class="flex justify-between items-center bg-white p-2 rounded border border-gray-200">
+                <span class="font-bold text-gray-700 text-sm">${item.nome}</span>
+                <div class="text-right leading-tight">${details}</div>
+            </div>`;
+        }).join('');
 
+        document.getElementById('restock-confirm-list').innerHTML = listHTML;
+        
+        // 3. Apri Modale
+        ui.modal('modal-restock-summary');
+    },
+
+    async confirmUpload() {
         loader.show();
         let successCount = 0;
+        const updatesIDs = Object.keys(state.restockCart).filter(id => {
+            const m = state.restockCart[id];
+            return (m.addQty !== '' && parseFloat(m.addQty) > 0) || m.newExpiry !== '';
+        });
 
         try {
-            for (const id of updates) {
+            for (const id of updatesIDs) {
                 const mod = state.restockCart[id];
                 const original = state.pantry.find(p => p.id == id);
-                
                 const payload = {};
                 
-                // Gestione Quantità: somma quella inserita a quella attuale
                 if (mod.addQty && parseFloat(mod.addQty) > 0) {
                     payload.quantita = original.quantita + parseFloat(mod.addQty);
                 }
-                
-                // Gestione Scadenza: aggiorna se cambiata
                 if (mod.newExpiry) {
                     payload.scadenza = mod.newExpiry;
                 }
@@ -302,15 +342,14 @@ const restock = {
                     if (!error) successCount++;
                 }
             }
-
-            ui.toast(`Aggiornati ${successCount} prodotti!`, "success");
-            state.restockCart = {}; // Reset
-            await app.loadData(); // Ricarica dati aggiornati
-            this.renderList(); // Pulisci input
-
+            ui.toast(`Salvato! ${successCount} prodotti aggiornati.`, "success");
+            state.restockCart = {}; 
+            ui.closeModals();
+            await app.loadData();
+            this.renderList();
         } catch (e) {
             console.error(e);
-            ui.toast("Errore durante il salvataggio", "error");
+            ui.toast("Errore salvataggio", "error");
         }
         loader.hide();
     },
@@ -321,36 +360,43 @@ const restock = {
         const qta = parseFloat(document.getElementById('new-prod-qty').value);
         const scadenza = document.getElementById('new-prod-expiry').value;
 
-        // VALIDAZIONE RIGIDA
         if (!nome) return ui.toast("Inserisci il nome", "error");
         if (!qta || qta <= 0) return ui.toast("Quantità non valida", "error");
         if (!scadenza) return ui.toast("⚠️ LA SCADENZA È OBBLIGATORIA", "error");
 
         loader.show();
         
-        // Inserimento diretto in 'cambusa' ma con stato PENDING
-        const { error } = await _sb.from('cambusa').insert([{
+        // .select() alla fine è fondamentale per recuperare l'ID creato
+        const { data, error } = await _sb.from('cambusa').insert([{
             nome: nome,
             categoria: cat,
             quantita: qta,
             unita: unita,
             scadenza: scadenza,
-            stato: 'pending' // <--- FONDAMENTALE
-        }]);
+            stato: 'pending'
+        }]).select();
 
         if (error) {
             console.error(error);
             ui.toast("Errore inserimento", "error");
         } else {
-            ui.toast("Richiesta inviata! In attesa di approvazione.", "success");
+            // --- LOGICA COOKIES/LOCALSTORAGE ---
+            // Salva l'ID del prodotto creato in una lista locale "miei prodotti"
+            const newId = data[0].id;
+            let myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
+            myProds.push(newId);
+            localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
+            // -----------------------------------
+
+            ui.toast("Richiesta inviata! Puoi modificarla finché è in attesa.", "success");
             ui.closeModals();
             
-            // Pulisci campi
+            // Pulisci
             document.getElementById('new-prod-name').value = '';
             document.getElementById('new-prod-qty').value = '';
             document.getElementById('new-prod-expiry').value = '';
             
-            await app.loadData(); // Ricarica per vederlo nella lista (bloccato)
+            await app.loadData();
         }
         loader.hide();
     },
@@ -657,12 +703,28 @@ const admin = {
             </div>`).join('');
     },
        // 5. MOVIMENTI
+   // 5. MOVIMENTI
     async renderMovements() {
-        const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false }).limit(20);
-        document.getElementById('movements-list').innerHTML = data.map(m => `
-            <div class="bg-teal-50 p-3 rounded border border-teal-100 mb-2">
-                <div class="flex justify-between mb-1"><span class="font-bold text-teal-900 text-xs">${m.utente}</span><span class="text-[10px] text-teal-600">${new Date(m.created_at).toLocaleDateString()}</span></div>
-                <p class="text-xs text-teal-800">${m.dettagli}</p>
+        const list = document.getElementById('movements-list');
+        list.innerHTML = '<div class="text-center text-gray-400 text-xs py-4">Caricamento...</div>';
+        
+        const { data, error } = await _sb.from('movimenti')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(30);
+
+        if (error || !data || data.length === 0) {
+            list.innerHTML = '<div class="text-center text-gray-400 text-xs py-4 italic">Nessun movimento registrato di recente.</div>';
+            return;
+        }
+
+        list.innerHTML = data.map(m => `
+            <div class="bg-teal-50 p-3 rounded-lg border border-teal-100 mb-2 shadow-sm">
+                <div class="flex justify-between mb-1">
+                    <span class="font-bold text-teal-900 text-xs uppercase tracking-wide">${m.utente || 'Anonimo'}</span>
+                    <span class="text-[10px] text-teal-600 font-mono">${new Date(m.created_at).toLocaleString()}</span>
+                </div>
+                <p class="text-xs text-teal-800 leading-snug">${m.dettagli}</p>
             </div>`).join('');
     },
     // NUOVO: Approva le richieste pubbliche
