@@ -100,22 +100,29 @@ const app = {
     },
 
     renderPantry() {
-        this.renderFilters(); // Assicura che i filtri ci siano
+        this.renderFilters();
         
         document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
             const isOut = item.quantita <= 0;
-            const isLow = !isOut && item.quantita <= item.soglia;
             
-            // Badge colorati
+            // Calcolo giorni alla scadenza
+            let isExpiring = false;
+            let daysToExpiry = null;
+            if (item.scadenza) {
+                const diffTime = new Date(item.scadenza) - new Date();
+                daysToExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                isExpiring = daysToExpiry <= 12 && daysToExpiry >= 0;
+            }
+            
             let badge = '';
             let borderClass = 'border-orange-100';
             
             if (isOut) {
                 badge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow">ESAURITO 🚫</span>';
                 borderClass = 'border-gray-300 bg-gray-50 opacity-75';
-            } else if (isLow) {
-                badge = '<span class="absolute top-2 right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow animate-pulse">SCORTA BASSA ⚠️</span>';
-                borderClass = 'border-red-300 bg-red-50';
+            } else if (isExpiring) {
+                badge = `<span class="absolute top-2 right-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow animate-pulse">SCADE TRA ${daysToExpiry} GG ⏳</span>`;
+                borderClass = 'border-red-400 bg-red-50';
             }
 
             return `
@@ -126,10 +133,11 @@ const app = {
                     <h4 class="font-bold text-gray-800 leading-tight mb-2 text-md">${item.nome}</h4>
                     
                     <div class="mt-auto">
-                        <p class="text-xs text-gray-500 mb-2 font-mono flex justify-between">
+                        <p class="text-xs text-gray-500 mb-1 font-mono flex justify-between">
                             <span>Disp:</span> 
-                            <span class="font-bold ${isLow ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span>
+                            <span class="font-bold ${isOut ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span>
                         </p>
+                        ${item.scadenza ? `<p class="text-[10px] text-gray-400 mb-2 italic">Scade il: ${new Date(item.scadenza).toLocaleDateString()}</p>` : ''}
                         
                         <div class="flex gap-1 ${isOut ? 'opacity-50 pointer-events-none' : ''}">
                             <input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" 
@@ -141,7 +149,7 @@ const app = {
             </div>`;
         }).join('');
         
-        this.filterPantry(); // Applica il filtro corrente
+        this.filterPantry();
     },
 
     async checkout() {
@@ -158,6 +166,13 @@ const app = {
                 await _sb.from('cambusa').update({ quantita: newQ }).eq('id', c.id);
                 logDetails.push(`${item.nome} x${c.qty}${item.unita}`);
             }
+            if (item.scadenza) {
+                const diffTime = new Date(item.scadenza) - new Date();
+                const daysToExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (daysToExpiry <= 12) {
+                    urgentAlerts += `<p style="color: #b91c1c; font-weight: bold;">🚨 SCADENZA IMMINENTE: L'oggetto '${item.nome}' scade il ${new Date(item.scadenza).toLocaleDateString()} (Tra ${daysToExpiry} giorni)!</p>`;
+                }
+            }   
         }
 
         // Salva movimento (uso tabella 'movimenti' generica, magari aggiungendo tag [CAMBUSA] nel dettaglio)
@@ -700,7 +715,7 @@ const admin = {
         document.getElementById('item-cat').value = p.categoria;
         document.getElementById('item-qty').value = p.quantita;
         document.getElementById('item-unit').value = p.unita;
-        document.getElementById('item-min').value = p.soglia;
+        document.getElementById('item-expiry').value = p.scadenza || '';
         document.getElementById('btn-del-item').classList.remove('hidden');
         ui.modal('modal-item');
     },
@@ -711,7 +726,7 @@ const admin = {
             categoria: document.getElementById('item-cat').value,
             quantita: parseFloat(document.getElementById('item-qty').value),
             unita: document.getElementById('item-unit').value,
-            soglia: parseFloat(document.getElementById('item-min').value)
+            scadenza: document.getElementById('item-expiry').value || null
         };
         if(id) await _sb.from('cambusa').update(data).eq('id', id);
         else await _sb.from('cambusa').insert([data]);
