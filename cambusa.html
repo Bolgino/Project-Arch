@@ -130,6 +130,11 @@
                     class="w-full p-3 pl-10 border-2 border-orange-100 rounded-xl font-bold text-gray-700 focus:border-orange-500 outline-none transition bg-gray-50 focus:bg-white">
                 <span class="absolute left-3 top-3.5 text-gray-400">⚡</span>
             </div>
+            <div class="px-4 pb-2">
+                <button onclick="ui.modal('modal-new-product')" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md hover:bg-blue-700 flex justify-center items-center gap-2 text-sm">
+                    <span class="text-xl">+</span> NON LO TROVI? AGGIUNGILO
+                </button>
+            </div>
         </div>
 
         <div id="restock-full-list" class="flex-grow overflow-y-auto p-3 space-y-3 pb-32 bg-orange-50/50">
@@ -212,6 +217,12 @@
                 <div id="admin-tab-movements" class="admin-tab hidden bg-white p-6 rounded-xl shadow-md border border-teal-100">
                      <h3 class="font-bold text-xl text-teal-900 mb-4">📜 Registro Movimenti</h3>
                      <div id="movements-list" class="space-y-2"></div>
+                </div>
+                <div id="admin-tab-approvals" class="admin-tab hidden space-y-3 pb-20">
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-4">
+                        <p class="text-sm text-yellow-800">Qui trovi i nuovi prodotti inseriti dagli utenti. Correggi se necessario e approva.</p>
+                    </div>
+                    <div id="admin-approval-list" class="space-y-3"></div>
                 </div>
             </div>
         </div>
@@ -371,7 +382,61 @@
             </div>
         </div>
     </div>
-
+    <div id="modal-new-product" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div class="bg-blue-600 p-4 text-white flex justify-between items-center">
+                <h3 class="font-bold uppercase tracking-wider">Nuovo Prodotto</h3>
+                <button onclick="ui.closeModals()" class="text-2xl">&times;</button>
+            </div>
+            
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Prodotto *</label>
+                    <input type="text" id="new-prod-name" class="w-full p-3 border-2 border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:border-blue-500" placeholder="Es. Farina 00">
+                </div>
+    
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria *</label>
+                        <select id="new-prod-cat" class="w-full p-3 border-2 border-gray-200 rounded-xl bg-white text-sm font-bold outline-none focus:border-blue-500">
+                            <option value="colazione">Colazione</option>
+                            <option value="pranzo_cena">Pasti</option>
+                            <option value="condimenti">Condimenti</option>
+                            <option value="merenda">Merenda</option>
+                            <option value="extra">Extra</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Unità *</label>
+                        <select id="new-prod-unit" class="w-full p-3 border-2 border-gray-200 rounded-xl bg-white text-sm font-bold outline-none focus:border-blue-500">
+                            <option value="pz">Pezzi</option>
+                            <option value="kg">Kg</option>
+                            <option value="lt">Litri</option>
+                        </select>
+                    </div>
+                </div>
+    
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Quantità *</label>
+                        <input type="number" step="0.5" id="new-prod-qty" class="w-full p-3 border-2 border-gray-200 rounded-xl font-bold outline-none focus:border-blue-500" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-red-600 uppercase mb-1">Scadenza *</label>
+                        <input type="date" id="new-prod-expiry" class="w-full p-3 border-2 border-red-200 rounded-xl font-mono text-sm outline-none focus:border-red-500 bg-red-50" required>
+                    </div>
+                </div>
+                
+                <p class="text-[10px] text-gray-400 italic text-center mt-2">
+                    Il prodotto sarà visibile subito ma "In Approvazione" finché l'admin non conferma.
+                </p>
+    
+                <button onclick="restock.addNewProduct()" class="w-full bg-blue-800 text-white font-bold py-3 rounded-xl hover:bg-blue-900 shadow-lg mt-2">
+                    INVIA RICHIESTA
+                </button>
+            </div>
+        </div>
+    </div>
     <datalist id="pantry-datalist"></datalist>
     <div id="login-modal" class="hidden fixed inset-0 bg-orange-900/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm relative">
