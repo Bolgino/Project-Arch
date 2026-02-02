@@ -666,7 +666,7 @@ const admin = {
             </div>`).join('');
     },
     // NUOVO: Approva le richieste pubbliche
-    async // Carica gli item con stato 'pending'
+    // Carica gli item con stato 'pending'
     loadApprovals() {
         const pendingItems = state.pantry.filter(x => x.stato === 'pending');
         const list = document.getElementById('admin-approval-list');
