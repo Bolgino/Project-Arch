@@ -105,8 +105,9 @@ const app = {
         
         document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
             const isOut = item.quantita <= 0;
+            const isPending = item.stato === 'pending'; // Controllo stato
             
-            // Calcolo giorni alla scadenza
+            // Logica Scadenza
             let isExpiring = false;
             let daysToExpiry = null;
             if (item.scadenza) {
@@ -117,8 +118,15 @@ const app = {
             
             let badge = '';
             let borderClass = 'border-orange-100';
+            let overlayClass = ''; // Per oscurare se pending o esaurito
             
-            if (isOut) {
+            // Gestione Visuale Stati
+            if (isPending) {
+                // STILE APPROVAZIONE
+                badge = '<span class="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[9px] px-2 py-1 rounded-bl-lg font-extrabold shadow z-10">IN APPROVAZIONE ⏳</span>';
+                borderClass = 'border-yellow-400 bg-yellow-50';
+                overlayClass = 'opacity-60 pointer-events-none grayscale-[0.5]'; // Disabilita interazione
+            } else if (isOut) {
                 badge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow">ESAURITO 🚫</span>';
                 borderClass = 'border-gray-300 bg-gray-50 opacity-75';
             } else if (isExpiring) {
@@ -129,8 +137,8 @@ const app = {
             return `
             <div class="rounded-xl shadow-sm border ${borderClass} overflow-hidden hover:shadow-md transition flex flex-col relative group bg-white" data-category="${item.categoria}">
                 ${badge}
-                <div class="p-3 flex flex-col flex-grow">
-                    <div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div>
+                
+                <div class="p-3 flex flex-col flex-grow ${isPending ? overlayClass : ''}"> <div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div>
                     <h4 class="font-bold text-gray-800 leading-tight mb-2 text-md">${item.nome}</h4>
                     
                     <div class="mt-auto">
@@ -147,6 +155,8 @@ const app = {
                         </div>
                     </div>
                 </div>
+                
+                ${isPending ? '<div class="absolute bottom-2 left-0 right-0 text-center text-[9px] font-bold text-yellow-700 uppercase tracking-wide">In attesa di Admin</div>' : ''}
             </div>`;
         }).join('');
         
@@ -304,6 +314,46 @@ const restock = {
         }
         loader.hide();
     }
+    async addNewProduct() {
+        const nome = document.getElementById('new-prod-name').value.trim();
+        const cat = document.getElementById('new-prod-cat').value;
+        const unita = document.getElementById('new-prod-unit').value;
+        const qta = parseFloat(document.getElementById('new-prod-qty').value);
+        const scadenza = document.getElementById('new-prod-expiry').value;
+
+        // VALIDAZIONE RIGIDA
+        if (!nome) return ui.toast("Inserisci il nome", "error");
+        if (!qta || qta <= 0) return ui.toast("Quantità non valida", "error");
+        if (!scadenza) return ui.toast("⚠️ LA SCADENZA È OBBLIGATORIA", "error");
+
+        loader.show();
+        
+        // Inserimento diretto in 'cambusa' ma con stato PENDING
+        const { error } = await _sb.from('cambusa').insert([{
+            nome: nome,
+            categoria: cat,
+            quantita: qta,
+            unita: unita,
+            scadenza: scadenza,
+            stato: 'pending' // <--- FONDAMENTALE
+        }]);
+
+        if (error) {
+            console.error(error);
+            ui.toast("Errore inserimento", "error");
+        } else {
+            ui.toast("Richiesta inviata! In attesa di approvazione.", "success");
+            ui.closeModals();
+            
+            // Pulisci campi
+            document.getElementById('new-prod-name').value = '';
+            document.getElementById('new-prod-qty').value = '';
+            document.getElementById('new-prod-expiry').value = '';
+            
+            await app.loadData(); // Ricarica per vederlo nella lista (bloccato)
+        }
+        loader.hide();
+    },
 };
 // --- CARRELLO ---
 const cart = {
@@ -616,29 +666,98 @@ const admin = {
             </div>`).join('');
     },
     // NUOVO: Approva le richieste pubbliche
-    async loadApprovals() {
-        const { data } = await _sb.from('proposte_rifornimento').select('*').eq('stato', 'pending');
+    async // Carica gli item con stato 'pending'
+    loadApprovals() {
+        const pendingItems = state.pantry.filter(x => x.stato === 'pending');
         const list = document.getElementById('admin-approval-list');
-        const badge = document.getElementById('badge-approvals');
+        const badge = document.getElementById('badge-approvals'); // Se hai un badge nel menu
         
-        if(data && data.length > 0) {
-            if(badge) badge.classList.remove('hidden');
-            list.innerHTML = data.map(p => `
-                <div class="bg-blue-50 border border-blue-200 p-3 rounded flex flex-col gap-2">
-                    <div class="flex justify-between font-bold text-blue-900"><span>${p.nome}</span> <span>${p.quantita} ${p.unita}</span></div>
-                    <div class="text-xs text-gray-500">Categoria: ${p.categoria} | Da: ${p.utente}</div>
-                    <div class="flex gap-2 items-center">
-                        <input type="number" id="approve-min-${p.id}" placeholder="Soglia Min." class="w-20 p-1 text-xs border rounded text-center">
-                        <button onclick="admin.approve(${p.id}, true)" class="flex-grow bg-green-600 text-white text-xs font-bold rounded py-1">APPROVA</button>
-                        <button onclick="admin.approve(${p.id}, false)" class="bg-red-500 text-white text-xs font-bold rounded px-2 py-1">X</button>
-                    </div>
-                </div>`).join('');
-        } else {
-            if(badge) badge.classList.add('hidden');
-            list.innerHTML = '<p class="text-gray-400 text-sm italic">Nessuna richiesta.</p>';
+        if (badge) {
+            badge.innerText = pendingItems.length;
+            badge.classList.toggle('hidden', pendingItems.length === 0);
         }
+
+        if (pendingItems.length === 0) {
+            list.innerHTML = '<div class="text-center text-gray-400 py-10 italic">Nessun prodotto da approvare.</div>';
+            return;
+        }
+
+        list.innerHTML = pendingItems.map(p => `
+            <div class="bg-white border-l-4 border-yellow-400 shadow-sm rounded-r-lg p-4 mb-3">
+                <div class="mb-3">
+                    <p class="text-[10px] text-gray-400 uppercase font-bold">Richiesta inserimento</p>
+                    <input type="text" id="appr-name-${p.id}" value="${p.nome}" 
+                        class="w-full font-bold text-gray-800 border-b border-gray-200 focus:border-yellow-500 outline-none text-lg">
+                </div>
+                
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div>
+                        <label class="text-[9px] text-gray-500 uppercase">Cat.</label>
+                        <select id="appr-cat-${p.id}" class="w-full text-xs border rounded p-1 bg-gray-50">
+                            <option value="colazione" ${p.categoria=='colazione'?'selected':''}>Colazione</option>
+                            <option value="pranzo_cena" ${p.categoria=='pranzo_cena'?'selected':''}>Pasti</option>
+                            <option value="condimenti" ${p.categoria=='condimenti'?'selected':''}>Condim.</option>
+                            <option value="merenda" ${p.categoria=='merenda'?'selected':''}>Merenda</option>
+                            <option value="extra" ${p.categoria=='extra'?'selected':''}>Extra</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-gray-500 uppercase">Unità</label>
+                        <select id="appr-unit-${p.id}" class="w-full text-xs border rounded p-1 bg-gray-50">
+                            <option value="pz" ${p.unita=='pz'?'selected':''}>Pz</option>
+                            <option value="kg" ${p.unita=='kg'?'selected':''}>Kg</option>
+                            <option value="lt" ${p.unita=='lt'?'selected':''}>Lt</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-gray-500 uppercase">Qtà</label>
+                        <input type="number" step="0.1" id="appr-qty-${p.id}" value="${p.quantita}" class="w-full text-xs border rounded p-1 text-center font-bold">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                     <label class="text-[9px] text-red-500 uppercase font-bold">Scadenza</label>
+                     <input type="date" id="appr-date-${p.id}" value="${p.scadenza}" class="w-full text-xs border border-red-200 rounded p-1 bg-red-50">
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="admin.processApproval('${p.id}', false)" class="flex-1 bg-red-100 text-red-600 font-bold text-xs py-2 rounded hover:bg-red-200">RIFIUTA 🗑️</button>
+                    <button onclick="admin.processApproval('${p.id}', true)" class="flex-1 bg-green-600 text-white font-bold text-xs py-2 rounded shadow hover:bg-green-700">APPROVA ✅</button>
+                </div>
+            </div>
+        `).join('');
     },
 
+    async processApproval(id, isApproved) {
+        loader.show();
+        if (isApproved) {
+            // Raccoglie i dati (eventualmente modificati dall'admin)
+            const updates = {
+                nome: document.getElementById(`appr-name-${id}`).value,
+                categoria: document.getElementById(`appr-cat-${id}`).value,
+                unita: document.getElementById(`appr-unit-${id}`).value,
+                quantita: parseFloat(document.getElementById(`appr-qty-${id}`).value),
+                scadenza: document.getElementById(`appr-date-${id}`).value,
+                stato: 'active' // <--- SBLOCCA IL PRODOTTO
+            };
+            
+            await _sb.from('cambusa').update(updates).eq('id', id);
+            ui.toast("Prodotto approvato e attivo!", "success");
+        } else {
+            // Rifiuta = Cancella dal DB
+            if(confirm("Sei sicuro di voler rifiutare ed eliminare questa richiesta?")) {
+                await _sb.from('cambusa').delete().eq('id', id);
+                ui.toast("Richiesta eliminata", "success");
+            } else {
+                loader.hide();
+                return;
+            }
+        }
+        
+        await app.loadData(); // Ricarica tutto
+        this.loadApprovals(); // Aggiorna lista approvazioni
+        loader.hide();
+    },
     async approve(id, isApproved) {
         loader.show();
         if(!isApproved) {
