@@ -15,6 +15,7 @@ const state = {
     pantry: [], 
     recipes: [], 
     cart: [],    
+    restockCart: [], // NUOVO: carrello per il ricarico
     user: null, 
     currentCategory: 'all' 
 };
@@ -82,27 +83,65 @@ const app = {
         });
     },
 
+   // --- DENTRO L'OGGETTO app ---
+
+    renderFilters() {
+        // Categorie fisse o dinamiche
+        const cats = ['all', 'colazione', 'pranzo_cena', 'condimenti', 'merenda', 'extra'];
+        const labels = { all: 'Tutto', colazione: '☕ Colazione', pranzo_cena: '🍝 Pasti', condimenti: '🧂 Condim.', merenda: '🍫 Merenda', extra: '🧻 Extra' };
+        
+        document.getElementById('pantry-filters').innerHTML = cats.map(c => `
+            <button id="btn-cat-${c}" onclick="app.setCategory('${c}')" 
+                class="filter-btn px-4 py-2 rounded-full text-xs font-bold border transition whitespace-nowrap
+                ${state.currentCategory === c ? 'bg-orange-700 text-white border-orange-700 shadow-md' : 'bg-white text-gray-600 border-gray-200'}">
+                ${labels[c] || c}
+            </button>
+        `).join('');
+    },
+
     renderPantry() {
+        this.renderFilters(); // Assicura che i filtri ci siano
+        
         document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
-            const isLow = item.quantita <= item.soglia;
             const isOut = item.quantita <= 0;
-            let badge = isOut ? '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 rounded">FINITO 🚫</span>' 
-                      : (isLow ? '<span class="absolute top-2 right-2 bg-red-100 text-red-600 text-[10px] px-2 rounded border border-red-200">SCORTA BASSA ⚠️</span>' : '');
+            const isLow = !isOut && item.quantita <= item.soglia;
+            
+            // Badge colorati
+            let badge = '';
+            let borderClass = 'border-orange-100';
+            
+            if (isOut) {
+                badge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow">ESAURITO 🚫</span>';
+                borderClass = 'border-gray-300 bg-gray-50 opacity-75';
+            } else if (isLow) {
+                badge = '<span class="absolute top-2 right-2 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow animate-pulse">SCORTA BASSA ⚠️</span>';
+                borderClass = 'border-red-300 bg-red-50';
+            }
 
             return `
-            <div class="bg-white rounded-xl shadow-sm border border-orange-100 overflow-hidden hover:shadow-md transition flex flex-col relative group" data-category="${item.categoria}">
+            <div class="rounded-xl shadow-sm border ${borderClass} overflow-hidden hover:shadow-md transition flex flex-col relative group bg-white" data-category="${item.categoria}">
                 ${badge}
-                <div class="p-4 flex flex-col flex-grow">
-                    <div class="text-[9px] font-bold uppercase text-orange-400 mb-1">${item.categoria}</div>
-                    <h4 class="font-bold text-gray-800 leading-tight mb-1 text-lg">${item.nome}</h4>
-                    <p class="text-xs text-gray-500 mb-3 font-mono">Disp: <span class="font-bold text-orange-700 text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span></p>
-                    <div class="mt-auto flex gap-1">
-                        <input type="number" step="0.5" id="qty-${item.id}" placeholder="0" class="w-16 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500">
-                        <button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold py-2 rounded text-sm transition">USA</button>
+                <div class="p-3 flex flex-col flex-grow">
+                    <div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div>
+                    <h4 class="font-bold text-gray-800 leading-tight mb-2 text-md">${item.nome}</h4>
+                    
+                    <div class="mt-auto">
+                        <p class="text-xs text-gray-500 mb-2 font-mono flex justify-between">
+                            <span>Disp:</span> 
+                            <span class="font-bold ${isLow ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span>
+                        </p>
+                        
+                        <div class="flex gap-1 ${isOut ? 'opacity-50 pointer-events-none' : ''}">
+                            <input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" 
+                                class="w-14 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500">
+                            <button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-800 hover:bg-orange-200 font-bold py-2 rounded text-xs transition">USA</button>
+                        </div>
                     </div>
                 </div>
             </div>`;
         }).join('');
+        
+        this.filterPantry(); // Applica il filtro corrente
     },
 
     async checkout() {
@@ -135,61 +174,180 @@ const app = {
     }
 };
 // --- RIFORNIMENTO PUBBLICO ---
+// --- RIFORNIMENTO PUBBLICO (A STEP) ---
 const restock = {
-    searchExisting() {
-        const term = document.getElementById('restock-name').value.toLowerCase();
-        const sugg = document.getElementById('restock-suggestions');
-        if(term.length < 2) { sugg.classList.add('hidden'); return; }
+    // Inizializza o Resetta
+    init() {
+        state.restockCart = [];
+        this.renderBadge();
+        this.backToStep1();
+        this.renderSearch();
+    },
+
+    // STEP 1: LOGICA
+    renderSearch() {
+        const term = document.getElementById('restock-search').value.toLowerCase();
+        const container = document.getElementById('restock-search-results');
         
-        const matches = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
-        if(matches.length > 0) {
-            sugg.innerHTML = matches.map(p => `
-                <div onclick="restock.select('${p.nome}', '${p.unita}', '${p.categoria}')" class="p-2 hover:bg-gray-100 cursor-pointer text-sm border-b">
-                    <b>${p.nome}</b> <span class="text-xs text-gray-500">(${p.unita})</span>
-                </div>`).join('');
-            sugg.classList.remove('hidden');
-        } else { sugg.classList.add('hidden'); }
+        // Filtra dispensa esistente
+        let matches = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
+        if(!term) matches = state.pantry.slice(0, 10); // Mostra primi 10 se vuoto
+
+        container.innerHTML = matches.map(p => {
+            // Controlla se è già nel carrello ricarico
+            const inCart = state.restockCart.find(x => x.nome === p.nome);
+            const val = inCart ? inCart.quantita : '';
+            const style = inCart ? 'border-l-4 border-blue-500 bg-blue-50' : 'bg-white';
+
+            return `
+            <div class="flex items-center justify-between p-3 rounded shadow-sm border ${style}">
+                <div class="flex-grow">
+                    <div class="font-bold text-gray-800 text-sm">${p.nome}</div>
+                    <div class="text-[10px] text-gray-500 font-mono">${p.categoria} (${p.unita})</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="number" step="0.5" placeholder="0" value="${val}"
+                        onchange="restock.updateCart('${p.nome}', this.value, '${p.unita}', '${p.categoria}')"
+                        class="w-20 p-2 text-center border rounded font-bold text-blue-900 outline-none focus:border-blue-500">
+                </div>
+            </div>`;
+        }).join('');
     },
-    select(name, unit, cat) {
-        document.getElementById('restock-name').value = name;
-        document.getElementById('restock-unit').value = unit;
-        document.getElementById('restock-cat').value = cat;
-        document.getElementById('restock-suggestions').classList.add('hidden');
+
+    // Aggiunge/Aggiorna item nel carrello temporaneo
+    updateCart(nome, qty, unita, categoria) {
+        const q = parseFloat(qty);
+        const idx = state.restockCart.findIndex(x => x.nome === nome);
+        
+        if (!qty || q <= 0) {
+            // Rimuovi se 0 o vuoto
+            if (idx > -1) state.restockCart.splice(idx, 1);
+        } else {
+            // Aggiorna o Aggiungi
+            if (idx > -1) state.restockCart[idx].quantita = q;
+            else state.restockCart.push({ nome, quantita: q, unita, categoria, isNew: false });
+        }
+        this.renderBadge();
     },
-    async submit() {
-        const data = {
-            nome: document.getElementById('restock-name').value,
-            quantita: parseFloat(document.getElementById('restock-qty').value),
-            unita: document.getElementById('restock-unit').value,
-            categoria: document.getElementById('restock-cat').value,
-            utente: state.user ? state.user.email : 'Pubblico',
-            stato: 'pending'
-        };
-        if(!data.nome || !data.quantita) return ui.toast("Dati mancanti", "error");
+
+    renderBadge() {
+        document.getElementById('restock-count-badge').innerText = state.restockCart.length;
+    },
+
+    // NUOVO OGGETTO
+    openNewModal() {
+        document.getElementById('new-res-name').value = '';
+        document.getElementById('new-res-qty').value = '';
+        document.getElementById('modal-new-restock').classList.remove('hidden');
+    },
+
+    addNewItemToCart() {
+        const nome = document.getElementById('new-res-name').value;
+        const qty = parseFloat(document.getElementById('new-res-qty').value);
+        const unita = document.getElementById('new-res-unit').value;
+        const cat = document.getElementById('new-res-cat').value;
+
+        if (!nome || !qty) return ui.toast("Dati mancanti", "error");
+
+        // Aggiungi al carrello
+        this.updateCart(nome, qty, unita, cat);
+        
+        // Chiudi modale e pulisci ricerca
+        document.getElementById('modal-new-restock').classList.add('hidden');
+        document.getElementById('restock-search').value = nome; // Filtra per il nuovo
+        this.renderSearch();
+        ui.toast("Aggiunto alla lista!", "success");
+    },
+
+    // NAVIGAZIONE STEP
+    goToStep2() {
+        if (state.restockCart.length === 0) return ui.toast("Seleziona almeno un prodotto", "error");
+        
+        document.getElementById('restock-step-1').classList.add('hidden');
+        document.getElementById('restock-step-2').classList.remove('hidden');
+        this.renderSummary();
+    },
+
+    backToStep1() {
+        document.getElementById('restock-step-2').classList.add('hidden');
+        document.getElementById('restock-step-1').classList.remove('hidden');
+        this.renderSearch();
+    },
+
+    renderSummary() {
+        document.getElementById('restock-summary-list').innerHTML = state.restockCart.map((item, idx) => `
+            <div class="flex justify-between items-center bg-white p-3 rounded border-b">
+                <div>
+                    <div class="font-bold text-gray-800">${item.nome}</div>
+                    <div class="text-xs text-gray-500">${item.categoria}</div>
+                </div>
+                <div class="text-right">
+                    <span class="font-bold text-blue-600 text-lg">+${item.quantita}</span> <span class="text-xs">${item.unita}</span>
+                    <button onclick="state.restockCart.splice(${idx},1); restock.renderSummary(); restock.renderBadge()" class="text-red-400 font-bold ml-2">✕</button>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    // INVIO DEFINITIVO
+    async submitTotal() {
+        if (state.restockCart.length === 0) return;
 
         loader.show();
-        await _sb.from('proposte_rifornimento').insert([data]);
+        const user = state.user ? state.user.email : 'Pubblico';
+        
+        // Prepara i dati per l'inserimento multiplo
+        const payload = state.restockCart.map(item => ({
+            nome: item.nome,
+            quantita: item.quantita,
+            unita: item.unita,
+            categoria: item.categoria,
+            utente: user,
+            stato: 'pending'
+        }));
+
+        const { error } = await _sb.from('proposte_rifornimento').insert(payload);
+        
         loader.hide();
-        ui.toast("Inviato ad Admin!", "success");
-        document.getElementById('restock-name').value = '';
-        document.getElementById('restock-qty').value = '';
+        
+        if(error) {
+            ui.toast("Errore invio dati", "error");
+        } else {
+            ui.toast(`Inviati ${state.restockCart.length} prodotti!`, "success");
+            this.init(); // Resetta tutto
+            document.getElementById('restock-search').value = '';
+        }
     }
 };
 // --- CARRELLO ---
 const cart = {
+    // --- DENTRO L'OGGETTO cart ---
     add(id) {
         const item = state.pantry.find(x => x.id == id);
         const input = document.getElementById(`qty-${id}`);
         const qty = parseFloat(input.value);
+        
         if(!qty || qty <= 0) return ui.toast("Quantità non valida", "error");
         
+        // CONTROLLO SCORTA
+        if(qty > item.quantita) {
+            return ui.toast(`Massimo disponibile: ${item.quantita} ${item.unita}`, "error");
+        }
+        
         const exists = state.cart.find(x => x.id == id);
+        // Calcola totale nel carrello per questo item per evitare workaround
+        const currentInCart = exists ? exists.qty : 0;
+        
+        if (currentInCart + qty > item.quantita) {
+             return ui.toast(`Superi la disponibilità!`, "error");
+        }
+
         if(exists) exists.qty += qty;
         else state.cart.push({ id, name: item.nome, qty, unit: item.unita });
         
         input.value = '';
         this.render();
-        ui.toast("Aggiunto", "success");
+        ui.toast("Aggiunto al consumo", "success");
     },
     remove(idx) { state.cart.splice(idx, 1); this.render(); },
     empty() { state.cart = []; this.render(); },
