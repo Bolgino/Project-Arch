@@ -794,47 +794,32 @@ const admin = {
     async render() {
         if (!state.user) return;
         
-        // Mostra pannello e tab default
-        document.getElementById('admin-panel').classList.remove('hidden');
-        this.switchTab('pantry'); // Default tab
-        
-        this.renderRequests();
-        this.renderRecipes(); // Nuova funzione per renderizzare tabella ricette
+        // Apre la tab "approvals" (Richieste) come default
+        this.tab('approvals');
     },
 
-    switchTab(tabName) {
-        // Nascondi tutti i contenuti
-        ['adm-pantry', 'adm-requests', 'adm-recipes'].forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.classList.add('hidden');
-        });
+    // Funzione Tab corretta per il tuo MENU LATERALE
+    tab(name) {
+        // 1. Nascondi tutte le tab che hanno classe 'admin-tab'
+        document.querySelectorAll('.admin-tab').forEach(el => el.classList.add('hidden'));
         
-        // Reset stile bottoni
-        document.querySelectorAll('#admin-panel nav button').forEach(b => {
-            b.classList.remove('bg-green-800', 'text-white');
-            b.classList.add('text-green-100', 'hover:bg-green-800');
-        });
-
-        // Attiva contenuto corrente
-        const target = document.getElementById(`adm-${tabName}`);
+        // 2. Mostra quella richiesta (es. admin-tab-recipes)
+        const target = document.getElementById(`admin-tab-${name}`);
         if(target) target.classList.remove('hidden');
-        
-        // Attiva bottone corrente
-        const btn = document.getElementById(`btn-tab-${tabName}`);
-        if(btn) {
-            btn.classList.remove('text-green-100', 'hover:bg-green-800');
-            btn.classList.add('bg-green-800', 'text-white');
-        }
+
+        // 3. Carica i dati specifici
+        if (name === 'recipes') this.renderRecipes();
+        if (name === 'approvals') this.renderRequests();
+        if (name === 'stock') this.filterStock(); // O renderStock se presente
+        if (name === 'movements') this.renderMovements(); // Se hai questa funzione
     },
 
-    // ... (Mantieni renderRequests o copialo se lo hai cancellato, qui riscrivo la parte ricette) ...
-    // Riporto renderRequests per completezza dell'oggetto admin se serve, altrimenti lascialo com'era
     async renderRequests() {
         const { data } = await _sb.from('richieste_cambusa').select('*').order('created_at', { ascending: false });
-        const el = document.getElementById('admin-requests-list');
+        const el = document.getElementById('admin-approval-list');
         if(!el) return;
         
-        if(!data.length) { el.innerHTML = '<p class="text-gray-400 text-sm italic">Nessuna richiesta pending.</p>'; return; }
+        if(!data || !data.length) { el.innerHTML = '<p class="text-gray-400 text-sm italic">Nessuna richiesta pending.</p>'; return; }
 
         el.innerHTML = data.map(r => `
             <div class="bg-white p-3 rounded border-l-4 border-yellow-400 shadow-sm flex justify-between items-center mb-2">
@@ -856,7 +841,6 @@ const admin = {
         if(approved) {
             const { data: req } = await _sb.from('richieste_cambusa').select('*').eq('id', id).single();
             if(req) {
-                // Cerca se esiste già in dispensa
                 const { data: exist } = await _sb.from('cambusa').select('*').ilike('nome', req.prodotto).single();
                 if(exist) {
                     await _sb.from('cambusa').update({ quantita: exist.quantita + req.quantita }).eq('id', exist.id);
@@ -884,25 +868,30 @@ const admin = {
 
         el.innerHTML = `
         <table class="w-full text-left text-sm text-gray-600">
-            <thead class="text-xs text-green-200 uppercase bg-green-900/50">
+            <thead class="text-xs text-red-200 uppercase bg-red-900/80 text-white rounded-t-lg">
                 <tr>
-                    <th class="p-2">Ricetta</th>
-                    <th class="p-2 text-center">Stato</th>
-                    <th class="p-2 text-right">Azioni</th>
+                    <th class="p-3 rounded-tl-lg">Ricetta</th>
+                    <th class="p-3 text-center">Stato</th>
+                    <th class="p-3 text-right rounded-tr-lg">Azioni</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-100">
+            <tbody class="divide-y divide-gray-100 bg-white border border-gray-100">
                 ${sorted.map(r => `
-                <tr class="hover:bg-gray-50">
-                    <td class="p-2 font-bold text-gray-800">${r.nome}</td>
-                    <td class="p-2 text-center">
-                        ${r.status === 'approved' 
-                            ? '<span class="text-green-600 bg-green-100 px-2 py-0.5 rounded text-[10px] font-bold">OK</span>' 
-                            : '<button onclick="admin.approveRecipe(\''+r.id+'\')" class="text-white bg-yellow-500 hover:bg-yellow-600 px-2 py-0.5 rounded text-[10px] font-bold shadow animate-pulse">APPROVA</button>'}
+                <tr class="hover:bg-red-50 transition">
+                    <td class="p-3 font-bold text-gray-800">
+                        ${r.nome}
+                        <div class="text-[10px] text-gray-400 font-normal">${r.porzioni} Persone</div>
                     </td>
-                    <td class="p-2 text-right flex justify-end gap-2">
-                         <button onclick="recipes.openModal('${r.id}')" class="text-blue-500 hover:text-blue-700">✏️</button>
-                         <button onclick="recipes.delete('${r.id}')" class="text-red-500 hover:text-red-700">🗑</button>
+                    <td class="p-3 text-center">
+                        ${r.status === 'approved' 
+                            ? '<span class="text-green-600 bg-green-100 px-2 py-1 rounded text-[10px] font-bold border border-green-200">PUBBLICA</span>' 
+                            : `<button onclick="admin.approveRecipe('${r.id}')" class="text-white bg-yellow-500 hover:bg-yellow-600 px-2 py-1 rounded text-[10px] font-bold shadow animate-pulse">APPROVA ORA</button>`}
+                    </td>
+                    <td class="p-3 text-right">
+                         <div class="flex justify-end gap-2">
+                            <button onclick="recipes.openModal('${r.id}')" class="text-blue-500 hover:text-white hover:bg-blue-500 p-1.5 rounded transition" title="Modifica">✏️</button>
+                            <button onclick="recipes.delete('${r.id}')" class="text-red-500 hover:text-white hover:bg-red-500 p-1.5 rounded transition" title="Elimina">🗑</button>
+                         </div>
                     </td>
                 </tr>
                 `).join('')}
@@ -911,21 +900,26 @@ const admin = {
     },
 
     async approveRecipe(id) {
+        if(!confirm("Confermi l'approvazione? La ricetta diventerà pubblica.")) return;
+        
         loader.show();
         const { error } = await _sb.from('ricette').update({ status: 'approved' }).eq('id', id);
         loader.hide();
         
         if(error) ui.toast("Errore Approvazione", "error");
         else {
-            ui.toast("Ricetta Approvata!", "success");
-            // Aggiorniamo stato locale e rirenderizziamo
+            ui.toast("Ricetta Pubblicata!", "success");
+            // Aggiorna array locale
             const r = state.recipes.find(x => x.id === id);
             if(r) r.status = 'approved';
-            
             this.renderRecipes();
-            recipes.renderList(); // Aggiorna anche la vista pubblica
+            recipes.renderList(); // Aggiorna lista pubblica
         }
-    }
+    },
+    
+    // Funzioni placeholder se nel tuo HTML ci sono ancora riferimenti
+    filterStock() { /* Logica filtro stock se serve */ },
+    renderMovements() { /* Logica movimenti se serve */ }
 };
 
 // --- AUTH ---
