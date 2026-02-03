@@ -972,12 +972,12 @@ const ui = {
     },
     toast(msg, type) {
         const t = document.createElement('div');
-        // Aggiunto z-[300], fixed, top/right per assicurarci che stia sopra ai modali (che sono z-[200])
-        t.className = `fixed top-5 right-5 z-[300] px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce ${type === 'error' ? 'bg-red-500' : 'bg-orange-800'}`;
+        // RIPRISTINATO: bottom-5 left-1/2 transform -translate-x-1/2 (In basso al centro)
+        // MANTENUTO: z-[300] (Per stare sopra ai modali)
+        t.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 z-[300] px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce ${type === 'error' ? 'bg-red-500' : 'bg-orange-800'}`;
         t.innerText = msg;
         document.body.appendChild(t);
         setTimeout(() => t.remove(), 3000);
     },
 };
-
 app.init();
