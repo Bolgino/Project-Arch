@@ -48,7 +48,7 @@ const app = {
 
         if (state.user) {
             // ADMIN: Carica liste gestione
-            admin.renderList();      
+            admin.render();      
             admin.loadApprovals();    
             admin.renderMovements(); 
         } else {
@@ -492,26 +492,18 @@ const cart = {
             </div>`).join('');
     }
 };
-// --- RICETTE ---
-// --- PEZZO DI CODICE VECCHIO: const recipes = { ... } (tutto l'oggetto) ---
-
-// --- PEZZO DI CODICE NUOVO ---
-// --- SOSTITUISCI INTERO OGGETTO recipes IN cambusa.js ---
-
 const recipes = {
     tempIng: [], 
 
     async load() {
-        // Carichiamo tutto. Nota: serve la colonna 'status' nel DB per la logica di approvazione
+        // Carichiamo tutto. Se la colonna status non esiste ancora, non esplode perché select(*) la ignora se non specificata.
         const { data } = await _sb.from('ricette').select('*, ingredienti_ricetta(*)');
         state.recipes = data || [];
         this.renderList();
         
-        // Aggiorna Select del Planner
+        // Select del Planner: Mostra TUTTE le ricette per semplicità
         const sel = document.getElementById('planner-recipe-select');
-        // Mostriamo nel planner solo le ricette APPROVATE
-        const approved = state.recipes.filter(r => r.status === 'approved');
-        if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + approved.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
+        if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + state.recipes.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
     },
     
     renderList() {
@@ -519,16 +511,12 @@ const recipes = {
         const el = document.getElementById('recipes-list');
         if(!el) return;
 
-        // Recupero info utente
         const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
         const isAdmin = state.user !== null;
 
-        // Filtro: Mostro se corrisponde alla ricerca E (è approvata OPPURE è mia OPPURE sono admin)
-        const filtered = state.recipes.filter(r => {
-            const matchesName = r.nome.toLowerCase().includes(term);
-            const isVisible = r.status === 'approved' || myRecipes.includes(r.id) || isAdmin;
-            return matchesName && isVisible;
-        });
+        // VISIBILITÀ: Mostriamo TUTTO quello che corrisponde alla ricerca.
+        // Niente filtri su status.
+        const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
 
         if(filtered.length === 0) {
             el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata.</div>`;
@@ -538,20 +526,23 @@ const recipes = {
         el.innerHTML = filtered.map(r => {
             const portions = r.porzioni || 4; 
             const isMyRecipe = myRecipes.includes(r.id);
-            const isPending = r.status !== 'approved'; // Assumiamo pending se non è approved
             
-            // LOGICA PERMESSI:
-            // Modifica/Elimina: Admin SEMPRE. Utente SOLO se è sua E non è ancora approvata.
-            const canEdit = isAdmin || (isMyRecipe && isPending);
+            // PERMESSI:
+            // Admin: Può tutto.
+            // Creatore (isMyRecipe): Può modificare/eliminare le proprie.
+            const canEdit = isAdmin || isMyRecipe;
             
-            // Badge stato
-            const statusBadge = isPending 
-                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1 rounded ml-2">IN ATTESA</span>` 
-                : `<span class="bg-green-100 text-green-800 text-[9px] font-bold px-1 rounded ml-2">APPROVATA</span>`;
+            // BADGE: Nessun badge "Approvata".
+            // Mostriamo "In Attesa" SOLO a chi può modificare (Admin o Creatore) per sapere perché non è ancora "ufficiale",
+            // ma al pubblico appare normale come richiesto.
+            const isPending = r.status && r.status !== 'approved';
+            const statusBadge = (isPending && canEdit) 
+                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1 rounded ml-2 border border-yellow-200">IN ATTESA</span>` 
+                : ``;
 
             return `
-            <div class="bg-white rounded-xl border ${isPending ? 'border-yellow-200' : 'border-gray-200'} shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
-                <div class="h-2 ${isPending ? 'bg-yellow-400' : 'bg-red-500'} w-full"></div>
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
+                <div class="h-2 bg-red-500 w-full"></div>
                 
                 ${canEdit ? `
                 <div class="absolute top-2 right-2 z-10 flex gap-1">
@@ -597,8 +588,6 @@ const recipes = {
         document.getElementById('ing-input-name').value = '';
         document.getElementById('ing-input-qty').value = '';
         
-        // Il bottone delete nel modale lo nascondiamo sempre, usiamo quello sulla card per coerenza, 
-        // oppure lo lasciamo solo per Admin. Per pulizia lo nascondo qui.
         const delBtn = document.getElementById('btn-del-recipe');
         if(delBtn) delBtn.classList.add('hidden');
 
@@ -665,14 +654,11 @@ const recipes = {
         loader.show();
         let recipeId = id;
         
-        // Se creo nuova, è pending. Se modifico e non sono admin, resta quello che è (o torna pending se vuoi ri-validazione).
-        // Qui assumiamo: Nuova = Pending. Modifica Admin = Status invariato. Modifica User = Pending (richiede ri-approvazione).
-        // Per semplicità: Nuova -> Pending.
-        
+        // Salviamo sempre come 'pending' se nuova, o manteniamo lo stato se esiste.
+        // Ma siccome mostriamo tutto, lo stato serve solo all'admin per sapere cosa controllare.
         const isAdmin = state.user !== null;
-        let statusToSet = 'pending';
-        if(id && isAdmin) {
-             // Se admin modifica, manteniamo lo stato esistente (recuperandolo)
+        let statusToSet = 'pending'; 
+        if(id) {
              const existing = state.recipes.find(r => r.id === id);
              statusToSet = existing ? existing.status : 'pending';
         }
@@ -705,14 +691,13 @@ const recipes = {
         }
 
         loader.hide();
-        ui.toast(id ? "Ricetta Aggiornata!" : "Ricetta Inviata per Approvazione!", "success");
+        ui.toast(id ? "Ricetta Aggiornata!" : "Ricetta Creata!", "success");
         ui.closeModals();
         this.load();
-        if(state.user) admin.renderRecipes(); // Aggiorna anche vista admin se loggato
+        if(state.user) admin.renderRecipes();
     },
 
     async delete(idIn = null) {
-        // Se chiamato dal modale usa value hidden, se dalla card usa parametro
         const id = idIn || document.getElementById('recipe-id').value;
         if(!id) return;
         if(!confirm("Eliminare definitivamente questa ricetta?")) return;
@@ -721,7 +706,6 @@ const recipes = {
         await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
         await _sb.from('ricette').delete().eq('id', id);
 
-        // Pulizia localstorage
         let myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
         myRecipes = myRecipes.filter(x => x !== id);
         localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
