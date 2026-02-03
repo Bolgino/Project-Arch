@@ -493,10 +493,14 @@ const cart = {
     }
 };
 // --- RICETTE ---
+// --- PEZZO DI CODICE VECCHIO: const recipes = { ... } (tutto l'oggetto) ---
+
+// --- PEZZO DI CODICE NUOVO ---
 const recipes = {
-    tempIng: [], 
-    
+    tempIng: [], // Array temporaneo per gli ingredienti nel modale
+
     async load() {
+        // Carichiamo ricette e ingredienti
         const { data } = await _sb.from('ricette').select('*, ingredienti_ricetta(*)');
         state.recipes = data || [];
         this.renderList();
@@ -506,7 +510,6 @@ const recipes = {
         if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + state.recipes.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
     },
     
-    // VISUALIZZAZIONE LISTA RICETTE (Card migliorate)
     renderList() {
         const term = document.getElementById('recipe-search') ? document.getElementById('recipe-search').value.toLowerCase() : '';
         const el = document.getElementById('recipes-list');
@@ -514,150 +517,200 @@ const recipes = {
 
         const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
 
+        // RECUPERO LISTA RICETTE MIE (dal LocalStorage)
+        const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
+        const isAdmin = state.user !== null; // Se state.user è popolato, sei Admin/Staff
+
         if(filtered.length === 0) {
             el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata.</div>`;
             return;
         }
 
         el.innerHTML = filtered.map(r => {
-            // Usa il campo 'note' per le porzioni se non c'è una colonna dedicata, o una logica fallback
-            // Nota: Se hai aggiunto la colonna 'porzioni' al DB, usa r.porzioni. 
-            // Qui simulo l'uso di un campo 'porzioni' o un default.
-            const portions = r.porzioni || 4; // Default 4 se manca
+            const portions = r.porzioni || 4; 
+            // Posso modificare se: Sono Admin OPPURE l'ID della ricetta è nel mio LocalStorage
+            const canEdit = isAdmin || myRecipes.includes(r.id);
 
             return `
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
                 <div class="h-2 bg-red-500 w-full"></div>
+                
+                ${canEdit ? `
+                <button onclick="recipes.openModal('${r.id}')" class="absolute top-4 right-4 bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-2 rounded-full shadow-sm transition z-10">
+                    ✏️
+                </button>` : ''}
+
                 <div class="p-4 flex-grow">
-                    <div class="flex justify-between items-start mb-2">
-                        <h3 class="font-extrabold text-gray-800 text-lg leading-tight group-hover:text-red-700 transition">${r.nome}</h3>
-                        <span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full border border-red-200 shadow-sm whitespace-nowrap">
-                            👥 x${portions}
-                        </span>
+                    <div class="flex justify-between items-start mb-2 pr-10"> <h3 class="font-extrabold text-gray-800 text-lg leading-tight group-hover:text-red-700 transition">${r.nome}</h3>
                     </div>
                     
-                    <div class="bg-gray-50 rounded-lg p-2 border border-gray-100 mt-3">
-                        <div class="text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Ingredienti necessari</div>
-                        <div class="flex flex-wrap gap-1">
+                    <span class="inline-block bg-red-50 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded border border-red-100 mb-3">
+                        👥 Per ${portions} persone
+                    </span>
+                    
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div class="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Ingredienti</div>
+                        <ul class="text-sm text-gray-600 space-y-1">
                             ${r.ingredienti_ricetta.map(i => `
-                                <span class="text-xs bg-white border border-gray-200 px-2 py-1 rounded text-gray-700 shadow-sm flex items-center gap-1">
-                                    <b>${i.quantita_necessaria}</b><small>${i.unita}</small> ${i.nome_ingrediente}
-                                </span>
+                                <li class="flex justify-between border-b border-gray-100 last:border-0 pb-1 last:pb-0">
+                                    <span>${i.nome_ingrediente}</span>
+                                    <span class="font-bold text-gray-800">${i.quantita_necessaria} <small>${i.unita}</small></span>
+                                </li>
                             `).join('')}
-                        </div>
+                        </ul>
                     </div>
                 </div>
             </div>`;
         }).join('');
     },
 
-    // APERTURA MODALE E SELETTORE
-    openModal() { 
+    // APERTURA MODALE (Nuova o Modifica)
+    openModal(editId = null) { 
         this.tempIng = []; 
+        document.getElementById('recipe-id').value = '';
         document.getElementById('new-recipe-name').value = '';
-        document.getElementById('new-recipe-portions').value = ''; // Reset porzioni
-        this.renderSelector();
-        this.renderSelected();
+        document.getElementById('new-recipe-portions').value = ''; 
+        document.getElementById('ing-input-name').value = '';
+        document.getElementById('ing-input-qty').value = '';
+        document.getElementById('btn-del-recipe').classList.add('hidden');
+
+        if (editId) {
+            // MOODALITA' MODIFICA
+            const r = state.recipes.find(x => x.id === editId);
+            if(r) {
+                document.getElementById('recipe-id').value = r.id;
+                document.getElementById('new-recipe-name').value = r.nome;
+                document.getElementById('new-recipe-portions').value = r.porzioni;
+                document.getElementById('btn-del-recipe').classList.remove('hidden');
+                
+                // Carichiamo gli ingredienti esistenti
+                this.tempIng = r.ingredienti_ricetta.map(i => ({
+                    nome: i.nome_ingrediente,
+                    qty: i.quantita_necessaria,
+                    unita: i.unita
+                }));
+            }
+        }
+
+        this.renderIngList();
         ui.modal('modal-recipe'); 
     },
 
-    // Renderizza la GRIGLIA di ingredienti nel modale (stile armadio)
-    renderSelector() {
-        const term = document.getElementById('recipe-ing-search').value.toLowerCase();
-        const container = document.getElementById('recipe-ing-grid');
+    // AGGIUNTA INGREDIENTE DALL'INPUT LIBERO
+    addIngFromInput() {
+        const name = document.getElementById('ing-input-name').value.trim();
+        const qty = parseFloat(document.getElementById('ing-input-qty').value);
+        const unit = document.getElementById('ing-input-unit').value;
+
+        if (!name) return ui.toast("Nome ingrediente mancante", "error");
+        if (!qty || qty <= 0) return ui.toast("Quantità non valida", "error");
+
+        this.tempIng.push({ nome: name, qty: qty, unita: unit });
         
-        let matches = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
-        
-        container.innerHTML = matches.map(p => {
-            const isSelected = this.tempIng.some(x => x.nome === p.nome);
-            const style = isSelected ? 'border-red-500 bg-red-50 ring-1 ring-red-200' : 'border-gray-200 bg-white hover:border-red-300';
-            
-            return `
-            <div onclick="recipes.toggleIng('${p.nome}', '${p.unita}')" class="cursor-pointer rounded-lg border ${style} p-2 flex flex-col justify-between transition h-20 relative select-none">
-                <div class="font-bold text-xs text-gray-800 leading-tight line-clamp-2">${p.nome}</div>
-                <div class="text-[10px] text-gray-400 text-right">${p.unita}</div>
-                ${isSelected ? '<div class="absolute top-1 right-1 text-red-600 font-bold text-xs">✓</div>' : ''}
-            </div>`;
-        }).join('');
+        // Pulisci i campi per inserimento rapido successivo
+        document.getElementById('ing-input-name').value = '';
+        document.getElementById('ing-input-qty').value = '';
+        document.getElementById('ing-input-name').focus();
+
+        this.renderIngList();
     },
 
-    filterSelector() {
-        this.renderSelector();
+    removeIng(idx) {
+        this.tempIng.splice(idx, 1);
+        this.renderIngList();
     },
 
-    toggleIng(nome, unita) {
-        const idx = this.tempIng.findIndex(x => x.nome === nome);
-        if (idx > -1) {
-            this.tempIng.splice(idx, 1);
-        } else {
-            // Aggiungi con quantità default 0, poi l'utente la cambia
-            this.tempIng.push({ nome, qty: 0, unita }); 
-        }
-        this.renderSelector(); // Aggiorna stato visivo griglia
-        this.renderSelected(); // Aggiorna lista in alto
-    },
-
-    // Renderizza le "pillole" in alto con input quantità
-    renderSelected() {
-        const container = document.getElementById('recipe-selected-list');
+    renderIngList() {
+        const list = document.getElementById('recipe-ing-list');
         if (this.tempIng.length === 0) {
-            container.innerHTML = '<span class="text-xs text-gray-400 italic self-center px-2">Clicca gli ingredienti sotto per aggiungerli...</span>';
+            list.innerHTML = '<div class="text-center text-gray-400 italic text-xs mt-4">Nessun ingrediente aggiunto.</div>';
             return;
         }
-
-        container.innerHTML = this.tempIng.map((i, idx) => `
-            <div class="flex items-center gap-1 bg-red-50 border border-red-200 rounded-lg pl-2 pr-1 py-1 shrink-0 shadow-sm">
-                <span class="text-xs font-bold text-red-900">${i.nome}</span>
-                <input type="number" step="0.1" value="${i.qty || ''}" placeholder="Qtà" 
-                    onchange="recipes.tempIng[${idx}].qty = this.value"
-                    class="w-12 p-1 text-center text-xs border rounded outline-none focus:border-red-500 bg-white font-mono">
-                <span class="text-[10px] text-gray-500">${i.unita}</span>
-                <button onclick="recipes.toggleIng('${i.nome}')" class="text-red-400 hover:text-red-600 font-bold px-1 ml-1">×</button>
+        
+        list.innerHTML = this.tempIng.map((ing, idx) => `
+            <div class="flex justify-between items-center bg-white border border-gray-200 p-2 rounded shadow-sm">
+                <div class="font-bold text-gray-700 text-sm">${ing.nome}</div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs bg-gray-100 px-2 py-1 rounded font-mono font-bold">${ing.qty} ${ing.unita}</span>
+                    <button onclick="recipes.removeIng(${idx})" class="text-red-400 hover:text-red-600 font-bold px-1">✕</button>
+                </div>
             </div>
         `).join('');
     },
 
     async save() {
+        const id = document.getElementById('recipe-id').value; // Se c'è, è update
         const nome = document.getElementById('new-recipe-name').value;
-        const portions = parseInt(document.getElementById('new-recipe-portions').value) || 4; // Default 4
+        const portions = parseInt(document.getElementById('new-recipe-portions').value) || 4;
         
         if(!nome || !this.tempIng.length) return ui.toast("Nome o ingredienti mancanti", "error");
-        
-        // Controllo che le quantità siano state inserite
-        if(this.tempIng.some(i => !i.qty || i.qty <= 0)) return ui.toast("Inserisci le dosi per gli ingredienti scelti", "error");
 
         loader.show();
         
-        // 1. Crea Ricetta (Aggiungi campo porzioni se il DB lo supporta, altrimenti lo mettiamo in 'note' o lo ignoriamo per ora)
-        // Se non hai la colonna 'porzioni', modifica la query sotto togliendola o aggiungila su Supabase.
-        // Qui assumo che tu possa aggiungerla o che esista. Se fallisce, togli 'porzioni'.
-        const { data: rec, error } = await _sb.from('ricette').insert([{ nome, porzioni: portions }]).select();
+        let recipeId = id;
+
+        // 1. SALVATAGGIO / AGGIORNAMENTO RICETTA
+        const recipeData = { nome: nome, porzioni: portions };
         
-        if (error) {
-            console.error(error);
-            loader.hide();
-            return ui.toast("Errore salvataggio (verificare DB)", "error");
+        if (id) {
+            // UPDATE
+            const { error } = await _sb.from('ricette').update(recipeData).eq('id', id);
+            if(error) { loader.hide(); return ui.toast("Errore aggiornamento", "error"); }
+            
+            // Per gli ingredienti, cancelliamo i vecchi e rimettiamo i nuovi (metodo più pulito per le modifiche complete)
+            await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
+        } else {
+            // INSERT
+            const { data, error } = await _sb.from('ricette').insert([recipeData]).select();
+            if(error) { loader.hide(); return ui.toast("Errore creazione", "error"); }
+            recipeId = data[0].id;
+
+            // SALVO ID NEL LOCAL STORAGE (Cosi l'utente pubblico può modificarla in futuro)
+            const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
+            myRecipes.push(recipeId);
+            localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
         }
 
-        const recId = rec[0].id;
-
-        // 2. Crea Ingredienti
+        // 2. INSERIMENTO INGREDIENTI
         const ingData = this.tempIng.map(i => ({
-            ricetta_id: recId,
+            ricetta_id: recipeId,
             nome_ingrediente: i.nome,
             quantita_necessaria: i.qty,
             unita: i.unita
         }));
         
-        await _sb.from('ingredienti_ricetta').insert(ingData);
+        if (ingData.length > 0) {
+            await _sb.from('ingredienti_ricetta').insert(ingData);
+        }
 
         loader.hide();
-        ui.toast("Ricetta Salvata! 👨‍🍳", "success");
+        ui.toast(id ? "Ricetta Aggiornata!" : "Ricetta Creata!", "success");
+        ui.closeModals();
+        this.load();
+    },
+
+    async delete() {
+        const id = document.getElementById('recipe-id').value;
+        if(!id) return;
+        if(!confirm("Eliminare definitivamente questa ricetta?")) return;
+
+        loader.show();
+        // Cancella ingredienti (cascade di solito funziona, ma per sicurezza)
+        await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
+        // Cancella ricetta
+        await _sb.from('ricette').delete().eq('id', id);
+
+        // Rimuovi da local storage se presente
+        let myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
+        myRecipes = myRecipes.filter(x => x !== id);
+        localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
+
+        loader.hide();
+        ui.toast("Ricetta Eliminata", "success");
         ui.closeModals();
         this.load();
     }
 };
-
 // --- PLANNER (CALCOLO SPESA) ---
 const planner = {
     currentMenu: [],
