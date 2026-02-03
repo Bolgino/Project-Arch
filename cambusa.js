@@ -1,5 +1,5 @@
 // cambusa.js
-const MAINTENANCE_MODE = false; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
+const MAINTENANCE_MODE = true; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
 // --- CONFIGURAZIONE ---
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
