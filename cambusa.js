@@ -656,56 +656,253 @@ const recipes = {
 };
 // --- PLANNER (CALCOLO SPESA) ---
 const planner = {
-    currentMenu: [],
-    addRecipe() {
-        const sel = document.getElementById('planner-recipe-select');
-        const mult = parseFloat(document.getElementById('planner-multiplier').value) || 1;
-        if(sel.value) {
-            this.currentMenu.push({ id: sel.value, name: sel.options[sel.selectedIndex].text, mult });
-            this.renderCurrent();
-        }
-    },
-    renderCurrent() {
-        document.getElementById('planner-current-list').innerHTML = this.currentMenu.map((item, idx) => `
-            <div class="flex justify-between items-center text-sm border-b py-1">
-                <span>🍽️ ${item.name} <span class="font-bold text-green-700">x${item.mult}</span></span>
-                <button onclick="planner.currentMenu.splice(${idx},1); planner.renderCurrent()" class="text-red-500 font-bold">x</button>
-            </div>`).join('');
-    },
-    calculate() {
-        if(!this.currentMenu.length) return ui.toast("Menu vuoto!", "error");
-        let totalNeeds = {};
+    eventData: { days: [], pax: 0 },
+    
+    // Genera la struttura dei giorni in base alle date
+    generateMenu() {
+        const startStr = document.getElementById('evt-start').value;
+        const endStr = document.getElementById('evt-end').value;
+        const pax = parseInt(document.getElementById('evt-pax').value) || 30;
+
+        if(!startStr || !endStr) return ui.toast("Inserisci date inizio e fine", "error");
+
+        const start = new Date(startStr);
+        const end = new Date(endStr);
         
-        // 1. Somma fabbisogno
-        this.currentMenu.forEach(menuItem => {
-            const recipe = state.recipes.find(r => r.id == menuItem.id);
-            if(recipe) recipe.ingredienti_ricetta.forEach(ing => {
-                const key = ing.nome_ingrediente.toLowerCase().trim();
-                if(!totalNeeds[key]) totalNeeds[key] = { q: 0, u: ing.unita, name: ing.nome_ingrediente };
-                totalNeeds[key].q += (parseFloat(ing.quantita_necessaria) * menuItem.mult);
+        if(end <= start) return ui.toast("La fine deve essere dopo l'inizio", "error");
+
+        this.eventData.pax = pax;
+        this.eventData.days = [];
+
+        // Loop per creare i giorni
+        let current = new Date(start);
+        while (current <= end || current.toDateString() === end.toDateString()) {
+            // Determina quali pasti servono in base all'ora
+            let meals = [];
+            const h = current.getHours();
+            const isFirstDay = current.toDateString() === start.toDateString();
+            const isLastDay = current.toDateString() === end.toDateString();
+
+            // Logica orari (es. se arrivo alle 18, niente pranzo)
+            let includeBreakfast = true, includeLunch = true, includeDinner = true;
+
+            if (isFirstDay) {
+                if (h > 9) includeBreakfast = false;
+                if (h > 14) includeLunch = false;
+                if (h > 20) includeDinner = false;
+            }
+            if (isLastDay) {
+                const endH = end.getHours();
+                if (endH < 8) includeBreakfast = false;
+                if (endH < 13) includeLunch = false;
+                if (endH < 20) includeDinner = false;
+            }
+
+            if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeId: null });
+            if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeId: null });
+            if(includeDinner) meals.push({ type: 'cena', name: 'Cena', recipeId: null });
+
+            this.eventData.days.push({
+                date: new Date(current),
+                meals: meals
+            });
+
+            // Vai al giorno dopo
+            current.setDate(current.getDate() + 1);
+            current.setHours(0,0,0,0); // Reset orario per i giorni successivi al primo
+        }
+
+        this.autoFillRecipes();
+        this.renderGrid();
+        
+        // Mostra la griglia
+        document.getElementById('planner-step-setup').classList.add('hidden');
+        document.getElementById('planner-step-grid').classList.remove('hidden');
+    },
+
+    // Algoritmo semplice per proporre un menu equilibrato
+    autoFillRecipes() {
+        // Cerchiamo ricette per categoria (se esistessero categorie nel DB sarebbe meglio, usiamo keyword nel nome)
+        const findRecipe = (keywords) => {
+            const matches = state.recipes.filter(r => keywords.some(k => r.nome.toLowerCase().includes(k)));
+            return matches.length > 0 ? matches[Math.floor(Math.random() * matches.length)].id : null;
+        };
+
+        const pastaRecipes = findRecipe(['pasta', 'riso', 'lasagne', 'fusilli', 'penne']);
+        const meatRecipes = findRecipe(['pollo', 'carne', 'arrosto', 'scaloppine', 'uova', 'frittata']);
+        const lightRecipes = findRecipe(['minestra', 'zuppa', 'insalata', 'verdure']);
+        const basicPasta = state.recipes.find(r => r.nome.toLowerCase().includes('pomodoro'))?.id;
+
+        this.eventData.days.forEach((day, idx) => {
+            day.meals.forEach(meal => {
+                if (meal.type === 'pranzo') {
+                    // Pranzi: Carboidrati
+                    meal.recipeId = pastaRecipes || basicPasta; 
+                } else if (meal.type === 'cena') {
+                    // Cene: Proteine o cose calde
+                    meal.recipeId = meatRecipes || lightRecipes;
+                }
+                // Se non trova nulla, lascia null (verrà mostrato come "Scegli...")
+            });
+        });
+    },
+
+    renderGrid() {
+        const container = document.getElementById('planner-grid-container');
+        container.innerHTML = this.eventData.days.map((day, dIdx) => {
+            const dateStr = day.date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+            
+            const mealsHtml = day.meals.map((meal, mIdx) => {
+                const recipe = state.recipes.find(r => r.id === meal.recipeId);
+                const recipeName = recipe ? recipe.nome : '<span class="text-gray-400 italic">Seleziona Ricetta...</span>';
+                const isPacked = meal.isPacked ? '🎒 AL SACCO' : '';
+                const styleClass = meal.type === 'pranzo' ? 'border-l-4 border-orange-400' : (meal.type === 'cena' ? 'border-l-4 border-blue-400' : 'border-l-4 border-yellow-300');
+
+                return `
+                <div onclick="planner.openSlotEditor(${dIdx}, ${mIdx})" 
+                     class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 flex justify-between items-center ${styleClass}">
+                    <div>
+                        <span class="text-xs font-bold uppercase text-gray-500 block">${meal.name}</span>
+                        <span class="font-bold text-gray-800 text-lg">${recipeName}</span>
+                    </div>
+                    <div class="text-xs font-bold text-orange-600">${isPacked}</div>
+                </div>`;
+            }).join('');
+
+            return `
+            <div class="bg-green-50 p-4 rounded-xl border border-green-100">
+                <h4 class="font-extrabold text-green-900 mb-3 capitalize text-lg">${dateStr}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    ${mealsHtml}
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    openSlotEditor(dIdx, mIdx) {
+        const meal = this.eventData.days[dIdx].meals[mIdx];
+        document.getElementById('slot-day-index').value = dIdx;
+        document.getElementById('slot-type').value = mIdx; // uso l'indice dell'array meals
+        document.getElementById('slot-packed').checked = meal.isPacked || false;
+
+        // Popola select
+        const sel = document.getElementById('slot-recipe-select');
+        sel.innerHTML = '<option value="">-- Nessuna / Piatto Pronto --</option>' + 
+            state.recipes.map(r => `<option value="${r.id}" ${r.id === meal.recipeId ? 'selected' : ''}>${r.nome}</option>`).join('');
+
+        ui.modal('modal-slot-edit');
+    },
+
+    saveSlot() {
+        const dIdx = parseInt(document.getElementById('slot-day-index').value);
+        const mIdx = parseInt(document.getElementById('slot-type').value);
+        const recipeId = document.getElementById('slot-recipe-select').value;
+        const isPacked = document.getElementById('slot-packed').checked;
+
+        this.eventData.days[dIdx].meals[mIdx].recipeId = recipeId || null;
+        this.eventData.days[dIdx].meals[mIdx].isPacked = isPacked;
+
+        ui.closeModals();
+        this.renderGrid();
+    },
+
+    calculateShopping() {
+        if (!this.eventData.days.length) return;
+
+        let needs = {}; // { 'farina': { qty: 1000, unit: 'gr', usage: ['Pane Lunedì', 'Pizza Martedì'] } }
+
+        // 1. Calcola Fabbisogno Totale
+        this.eventData.days.forEach(day => {
+            day.meals.forEach(meal => {
+                if(meal.recipeId) {
+                    const r = state.recipes.find(x => x.id === meal.recipeId);
+                    if(r && r.ingredienti_ricetta) {
+                        // Scala dosi: (DoseRicetta / PorzioniRicetta) * PaxEvento
+                        const ratio = this.eventData.pax / (r.porzioni || 4);
+                        
+                        r.ingredienti_ricetta.forEach(ing => {
+                            const name = ing.nome_ingrediente.toLowerCase().trim();
+                            const qty = parseFloat(ing.quantita_necessaria) * ratio;
+                            
+                            if(!needs[name]) {
+                                needs[name] = { qty: 0, unit: ing.unita, usage: [] };
+                            }
+                            needs[name].qty += qty;
+                            const mealName = `${r.nome} (${day.date.toLocaleDateString('it-IT', {weekday:'short'})} ${meal.name})`;
+                            if(!needs[name].usage.includes(mealName)) needs[name].usage.push(mealName);
+                        });
+                    }
+                }
             });
         });
 
-        // 2. Confronta con dispensa e genera lista
-        let list = [];
-        for (let key in totalNeeds) {
-            const need = totalNeeds[key];
-            const inStock = state.pantry.find(p => p.nome.toLowerCase().trim() === key);
-            const qtyStock = inStock ? inStock.quantita : 0;
-            const diff = need.q - qtyStock;
-            if (diff > 0) list.push({ ...need, stock: qtyStock, toBuy: diff });
-        }
-        this.renderResult(list);
+        // 2. Confronta con Dispensa (solo NON SCADUTI)
+        const today = new Date().toISOString().split('T')[0];
+        let resultHtml = '';
+
+        Object.keys(needs).sort().forEach(ingName => {
+            const need = needs[ingName];
+            
+            // Cerca in dispensa prodotti simili non scaduti
+            const inPantryItems = state.pantry.filter(p => 
+                p.nome.toLowerCase().includes(ingName) && 
+                (!p.scadenza || p.scadenza >= today) &&
+                p.quantita > 0
+            );
+
+            const totalInPantry = inPantryItems.reduce((acc, curr) => acc + curr.quantita, 0);
+            const missing = need.qty - totalInPantry;
+            
+            // Colore: Rosso se manca molto, Giallo se manca poco, Verde se c'è tutto
+            let statusColor = 'text-red-600 bg-red-50';
+            let statusText = `MANCANO: <strong>${missing.toFixed(1)} ${need.unit}</strong>`;
+            
+            if (missing <= 0) {
+                statusColor = 'text-green-700 bg-green-50';
+                statusText = '✅ Coperto dalla dispensa!';
+            }
+
+            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita}`).join(', ') || 'Nessuno';
+
+            resultHtml += `
+            <div class="py-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="md:col-span-1">
+                    <div class="font-extrabold text-lg capitalize text-gray-800">${ingName}</div>
+                    <div class="text-xs text-gray-500">Serve per: ${need.usage.length} ricette</div>
+                </div>
+                
+                <div class="md:col-span-1">
+                    <div class="text-xs uppercase font-bold text-gray-400">Totale Necessario</div>
+                    <div class="font-mono text-xl font-bold">${need.qty.toFixed(1)} <span class="text-sm">${need.unit}</span></div>
+                </div>
+
+                <div class="md:col-span-1">
+                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa (Validi)</div>
+                    <div class="text-sm font-bold text-gray-700">${pantryDetail}</div>
+                    <div class="text-xs text-gray-400">Tot: ${totalInPantry}</div>
+                </div>
+
+                <div class="md:col-span-1 p-2 rounded-lg text-center flex flex-col justify-center ${statusColor}">
+                    <div class="text-sm">${statusText}</div>
+                </div>
+                
+                <div class="md:col-span-4 text-xs text-gray-400 italic border-t border-gray-50 pt-2">
+                    Uso: ${need.usage.join(', ')}
+                </div>
+            </div>`;
+        });
+
+        if(!resultHtml) resultHtml = '<div class="text-center py-10">Nessun ingrediente necessario. Hai selezionato le ricette?</div>';
+
+        document.getElementById('shopping-result-list').innerHTML = resultHtml;
+        
+        document.getElementById('planner-step-grid').classList.add('hidden');
+        document.getElementById('planner-step-list').classList.remove('hidden');
     },
-    renderResult(list) {
-        document.getElementById('planner-result').classList.remove('hidden');
-        const el = document.getElementById('planner-shopping-list');
-        if(list.length === 0) el.innerHTML = '<div class="text-green-600 font-bold text-center">✅ Tutto presente in dispensa!</div>';
-        else el.innerHTML = list.map(i => `
-            <div class="py-2 flex justify-between border-b">
-                <div><div class="font-bold capitalize">${i.name}</div><div class="text-xs text-gray-500">Serve: ${i.q} | C'è: ${i.stock}</div></div>
-                <div class="text-right"><span class="block text-xs font-bold">COMPRARE</span><span class="text-xl font-bold text-red-600">${i.toBuy.toFixed(1)} <small>${i.u}</small></span></div>
-            </div>`).join('');
+
+    backToGrid() {
+        document.getElementById('planner-step-list').classList.add('hidden');
+        document.getElementById('planner-step-grid').classList.remove('hidden');
     }
 };
 // --- NUOVO OGGETTO PER LA SINCRONIZZAZIONE ---
