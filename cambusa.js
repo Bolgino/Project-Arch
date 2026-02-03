@@ -210,65 +210,82 @@ const restock = {
     },
 
     renderList() {
-        const searchInput = document.getElementById('restock-search');
-        // Protezione se l'input non esiste ancora nel DOM
-        const term = searchInput ? searchInput.value.toLowerCase() : '';
-        const container = document.getElementById('restock-full-list');
-        
-        if (!container) return;
+        const term = document.getElementById('recipe-search') ? document.getElementById('recipe-search').value.toLowerCase() : '';
+        const el = document.getElementById('recipes-list');
+        if(!el) return;
 
-        // Filtra prodotti
-        const matches = state.pantry.filter(p => 
-            p.nome.toLowerCase().includes(term) || 
-            p.categoria.toLowerCase().includes(term)
-        );
+        const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
+        const isAdmin = state.user !== null;
 
-        if (matches.length === 0) {
-            container.innerHTML = `<div class="text-center py-10 text-gray-400 italic">Nessun prodotto trovato.<br>Usa il tasto in alto per aggiungerlo.</div>`;
+        // 1. FILTRO DI RICERCA (Mostriamo TUTTO quello che corrisponde al nome, indipendentemente dallo status)
+        const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
+
+        if(filtered.length === 0) {
+            el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata.</div>`;
             return;
         }
 
-        container.innerHTML = matches.map(item => {
-            // Recupera stato modifica o inizializza vuoto
-            const mod = state.restockCart[item.id] || { addQty: '', newExpiry: '' };
-            const isModified = (mod.addQty !== '' && mod.addQty != 0) || mod.newExpiry !== '';
-            
-            const borderClass = isModified ? 'border-orange-500 ring-1 ring-orange-200 bg-orange-50' : 'border-gray-200 bg-white';
+        el.innerHTML = filtered.map(r => {
+            const portions = r.porzioni || 4; 
+            const isMyRecipe = myRecipes.includes(r.id);
+            // Se non c'è status o è diverso da approved, è pending
+            const isPending = !r.status || r.status !== 'approved'; 
 
-            // Formattazione data esistente per il campo date (YYYY-MM-DD)
-            const currentExpiry = item.scadenza ? item.scadenza.split('T')[0] : '';
+            // 2. LOGICA PERMESSI (quella che hai chiesto)
+            let canEdit = false;
+            if (isAdmin) {
+                canEdit = true; // Admin comanda sempre
+            } else if (isMyRecipe && isPending) {
+                canEdit = true; // Creatore tocca SOLO se non è ancora approvata
+            }
+            // Se è isMyRecipe ma è Approved -> canEdit resta false.
+
+            // 3. BADGE VISIBILE A TUTTI
+            // Se è pending, mostriamo il badge Giallo a CHIUNQUE
+            const statusBadge = isPending 
+                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-2 py-1 rounded ml-2 border border-yellow-200 uppercase">⏳ In Approvazione</span>` 
+                : ``; 
+                // Se è approvata non mostriamo nulla (o puoi mettere un badge verde se vuoi)
 
             return `
-            <div class="rounded-xl shadow-sm border ${borderClass} p-4 transition mb-3">
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">${item.categoria}</div>
-                        <div class="font-extrabold text-gray-800 text-lg leading-tight">${item.nome}</div>
-                    </div>
-                    <div class="text-right">
-                         <div class="text-[10px] text-gray-400 font-bold uppercase">Attuale</div>
-                        <div class="font-mono font-bold text-gray-600">${item.quantita} <span class="text-xs">${item.unita}</span></div>
-                    </div>
-                </div>
+            <div class="bg-white rounded-xl border ${isPending ? 'border-yellow-300' : 'border-gray-200'} shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
+                <div class="h-2 ${isPending ? 'bg-yellow-400' : 'bg-red-500'} w-full"></div>
                 
-                <div class="grid grid-cols-2 gap-3 bg-white/50 p-2 rounded-lg">
-                    <div>
-                        <label class="text-[9px] font-bold text-orange-600 uppercase block mb-1">Aggiungi (+)</label>
-                        <input type="number" step="0.5" placeholder="0" value="${mod.addQty}" 
-                            oninput="restock.trackChange('${item.id}', 'addQty', this.value)"
-                            class="w-full p-2 text-center border rounded-lg font-bold text-gray-800 focus:border-orange-500 focus:bg-orange-50 outline-none transition">
+                ${canEdit ? `
+                <div class="absolute top-2 right-2 z-10 flex gap-1">
+                    <button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">
+                        🗑
+                    </button>
+                    <button onclick="recipes.openModal('${r.id}')" class="bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-1.5 rounded-full shadow-sm transition">
+                        ✏️
+                    </button>
+                </div>` : ''}
+
+                <div class="p-4 flex-grow">
+                    <div class="flex flex-wrap items-center mb-2 pr-14"> 
+                        <h3 class="font-extrabold text-gray-800 text-lg leading-tight">${r.nome}</h3>
+                        ${statusBadge}
                     </div>
-                    <div>
-                        <label class="text-[9px] font-bold text-gray-500 uppercase block mb-1">Nuova Scadenza</label>
-                        <input type="date" value="${mod.newExpiry || currentExpiry}" 
-                            onchange="restock.trackChange('${item.id}', 'newExpiry', this.value)"
-                            class="w-full p-2 border rounded-lg text-xs font-mono focus:border-orange-500 outline-none transition">
+                    
+                    <span class="inline-block bg-red-50 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded border border-red-100 mb-3">
+                        👥 Per ${portions} persone
+                    </span>
+                    
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                        <div class="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Ingredienti</div>
+                        <ul class="text-sm text-gray-600 space-y-1">
+                            ${r.ingredienti_ricetta.map(i => `
+                                <li class="flex justify-between border-b border-gray-100 last:border-0 pb-1 last:pb-0">
+                                    <span>${i.nome_ingrediente}</span>
+                                    <span class="font-bold text-gray-800">${i.quantita_necessaria} <small>${i.unita}</small></span>
+                                </li>
+                            `).join('')}
+                        </ul>
                     </div>
                 </div>
             </div>`;
         }).join('');
     },
-
     trackChange(id, field, value) {
         if (!state.restockCart[id]) state.restockCart[id] = { addQty: '', newExpiry: '' };
         state.restockCart[id][field] = value;
