@@ -47,10 +47,9 @@ const app = {
         this.renderPantry();
 
         if (state.user) {
-            // ADMIN: Carica liste gestione
+            // ADMIN: Carica pannello di controllo
+            // PRIMA C'ERA L'ERRORE QUI. ORA CHIAMIAMO SOLO render()
             admin.render();      
-            admin.loadApprovals();    
-            admin.renderMovements(); 
         } else {
             // PUBBLICO: Naviga alla dispensa
             this.nav('pantry'); 
@@ -58,19 +57,18 @@ const app = {
     },
 
     nav(view) {
-        // LOGICA MANUTENZIONE
-        // Se la manutenzione è attiva E l'utente NON è admin E sta cercando di vedere pagine pubbliche
-        if (MAINTENANCE_MODE && !state.user && ['pantry', 'restock-public', 'recipes', 'planner'].includes(view)) {
+        // Gestione manutenzione
+        if (typeof MAINTENANCE_MODE !== 'undefined' && MAINTENANCE_MODE && !state.user && ['pantry', 'restock-public', 'recipes', 'planner'].includes(view)) {
             document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
             document.getElementById('view-maintenance').classList.remove('hidden');
             return;
         }
 
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-        document.getElementById(`view-${view}`).classList.remove('hidden');
+        const target = document.getElementById(`view-${view}`);
+        if(target) target.classList.remove('hidden');
         
-        if(view === 'wishlist') wishlist.load();
-        if(view === 'restock-public') restock.init();
+        if(view === 'restock-public' && typeof restock !== 'undefined') restock.init();
     },
 
     setCategory(cat) {
@@ -94,10 +92,7 @@ const app = {
         });
     },
 
-   // --- DENTRO L'OGGETTO app ---
-
     renderFilters() {
-        // Categorie fisse o dinamiche
         const cats = ['all', 'colazione', 'pranzo_cena', 'condimenti', 'merenda', 'extra'];
         const labels = { all: 'Tutto', colazione: '☕ Colazione', pranzo_cena: '🍝 Pasti', condimenti: '🧂 Condim.', merenda: '🍫 Merenda', extra: '🧻 Extra' };
         
@@ -112,16 +107,13 @@ const app = {
 
     renderPantry() {
         this.renderFilters();
-        
-        // Recupera lista ID creati da questo browser
         const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
 
         document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
             const isOut = item.quantita <= 0;
             const isPending = item.stato === 'pending';
-            const isMine = myProds.includes(item.id); // È mio?
+            const isMine = myProds.includes(item.id);
 
-            // Calcolo scadenza
             let isExpiring = false;
             let daysToExpiry = null;
             if (item.scadenza) {
@@ -137,16 +129,10 @@ const app = {
             
             if (isPending) {
                 if (isMine) {
-                    // SE È MIO: Badge diverso e NIENTE overlay bloccante
                     badge = '<span class="absolute top-0 right-0 bg-yellow-100 text-yellow-800 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10 border border-yellow-300">IN ATTESA (TUO) ✏️</span>';
                     borderClass = 'border-yellow-400 bg-yellow-50/50';
-                    // Tasto Modifica Speciale
-                    actionButtons = `
-                    <button onclick="restock.openEditPending('${item.id}')" class="w-full bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">
-                        MODIFICA RICHIESTA
-                    </button>`;
+                    actionButtons = `<button onclick="restock.openEditPending('${item.id}')" class="w-full bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">MODIFICA RICHIESTA</button>`;
                 } else {
-                    // SE NON È MIO: Bloccato
                     badge = '<span class="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10">IN APPROVAZIONE ⏳</span>';
                     borderClass = 'border-gray-200 bg-gray-50';
                     overlayClass = 'opacity-50 pointer-events-none grayscale-[0.8]';
@@ -154,19 +140,13 @@ const app = {
             } else if (isOut) {
                 badge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow">ESAURITO 🚫</span>';
                 borderClass = 'border-gray-300 bg-gray-50 opacity-75';
-                actionButtons = `
-                <input type="number" disabled class="w-14 p-2 text-center border rounded bg-gray-100 text-sm">
-                <button disabled class="flex-1 bg-gray-200 text-gray-400 font-bold py-2 rounded text-xs">USA</button>`;
+                actionButtons = `<input type="number" disabled class="w-14 p-2 text-center border rounded bg-gray-100 text-sm"><button disabled class="flex-1 bg-gray-200 text-gray-400 font-bold py-2 rounded text-xs">USA</button>`;
             } else {
                 if(isExpiring) {
                     badge = `<span class="absolute top-2 right-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow animate-pulse">SCADE TRA ${daysToExpiry} GG ⏳</span>`;
                     borderClass = 'border-red-400 bg-red-50';
                 }
-                // Tasti normali per utenti attivi
-                actionButtons = `
-                <input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" 
-                    class="w-14 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500">
-                <button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-800 hover:bg-orange-200 font-bold py-2 rounded text-xs transition">USA</button>`;
+                actionButtons = `<input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" class="w-14 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500"><button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-800 hover:bg-orange-200 font-bold py-2 rounded text-xs transition">USA</button>`;
             }
 
             return `
@@ -175,17 +155,13 @@ const app = {
                 <div class="p-3 flex flex-col flex-grow ${overlayClass}">
                     <div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div>
                     <h4 class="font-bold text-gray-800 leading-tight mb-2 text-md line-clamp-2">${item.nome}</h4>
-                    
                     <div class="mt-auto">
                         <p class="text-xs text-gray-500 mb-1 font-mono flex justify-between items-center">
                             <span>Disp:</span> 
                             <span class="font-bold ${isOut ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span>
                         </p>
                         ${item.scadenza ? `<p class="text-[10px] text-gray-400 mb-2 italic">Scade il: ${new Date(item.scadenza).toLocaleDateString()}</p>` : ''}
-                        
-                        <div class="flex gap-1 mt-1">
-                            ${actionButtons}
-                        </div>
+                        <div class="flex gap-1 mt-1">${actionButtons}</div>
                     </div>
                 </div>
             </div>`;
@@ -200,7 +176,6 @@ const app = {
 
         loader.show();
         let logDetails = [];
-        
         for (let c of state.cart) {
             const item = state.pantry.find(x => x.id === c.id);
             if(item) {
@@ -208,16 +183,8 @@ const app = {
                 await _sb.from('cambusa').update({ quantita: newQ }).eq('id', c.id);
                 logDetails.push(`${item.nome} x${c.qty}${item.unita}`);
             }
-            if (item.scadenza) {
-                const diffTime = new Date(item.scadenza) - new Date();
-                const daysToExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (daysToExpiry <= 12) {
-                    urgentAlerts += `<p style="color: #b91c1c; font-weight: bold;">🚨 SCADENZA IMMINENTE: L'oggetto '${item.nome}' scade il ${new Date(item.scadenza).toLocaleDateString()} (Tra ${daysToExpiry} giorni)!</p>`;
-                }
-            }   
         }
 
-        // Salva movimento (uso tabella 'movimenti' generica, magari aggiungendo tag [CAMBUSA] nel dettaglio)
         await _sb.from('movimenti').insert([{
             utente: `Cambusa: ${note}`,
             dettagli: logDetails.join(', ')
@@ -230,8 +197,6 @@ const app = {
         loader.hide();
     }
 };
-// --- RIFORNIMENTO PUBBLICO (A STEP CON GRIGLIA) ---
-// --- RIFORNIMENTO (LISTA RAPIDA) ---
 // --- RIFORNIMENTO (LISTA RAPIDA) ---
 const restock = {
     init() {
