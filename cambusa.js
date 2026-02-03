@@ -27,10 +27,15 @@ const loader = {
 };
 
 // --- APP ---
+// --- CODICE NUOVO ---
 const app = {
     async init() {
         loader.show();
         await auth.check();
+        
+        // Attiviamo il realtime
+        realtime.init(); 
+
         await this.loadData();
         loader.hide();
     },
@@ -700,6 +705,30 @@ const planner = {
             </div>`).join('');
     }
 };
+// --- NUOVO OGGETTO PER LA SINCRONIZZAZIONE ---
+const realtime = {
+    init() {
+        // Ascolta i cambiamenti su tutte le tabelle importanti
+        _sb.channel('db-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cambusa' }, () => {
+                app.loadData(); // Ricarica dispensa e liste
+                if(typeof restock !== 'undefined') restock.renderList();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ricette' }, () => {
+                recipes.load(); // Ricarica ricette
+                if(state.user) admin.renderRecipes(); // Aggiorna tabella admin se aperta
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'richieste_cambusa' }, () => {
+                if(state.user) admin.renderRequests(); // Aggiorna richieste admin
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredienti_ricetta' }, () => {
+                recipes.load(); // Se cambiano gli ingredienti, ricarica le ricette
+            })
+            .subscribe();
+            
+        console.log("📡 Sincronizzazione attiva");
+    }
+};
 // --- ADMIN ---
 // --- SOSTITUISCI INTERO OGGETTO admin IN cambusa.js ---
 
@@ -812,21 +841,47 @@ const admin = {
         </table>`;
     },
 
+    // Dentro l'oggetto admin...
+
     async approveRecipe(id) {
         if(!confirm("Confermi l'approvazione? La ricetta diventerà pubblica.")) return;
         
         loader.show();
+        // 1. Aggiorna il DB
         const { error } = await _sb.from('ricette').update({ status: 'approved' }).eq('id', id);
-        loader.hide();
         
-        if(error) ui.toast("Errore Approvazione", "error");
-        else {
+        if(error) {
+            loader.hide();
+            ui.toast("Errore Approvazione", "error");
+        } else {
             ui.toast("Ricetta Pubblicata!", "success");
-            // Aggiorna array locale
-            const r = state.recipes.find(x => x.id === id);
-            if(r) r.status = 'approved';
-            this.renderRecipes();
-            recipes.renderList(); // Aggiorna lista pubblica
+            
+            // 2. FORZA IL RICARICAMENTO DEI DATI
+            await recipes.load(); // Ricarica dal server
+            this.renderRecipes(); // Ridisegna la tabella Admin
+            
+            loader.hide();
+        }
+    },// Dentro l'oggetto admin...
+
+    async approveRecipe(id) {
+        if(!confirm("Confermi l'approvazione? La ricetta diventerà pubblica.")) return;
+        
+        loader.show();
+        // 1. Aggiorna il DB
+        const { error } = await _sb.from('ricette').update({ status: 'approved' }).eq('id', id);
+        
+        if(error) {
+            loader.hide();
+            ui.toast("Errore Approvazione", "error");
+        } else {
+            ui.toast("Ricetta Pubblicata!", "success");
+            
+            // 2. FORZA IL RICARICAMENTO DEI DATI
+            await recipes.load(); // Ricarica dal server
+            this.renderRecipes(); // Ridisegna la tabella Admin
+            
+            loader.hide();
         }
     },
     
