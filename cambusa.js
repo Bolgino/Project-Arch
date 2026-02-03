@@ -200,100 +200,85 @@ const app = {
 // --- RIFORNIMENTO (LISTA RAPIDA) ---
 const restock = {
     init() {
-        // Assicuriamoci che sia un oggetto vuoto all'avvio
         state.restockCart = {}; 
-        // Pulisce la ricerca quando si entra
         const searchInput = document.getElementById('restock-search');
         if(searchInput) searchInput.value = '';
-        
         this.renderList();
     },
 
     renderList() {
-        const term = document.getElementById('recipe-search') ? document.getElementById('recipe-search').value.toLowerCase() : '';
-        const el = document.getElementById('recipes-list');
-        if(!el) return;
+        // CORRETTO: Punta agli ID della schermata Rifornimento
+        const searchInput = document.getElementById('restock-search');
+        const term = searchInput ? searchInput.value.toLowerCase() : '';
+        const container = document.getElementById('restock-full-list');
+        
+        if (!container) return;
+        
+        // Verifica se la dispensa è caricata
+        if (!state.pantry || state.pantry.length === 0) {
+             // Se è vuota davvero o non caricata, mostriamo un messaggio
+             container.innerHTML = `<div class="text-center py-10 text-gray-400 italic">Caricamento prodotti...</div>`;
+        }
 
-        const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
-        const isAdmin = state.user !== null;
+        const matches = state.pantry.filter(p => 
+            p.nome.toLowerCase().includes(term) || 
+            p.categoria.toLowerCase().includes(term)
+        );
 
-        // 1. FILTRO DI RICERCA (Mostriamo TUTTO quello che corrisponde al nome, indipendentemente dallo status)
-        const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
-
-        if(filtered.length === 0) {
-            el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata.</div>`;
+        if (matches.length === 0) {
+            container.innerHTML = `<div class="text-center py-10 text-gray-400 italic">Nessun prodotto trovato.</div>`;
             return;
         }
 
-        el.innerHTML = filtered.map(r => {
-            const portions = r.porzioni || 4; 
-            const isMyRecipe = myRecipes.includes(r.id);
-            // Se non c'è status o è diverso da approved, è pending
-            const isPending = !r.status || r.status !== 'approved'; 
+        container.innerHTML = matches.map(item => {
+            const mod = state.restockCart[item.id] || { addQty: '', newExpiry: '' };
+            const isModified = (mod.addQty !== '' && mod.addQty != 0) || mod.newExpiry !== '';
+            const borderClass = isModified ? 'border-orange-500 ring-1 ring-orange-200 bg-orange-50' : 'border-gray-200 bg-white';
+            const currentExpiry = item.scadenza ? item.scadenza.split('T')[0] : '';
 
-            // 2. LOGICA PERMESSI (quella che hai chiesto)
-            let canEdit = false;
-            if (isAdmin) {
-                canEdit = true; // Admin comanda sempre
-            } else if (isMyRecipe && isPending) {
-                canEdit = true; // Creatore tocca SOLO se non è ancora approvata
-            }
-            // Se è isMyRecipe ma è Approved -> canEdit resta false.
-
-            // 3. BADGE VISIBILE A TUTTI
-            // Se è pending, mostriamo il badge Giallo a CHIUNQUE
-            const statusBadge = isPending 
-                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-2 py-1 rounded ml-2 border border-yellow-200 uppercase">⏳ In Approvazione</span>` 
-                : ``; 
-                // Se è approvata non mostriamo nulla (o puoi mettere un badge verde se vuoi)
+            // Se è un prodotto "pending" (in attesa), mostriamo un avviso o lo stile diverso
+            const isPending = item.stato === 'pending';
+            const nameColor = isPending ? 'text-gray-500' : 'text-gray-800';
+            const pendingLabel = isPending ? '<span class="text-[9px] bg-yellow-100 text-yellow-800 px-1 rounded ml-2">IN ATTESA</span>' : '';
 
             return `
-            <div class="bg-white rounded-xl border ${isPending ? 'border-yellow-300' : 'border-gray-200'} shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
-                <div class="h-2 ${isPending ? 'bg-yellow-400' : 'bg-red-500'} w-full"></div>
-                
-                ${canEdit ? `
-                <div class="absolute top-2 right-2 z-10 flex gap-1">
-                    <button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">
-                        🗑
-                    </button>
-                    <button onclick="recipes.openModal('${r.id}')" class="bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-1.5 rounded-full shadow-sm transition">
-                        ✏️
-                    </button>
-                </div>` : ''}
-
-                <div class="p-4 flex-grow">
-                    <div class="flex flex-wrap items-center mb-2 pr-14"> 
-                        <h3 class="font-extrabold text-gray-800 text-lg leading-tight">${r.nome}</h3>
-                        ${statusBadge}
+            <div class="rounded-xl shadow-sm border ${borderClass} p-4 transition mb-3">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">${item.categoria}</div>
+                        <div class="font-extrabold ${nameColor} text-lg leading-tight flex items-center">
+                            ${item.nome} ${pendingLabel}
+                        </div>
                     </div>
-                    
-                    <span class="inline-block bg-red-50 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded border border-red-100 mb-3">
-                        👥 Per ${portions} persone
-                    </span>
-                    
-                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        <div class="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Ingredienti</div>
-                        <ul class="text-sm text-gray-600 space-y-1">
-                            ${r.ingredienti_ricetta.map(i => `
-                                <li class="flex justify-between border-b border-gray-100 last:border-0 pb-1 last:pb-0">
-                                    <span>${i.nome_ingrediente}</span>
-                                    <span class="font-bold text-gray-800">${i.quantita_necessaria} <small>${i.unita}</small></span>
-                                </li>
-                            `).join('')}
-                        </ul>
+                    <div class="text-right">
+                         <div class="text-[10px] text-gray-400 font-bold uppercase">Attuale</div>
+                        <div class="font-mono font-bold text-gray-600">${item.quantita} <span class="text-xs">${item.unita}</span></div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3 bg-white/50 p-2 rounded-lg">
+                    <div>
+                        <label class="text-[9px] font-bold text-orange-600 uppercase block mb-1">Aggiungi (+)</label>
+                        <input type="number" step="0.5" placeholder="0" value="${mod.addQty}" 
+                            oninput="restock.trackChange('${item.id}', 'addQty', this.value)"
+                            class="w-full p-2 text-center border rounded-lg font-bold text-gray-800 focus:border-orange-500 focus:bg-orange-50 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-bold text-gray-500 uppercase block mb-1">Nuova Scadenza</label>
+                        <input type="date" value="${mod.newExpiry || currentExpiry}" 
+                            onchange="restock.trackChange('${item.id}', 'newExpiry', this.value)"
+                            class="w-full p-2 border rounded-lg text-xs font-mono focus:border-orange-500 outline-none transition">
                     </div>
                 </div>
             </div>`;
         }).join('');
     },
+
     trackChange(id, field, value) {
         if (!state.restockCart[id]) state.restockCart[id] = { addQty: '', newExpiry: '' };
         state.restockCart[id][field] = value;
-        // Non ricarichiamo tutta la lista per non perdere il focus
-        // Potremmo aggiungere una classe visuale al div padre qui se volessimo fare fine tuning
     },
 
-    // --- POP-UP RIEPILOGO ---
     submitUpdates() {
         const updatesIDs = Object.keys(state.restockCart).filter(id => {
             const m = state.restockCart[id];
@@ -305,16 +290,10 @@ const restock = {
         const listHTML = updatesIDs.map(id => {
             const item = state.pantry.find(p => p.id == id);
             const mod = state.restockCart[id];
-            
             let details = '';
             if (mod.addQty && parseFloat(mod.addQty) > 0) details += `<span class="text-green-600 font-bold">+${mod.addQty} ${item.unita}</span>`;
             if (mod.newExpiry) details += `<div class="text-[10px] text-gray-500 mt-1">Scad: ${mod.newExpiry}</div>`;
-            
-            return `
-            <div class="flex justify-between items-center bg-white p-3 rounded border border-gray-100 shadow-sm">
-                <span class="font-bold text-gray-700">${item.nome}</span>
-                <div class="text-right leading-tight">${details}</div>
-            </div>`;
+            return `<div class="flex justify-between items-center bg-white p-3 rounded border border-gray-100 shadow-sm"><span class="font-bold text-gray-700">${item.nome}</span><div class="text-right leading-tight">${details}</div></div>`;
         }).join('');
 
         document.getElementById('restock-confirm-list').innerHTML = listHTML;
@@ -334,13 +313,8 @@ const restock = {
                 const mod = state.restockCart[id];
                 const original = state.pantry.find(p => p.id == id);
                 const payload = {};
-                
-                if (mod.addQty && parseFloat(mod.addQty) > 0) {
-                    payload.quantita = original.quantita + parseFloat(mod.addQty);
-                }
-                if (mod.newExpiry) {
-                    payload.scadenza = mod.newExpiry;
-                }
+                if (mod.addQty && parseFloat(mod.addQty) > 0) payload.quantita = original.quantita + parseFloat(mod.addQty);
+                if (mod.newExpiry) payload.scadenza = mod.newExpiry;
 
                 if (Object.keys(payload).length > 0) {
                     const { error } = await _sb.from('cambusa').update(payload).eq('id', id);
@@ -351,15 +325,14 @@ const restock = {
             state.restockCart = {}; 
             ui.closeModals();
             await app.loadData();
-            this.renderList(); // Resetta i campi
+            this.renderList();
         } catch (e) {
-            console.error(e);
             ui.toast("Errore salvataggio", "error");
         }
         loader.hide();
     },
 
-    // --- NUOVO PRODOTTO (PENDING) ---
+    // Funzioni per aggiungere nuovi prodotti (RIPRISTINATE PER TABELLA CAMBUSA)
     async addNewProduct() {
         const nome = document.getElementById('new-prod-name').value.trim();
         const cat = document.getElementById('new-prod-cat').value;
@@ -367,46 +340,35 @@ const restock = {
         const qta = parseFloat(document.getElementById('new-prod-qty').value);
         const scadenza = document.getElementById('new-prod-expiry').value;
 
-        if (!nome) return ui.toast("Inserisci il nome", "error");
-        if (!qta || qta <= 0) return ui.toast("Quantità non valida", "error");
-        if (!scadenza) return ui.toast("⚠️ LA SCADENZA È OBBLIGATORIA", "error");
+        if (!nome || !qta || !scadenza) return ui.toast("Compila tutti i campi", "error");
 
         loader.show();
-        
-        // 1. Inserisci e recupera ID
+        // Usa la tabella 'cambusa' con stato 'pending' come avevi in origine
         const { data, error } = await _sb.from('cambusa').insert([{
-            nome: nome,
-            categoria: cat,
-            quantita: qta,
-            unita: unita,
-            scadenza: scadenza,
-            stato: 'pending'
+            nome: nome, categoria: cat, quantita: qta, unita: unita, scadenza: scadenza, stato: 'pending'
         }]).select();
 
         if (error) {
-            console.error(error);
-            ui.toast("Errore inserimento", "error");
+             ui.toast("Errore inserimento", "error");
         } else {
-            // 2. Salva ID nel LocalStorage (I miei prodotti)
-            const newId = data[0].id;
-            const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
-            myProds.push(newId);
-            localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
+             // Salva nel local storage per sapere che è mio
+             const newId = data[0].id;
+             const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
+             myProds.push(newId);
+             localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
 
-            ui.toast("Richiesta inviata! Puoi modificarla finché è in attesa.", "success");
-            ui.closeModals();
-            
-            // Pulisci campi
-            document.getElementById('new-prod-name').value = '';
-            document.getElementById('new-prod-qty').value = '';
-            document.getElementById('new-prod-expiry').value = '';
-            
-            await app.loadData();
+             ui.toast("Richiesta inviata!", "success");
+             ui.closeModals();
+             
+             document.getElementById('new-prod-name').value = '';
+             document.getElementById('new-prod-qty').value = '';
+             document.getElementById('new-prod-expiry').value = '';
+
+             await app.loadData();
         }
         loader.hide();
     },
 
-    // --- MODIFICA PENDING (Utente) ---
     openEditPending(id) {
         const item = state.pantry.find(x => x.id == id);
         if(!item) return;
@@ -478,12 +440,10 @@ const recipes = {
     tempIng: [], 
 
     async load() {
-        // Carichiamo tutto. Se la colonna status non esiste ancora, non esplode perché select(*) la ignora se non specificata.
         const { data } = await _sb.from('ricette').select('*, ingredienti_ricetta(*)');
         state.recipes = data || [];
         this.renderList();
         
-        // Select del Planner: Mostra TUTTE le ricette per semplicità
         const sel = document.getElementById('planner-recipe-select');
         if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + state.recipes.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
     },
@@ -496,8 +456,6 @@ const recipes = {
         const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
         const isAdmin = state.user !== null;
 
-        // VISIBILITÀ: Mostriamo TUTTO quello che corrisponde alla ricerca.
-        // Niente filtri su status.
         const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
 
         if(filtered.length === 0) {
@@ -508,32 +466,27 @@ const recipes = {
         el.innerHTML = filtered.map(r => {
             const portions = r.porzioni || 4; 
             const isMyRecipe = myRecipes.includes(r.id);
+            // Se non c'è status o è diverso da approved, è pending
+            const isPending = !r.status || r.status !== 'approved'; 
+
+            // LOGICA PERMESSI AGGIORNATA
+            // Admin: Sempre TRUE.
+            // Utente Pubblico: SOLO se è sua (isMyRecipe) E se NON è ancora approvata (isPending).
+            const canEdit = isAdmin || (isMyRecipe && isPending);
             
-            // PERMESSI:
-            // Admin: Può tutto.
-            // Creatore (isMyRecipe): Può modificare/eliminare le proprie.
-            const canEdit = isAdmin || isMyRecipe;
-            
-            // BADGE: Nessun badge "Approvata".
-            // Mostriamo "In Attesa" SOLO a chi può modificare (Admin o Creatore) per sapere perché non è ancora "ufficiale",
-            // ma al pubblico appare normale come richiesto.
-            const isPending = r.status && r.status !== 'approved';
-            const statusBadge = (isPending && canEdit) 
-                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1 rounded ml-2 border border-yellow-200">IN ATTESA</span>` 
-                : ``;
+            // Badge visibile a tutti se pending
+            const statusBadge = isPending 
+                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-2 py-1 rounded ml-2 border border-yellow-200 uppercase">⏳ In Approvazione</span>` 
+                : ``; 
 
             return `
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
-                <div class="h-2 bg-red-500 w-full"></div>
+            <div class="bg-white rounded-xl border ${isPending ? 'border-yellow-300' : 'border-gray-200'} shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
+                <div class="h-2 ${isPending ? 'bg-yellow-400' : 'bg-red-500'} w-full"></div>
                 
                 ${canEdit ? `
                 <div class="absolute top-2 right-2 z-10 flex gap-1">
-                    <button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">
-                        🗑
-                    </button>
-                    <button onclick="recipes.openModal('${r.id}')" class="bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-1.5 rounded-full shadow-sm transition">
-                        ✏️
-                    </button>
+                    <button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">🗑</button>
+                    <button onclick="recipes.openModal('${r.id}')" class="bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-1.5 rounded-full shadow-sm transition">✏️</button>
                 </div>` : ''}
 
                 <div class="p-4 flex-grow">
@@ -581,9 +534,7 @@ const recipes = {
                 document.getElementById('new-recipe-portions').value = r.porzioni;
                 
                 this.tempIng = r.ingredienti_ricetta.map(i => ({
-                    nome: i.nome_ingrediente,
-                    qty: i.quantita_necessaria,
-                    unita: i.unita
+                    nome: i.nome_ingrediente, qty: i.quantita_necessaria, unita: i.unita
                 }));
             }
         }
@@ -595,8 +546,8 @@ const recipes = {
         const name = document.getElementById('ing-input-name').value.trim();
         const qty = parseFloat(document.getElementById('ing-input-qty').value);
         const unit = document.getElementById('ing-input-unit').value;
-        if (!name) return ui.toast("Nome ingrediente mancante", "error");
-        if (!qty || qty <= 0) return ui.toast("Quantità non valida", "error");
+        if (!name) return ui.toast("Nome mancante", "error");
+        if (!qty || qty <= 0) return ui.toast("Qtà errata", "error");
         this.tempIng.push({ nome: name, qty: qty, unita: unit });
         document.getElementById('ing-input-name').value = '';
         document.getElementById('ing-input-qty').value = '';
@@ -612,7 +563,7 @@ const recipes = {
     renderIngList() {
         const list = document.getElementById('recipe-ing-list');
         if (this.tempIng.length === 0) {
-            list.innerHTML = '<div class="text-center text-gray-400 italic text-xs mt-4">Nessun ingrediente aggiunto.</div>';
+            list.innerHTML = '<div class="text-center text-gray-400 italic text-xs mt-4">Nessun ingrediente.</div>';
             return;
         }
         list.innerHTML = this.tempIng.map((ing, idx) => `
@@ -631,16 +582,17 @@ const recipes = {
         const nome = document.getElementById('new-recipe-name').value;
         const portions = parseInt(document.getElementById('new-recipe-portions').value) || 4;
         
-        if(!nome || !this.tempIng.length) return ui.toast("Nome o ingredienti mancanti", "error");
+        if(!nome || !this.tempIng.length) return ui.toast("Dati mancanti", "error");
 
         loader.show();
         let recipeId = id;
         
-        // Salviamo sempre come 'pending' se nuova, o manteniamo lo stato se esiste.
-        // Ma siccome mostriamo tutto, lo stato serve solo all'admin per sapere cosa controllare.
         const isAdmin = state.user !== null;
         let statusToSet = 'pending'; 
-        if(id) {
+
+        if (isAdmin) {
+            statusToSet = 'approved'; 
+        } else if (id) {
              const existing = state.recipes.find(r => r.id === id);
              statusToSet = existing ? existing.status : 'pending';
         }
@@ -649,40 +601,35 @@ const recipes = {
         
         if (id) {
             const { error } = await _sb.from('ricette').update(recipeData).eq('id', id);
-            if(error) { loader.hide(); return ui.toast("Errore aggiornamento", "error"); }
+            if(error) { loader.hide(); return ui.toast("Errore update", "error"); }
             await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
         } else {
             const { data, error } = await _sb.from('ricette').insert([recipeData]).select();
-            if(error) { loader.hide(); return ui.toast("Errore creazione", "error"); }
+            if(error) { loader.hide(); return ui.toast("Errore insert", "error"); }
             recipeId = data[0].id;
-
+            
             const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
             myRecipes.push(recipeId);
             localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
         }
 
         const ingData = this.tempIng.map(i => ({
-            ricetta_id: recipeId,
-            nome_ingrediente: i.nome,
-            quantita_necessaria: i.qty,
-            unita: i.unita
+            ricetta_id: recipeId, nome_ingrediente: i.nome, quantita_necessaria: i.qty, unita: i.unita
         }));
         
-        if (ingData.length > 0) {
-            await _sb.from('ingredienti_ricetta').insert(ingData);
-        }
+        if (ingData.length > 0) await _sb.from('ingredienti_ricetta').insert(ingData);
+
+        await this.load(); // Reload completo per sicurezza
+        if(state.user) admin.renderRecipes();
 
         loader.hide();
-        ui.toast(id ? "Ricetta Aggiornata!" : "Ricetta Creata!", "success");
+        ui.toast("Salvato!", "success");
         ui.closeModals();
-        this.load();
-        if(state.user) admin.renderRecipes();
     },
 
     async delete(idIn = null) {
         const id = idIn || document.getElementById('recipe-id').value;
-        if(!id) return;
-        if(!confirm("Eliminare definitivamente questa ricetta?")) return;
+        if(!id || !confirm("Eliminare?")) return;
 
         loader.show();
         await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
@@ -692,11 +639,11 @@ const recipes = {
         myRecipes = myRecipes.filter(x => x !== id);
         localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
 
-        loader.hide();
-        ui.toast("Ricetta Eliminata", "success");
-        ui.closeModals();
-        this.load();
+        await this.load();
         if(state.user) admin.renderRecipes();
+        loader.hide();
+        ui.toast("Eliminata", "success");
+        ui.closeModals();
     }
 };
 // --- PLANNER (CALCOLO SPESA) ---
@@ -937,13 +884,24 @@ const ui = {
         }
     },
     toast(msg, type) {
+        // Rimuove eventuali toast precedenti
+        const old = document.getElementById('toast-container');
+        if(old) old.remove();
+
+        // Contenitore Flex a larghezza piena per garantire la centratura
+        const container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'fixed bottom-10 inset-x-0 flex justify-center z-[300] pointer-events-none';
+        
         const t = document.createElement('div');
-        // RIPRISTINATO: bottom-5 left-1/2 transform -translate-x-1/2 (In basso al centro)
-        // MANTENUTO: z-[300] (Per stare sopra ai modali)
-        t.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 z-[300] px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce ${type === 'error' ? 'bg-red-500' : 'bg-orange-800'}`;
+        // Il toast vero e proprio
+        t.className = `px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce pointer-events-auto ${type === 'error' ? 'bg-red-500' : 'bg-orange-800'}`;
         t.innerText = msg;
-        document.body.appendChild(t);
-        setTimeout(() => t.remove(), 3000);
+        
+        container.appendChild(t);
+        document.body.appendChild(container);
+        
+        setTimeout(() => container.remove(), 3000);
     },
 };
 app.init();
