@@ -176,32 +176,89 @@
             </div>
     </section>
 
-    <section id="view-planner" class="hidden fade-in">
-        <div class="mb-4 border-b border-green-200 pb-2">
-            <h1 class="text-2xl font-extrabold text-green-900">Menu & Spesa</h1>
-            <p class="text-xs text-gray-500">Pianifica il campo e calcola cosa comprare.</p>
+    <section id="view-planner" class="hidden fade-in pb-32">
+        <div class="mb-6 border-b border-green-200 pb-4">
+            <h1 class="text-3xl font-extrabold text-green-900">Pianificatore Eventi</h1>
+            <p class="text-sm text-gray-500">Organizza i pasti del campo e calcola la spesa.</p>
         </div>
 
-        <div class="bg-green-50 p-4 rounded-xl border border-green-200 mb-6">
-            <h3 class="font-bold text-green-900 mb-2">1. Componi il Menu</h3>
-            <div class="flex gap-2 mb-2">
-                <select id="planner-recipe-select" class="flex-grow p-2 border rounded text-sm bg-white"></select>
-                <input type="number" id="planner-multiplier" value="1" placeholder="x" class="w-16 p-2 border rounded text-center font-bold">
-                <button onclick="planner.addRecipe()" class="bg-green-600 text-white px-3 rounded font-bold">+</button>
-            </div>
-            <div id="planner-current-list" class="space-y-2 mb-4 bg-white p-2 rounded border min-h-[50px]"></div>
+        <div id="planner-step-setup" class="bg-white p-6 rounded-2xl shadow-lg border border-green-100">
+            <h3 class="font-bold text-xl text-green-800 mb-4 flex items-center gap-2">🗓️ Dettagli Evento</h3>
             
-            <button onclick="planner.calculate()" class="w-full bg-yellow-400 text-yellow-900 font-bold py-3 rounded shadow-lg uppercase tracking-wide">
-                🛒 Calcola Lista Spesa
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Inizio (Data e Ora)</label>
+                    <input type="datetime-local" id="evt-start" class="w-full p-3 border rounded-xl bg-gray-50 font-bold text-green-900 outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fine (Data e Ora)</label>
+                    <input type="datetime-local" id="evt-end" class="w-full p-3 border rounded-xl bg-gray-50 font-bold text-green-900 outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Numero Partecipanti</label>
+                <div class="flex items-center gap-4">
+                    <input type="number" id="evt-pax" value="30" class="w-24 p-3 border rounded-xl text-center font-bold text-xl text-green-900">
+                    <p class="text-xs text-gray-400">Il calcolo delle dosi sarà basato su questo numero.</p>
+                </div>
+            </div>
+
+            <button onclick="planner.generateMenu()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg transition transform active:scale-95 text-lg">
+                🚀 GENERA MENU AUTOMATICO
             </button>
         </div>
 
-        <div id="planner-result" class="hidden bg-white p-4 rounded-xl shadow-xl border-t-8 border-yellow-400 relative">
-            <button onclick="document.getElementById('planner-result').classList.add('hidden')" class="absolute top-2 right-2 text-gray-400 font-bold">X</button>
-            <h3 class="font-bold text-xl mb-4 text-gray-800">📝 Lista della Spesa</h3>
-            <div id="planner-shopping-list" class="space-y-3 divide-y"></div>
+        <div id="planner-step-grid" class="hidden mt-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-xl text-green-800">🍽️ Menu Proposto</h3>
+                <button onclick="planner.calculateShopping()" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold px-4 py-2 rounded-lg shadow transition">
+                    🛒 CALCOLA SPESA
+                </button>
+            </div>
+            
+            <div id="planner-grid-container" class="space-y-6">
+                </div>
+        </div>
+
+        <div id="planner-step-list" class="hidden mt-6 bg-white p-6 rounded-2xl shadow-xl border-t-8 border-yellow-400">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="font-extrabold text-2xl text-gray-800">Lista della Spesa</h3>
+                    <p class="text-xs text-gray-500">Calcolata su scorte reali non scadute.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="planner.backToGrid()" class="text-gray-400 font-bold text-xs hover:text-gray-600">MODIFICA MENU</button>
+                    <button onclick="window.print()" class="bg-gray-800 text-white px-4 py-2 rounded font-bold shadow hover:bg-gray-700">🖨️ STAMPA</button>
+                </div>
+            </div>
+
+            <div id="shopping-result-list" class="divide-y divide-gray-100 text-sm"></div>
         </div>
     </section>
+
+    <div id="modal-slot-edit" class="hidden fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 class="font-bold text-lg mb-4 text-green-900">Modifica Pasto</h3>
+            <input type="hidden" id="slot-day-index">
+            <input type="hidden" id="slot-type">
+
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cerca Ricetta</label>
+                <select id="slot-recipe-select" class="w-full p-3 border rounded-xl font-bold bg-white"></select>
+            </div>
+
+            <div class="flex items-center gap-2 mb-6">
+                <input type="checkbox" id="slot-packed" class="w-5 h-5 accent-green-600">
+                <label for="slot-packed" class="font-bold text-gray-700">È un pranzo al sacco?</label>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="document.getElementById('modal-slot-edit').classList.add('hidden')" class="bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">Annulla</button>
+                <button onclick="planner.saveSlot()" class="bg-green-600 text-white font-bold py-3 rounded-lg shadow">Conferma</button>
+            </div>
+        </div>
+    </div>
 
     <section id="view-admin" class="hidden fade-in">
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
