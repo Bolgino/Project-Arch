@@ -466,8 +466,9 @@ const cart = {
             </div>`).join('');
     }
 };
+// SOSTITUISCI TUTTO L'OGGETTO recipes
 const recipes = {
-    tempIng: [], 
+    currentIngredients: [], // Usiamo un unico array per gestire gli ingredienti
 
     async load() {
         const { data } = await _sb.from('ricette').select('*, ingredienti_ricetta(*)');
@@ -498,10 +499,7 @@ const recipes = {
             const isMyRecipe = myRecipes.includes(r.id);
             const isPending = !r.status || r.status !== 'approved'; 
 
-            // PERMESSI:
-            // 1. Modifica: TUTTI possono modificare.
-            // 2. Elimina: SOLO Admin o Chi l'ha creata (se pending).
-            const canEdit = true;
+            const canEdit = true; // Tutti possono modificare
             const canDelete = isAdmin || (isMyRecipe && isPending);
             
             const statusBadge = isPending 
@@ -544,12 +542,17 @@ const recipes = {
     },
 
     openModal(id = null) {
-        // Pulisci i campi
+        // Reset campi
         document.getElementById('rec-name').value = '';
         document.getElementById('rec-portions').value = 4;
         document.getElementById('rec-cat').value = 'pasti'; 
+        
+        // Pulizia input ingredienti
+        document.getElementById('new-ing-name').value = '';
+        document.getElementById('new-ing-qty').value = '';
+        
         this.currentIngredients = [];
-        this.editingId = id; // IMPORTANTE: salvare l'ID qui
+        this.editingId = id; 
 
         if (id && id !== 'undefined' && id !== 'null') {
             const r = state.recipes.find(x => String(x.id) === String(id));
@@ -557,63 +560,59 @@ const recipes = {
                 document.getElementById('rec-name').value = r.nome;
                 document.getElementById('rec-portions').value = r.porzioni || 4;
                 document.getElementById('rec-cat').value = r.categoria || 'pasti'; 
-                this.currentIngredients = r.ingredienti_ricetta || [];
-                // Debug per vedere se li trova
-                console.log("Edit ricetta:", r.nome, this.currentIngredients);
+                // Clona l'array per evitare modifiche dirette prima del salvataggio
+                this.currentIngredients = r.ingredienti_ricetta ? [...r.ingredienti_ricetta] : [];
             }
         }
         this.renderIngredientsList();
         ui.modal('modal-recipe');
     },
+
+    // FUNZIONE CORRETTA CHE CORRISPONDE ALL'HTML (addIngredient)
+    addIngredient() {
+        const name = document.getElementById('new-ing-name').value.trim(); // ID corretto
+        const qty = parseFloat(document.getElementById('new-ing-qty').value); // ID corretto
+        const unit = document.getElementById('new-ing-unit').value; // ID corretto
+        
+        if (!name) return ui.toast("Nome ingrediente mancante", "error");
+        if (!qty || qty <= 0) return ui.toast("Quantità errata", "error");
+        
+        // Aggiunge all'array corrente
+        this.currentIngredients.push({ 
+            nome_ingrediente: name, 
+            quantita_necessaria: qty, 
+            unita: unit 
+        });
+        
+        // Pulisce input e rimette focus
+        document.getElementById('new-ing-name').value = '';
+        document.getElementById('new-ing-qty').value = '';
+        document.getElementById('new-ing-name').focus();
+        
+        this.renderIngredientsList();
+    },
+
+    // FUNZIONE CORRETTA (removeIngredient)
+    removeIngredient(idx) {
+        this.currentIngredients.splice(idx, 1);
+        this.renderIngredientsList();
+    },
+
     renderIngredientsList() {
-        const el = document.getElementById('recipe-ing-list');
-        if (!el) return;
+        const list = document.getElementById('recipe-ing-list');
+        if (!list) return;
 
         if (this.currentIngredients.length === 0) {
-            el.innerHTML = '<div class="text-center text-gray-400 italic text-sm py-4">Nessun ingrediente inserito</div>';
+            list.innerHTML = '<div class="text-center text-gray-400 italic text-xs mt-4">Nessun ingrediente inserito.</div>';
             return;
         }
-
-        el.innerHTML = this.currentIngredients.map((ing, idx) => `
-            <div class="flex justify-between items-center bg-white p-2 mb-2 rounded border border-gray-200 shadow-sm">
-                <div class="text-sm">
-                    <span class="font-bold text-gray-800">${ing.nome_ingrediente}</span>
-                    <span class="text-xs text-gray-500 ml-2">${ing.quantita_necessaria} ${ing.unita}</span>
-                </div>
-                <button onclick="recipes.removeIngredient(${idx})" class="text-red-500 hover:bg-red-50 p-1 rounded">🗑</button>
-            </div>
-        `).join('');
-    },
-    addIngFromInput() {
-        const name = document.getElementById('ing-input-name').value.trim();
-        const qty = parseFloat(document.getElementById('ing-input-qty').value);
-        const unit = document.getElementById('ing-input-unit').value;
-        if (!name) return ui.toast("Nome mancante", "error");
-        if (!qty || qty <= 0) return ui.toast("Qtà errata", "error");
-        this.tempIng.push({ nome: name, qty: qty, unita: unit });
-        document.getElementById('ing-input-name').value = '';
-        document.getElementById('ing-input-qty').value = '';
-        document.getElementById('ing-input-name').focus();
-        this.renderIngList();
-    },
-
-    removeIng(idx) {
-        this.tempIng.splice(idx, 1);
-        this.renderIngList();
-    },
-
-    renderIngList() {
-        const list = document.getElementById('recipe-ing-list');
-        if (this.tempIng.length === 0) {
-            list.innerHTML = '<div class="text-center text-gray-400 italic text-xs mt-4">Nessun ingrediente.</div>';
-            return;
-        }
-        list.innerHTML = this.tempIng.map((ing, idx) => `
+        
+        list.innerHTML = this.currentIngredients.map((ing, idx) => `
             <div class="flex justify-between items-center bg-white border border-gray-200 p-2 rounded shadow-sm">
-                <div class="font-bold text-gray-700 text-sm">${ing.nome}</div>
+                <div class="font-bold text-gray-700 text-sm">${ing.nome_ingrediente}</div>
                 <div class="flex items-center gap-3">
-                    <span class="text-xs bg-gray-100 px-2 py-1 rounded font-mono font-bold">${ing.qty} ${ing.unita}</span>
-                    <button onclick="recipes.removeIng(${idx})" class="text-red-400 hover:text-red-600 font-bold px-1">✕</button>
+                    <span class="text-xs bg-gray-100 px-2 py-1 rounded font-mono font-bold">${ing.quantita_necessaria} ${ing.unita}</span>
+                    <button onclick="recipes.removeIngredient(${idx})" class="text-red-400 hover:text-red-600 font-bold px-1 text-lg">×</button>
                 </div>
             </div>
         `).join('');
@@ -622,35 +621,55 @@ const recipes = {
    async save() {
         const nome = document.getElementById('rec-name').value;
         const porz = parseInt(document.getElementById('rec-portions').value);
-        const cat = document.getElementById('rec-cat').value; // NUOVO
+        const cat = document.getElementById('rec-cat').value;
 
         if (!nome || this.currentIngredients.length === 0) return ui.toast("Nome e ingredienti obbligatori", "error");
 
         loader.show();
+        
+        // Se è una nuova ricetta creata da utente, salviamo ID in localStorage
+        const isNew = !this.editingId;
+        
         const payload = {
             nome: nome,
             porzioni: porz,
-            categoria: cat, // SALVIAMO LA CATEGORIA
+            categoria: cat,
             ingredienti_ricetta: this.currentIngredients,
-            status: 'pending' // Torna in approvazione se modificata
+            status: state.user ? 'approved' : 'pending' // Admin approva subito
         };
 
         let error = null;
+        let data = null;
+        
         if (this.editingId) {
-            const res = await _sb.from('ricette').update(payload).eq('id', this.editingId);
+            // Update
+            const res = await _sb.from('ricette').update(payload).eq('id', this.editingId).select();
             error = res.error;
+            data = res.data;
         } else {
-            const res = await _sb.from('ricette').insert([payload]);
+            // Insert
+            const res = await _sb.from('ricette').insert([payload]).select();
             error = res.error;
+            data = res.data;
         }
 
         if (error) {
+            console.error(error);
             ui.toast("Errore salvataggio", "error");
         } else {
-            ui.toast("Ricetta salvata (In attesa di approvazione)", "success");
+            // Se nuovo e utente pubblico, salva ownership
+            if (isNew && !state.user && data && data[0]) {
+                const newId = data[0].id;
+                let myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
+                myRecipes.push(newId);
+                localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
+            }
+
+            ui.toast("Ricetta salvata!", "success");
             ui.closeModals();
-            await this.load(); // Ricarica lista
-            // Se eravamo nel planner, potremmo voler aggiornare la vista
+            await this.load(); 
+            
+            // Se eravamo nel planner, aggiorna griglia
             if(!document.getElementById('planner-step-grid').classList.contains('hidden')) {
                 planner.renderGrid();
             }
@@ -659,8 +678,8 @@ const recipes = {
     },
 
     async delete(idIn = null) {
-        const id = idIn || document.getElementById('recipe-id').value;
-        if(!id || !confirm("Eliminare?")) return;
+        const id = idIn || this.editingId;
+        if(!id || !confirm("Eliminare questa ricetta?")) return;
 
         loader.show();
         await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
@@ -978,6 +997,11 @@ const planner = {
     backToGrid() {
         document.getElementById('planner-step-list').classList.add('hidden');
         document.getElementById('planner-step-grid').classList.remove('hidden');
+    },
+
+    createNewRecipeFromPlanner() {
+        ui.closeModals(); // Chiude il modale slot
+        recipes.openModal(); // Apre il modale creazione ricetta
     }
 };
 // --- NUOVO OGGETTO PER LA SINCRONIZZAZIONE ---
