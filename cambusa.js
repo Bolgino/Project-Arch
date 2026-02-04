@@ -98,8 +98,16 @@ const app = {
     },
 
     renderFilters() {
-        const cats = ['all', 'colazione', 'pranzo_cena', 'condimenti', 'merenda', 'extra'];
-        const labels = { all: 'Tutto', colazione: '☕ Colazione', pranzo_cena: '🍝 Pasti', condimenti: '🧂 Condim.', merenda: '🍫 Merenda', extra: '🧻 Extra' };
+        // Standardizzazione Categorie: pasti, colazione, merenda, condimenti, extra
+        const cats = ['all', 'colazione', 'merenda', 'pasti', 'condimenti', 'extra'];
+        const labels = { 
+            all: 'Tutto', 
+            colazione: '☕ Colazione', 
+            merenda: '🍫 Merenda', 
+            pasti: '🍝 Pasti', 
+            condimenti: '🧂 Condim.', 
+            extra: '🧻 Extra' 
+        };
         
         document.getElementById('pantry-filters').innerHTML = cats.map(c => `
             <button id="btn-cat-${c}" onclick="app.setCategory('${c}')" 
@@ -180,20 +188,26 @@ const app = {
         if(state.cart.length === 0) return ui.toast("Lista vuota!", "error");
 
         loader.show();
-        let logDetails = [];
+        // Registrazione su 'movimenti_cambusa' per ogni item
+        const userLabel = state.user ? 'Admin' : (note || 'Utente');
+
         for (let c of state.cart) {
             const item = state.pantry.find(x => x.id === c.id);
             if(item) {
+                // 1. Aggiorna quantità
                 const newQ = item.quantita - c.qty;
                 await _sb.from('cambusa').update({ quantita: newQ }).eq('id', c.id);
-                logDetails.push(`${item.nome} x${c.qty}${item.unita}`);
+                
+                // 2. Registra movimento singolo
+                await _sb.from('movimenti_cambusa').insert([{
+                    prodotto: item.nome,
+                    quantita: -Math.abs(c.qty), // Negativo perché è un consumo
+                    unita: item.unita,
+                    azione: 'scarico', // o 'consumo'
+                    utente: userLabel
+                }]);
             }
         }
-
-        await _sb.from('movimenti').insert([{
-            utente: `Cambusa: ${note}`,
-            dettagli: logDetails.join(', ')
-        }]);
 
         cart.empty();
         ui.toggleCart();
@@ -319,28 +333,44 @@ const restock = {
         if (!nome || !qta || !scadenza) return ui.toast("Compila tutti i campi", "error");
 
         loader.show();
-        // Usa la tabella 'cambusa' con stato 'pending' come avevi in origine
+        
+        // SE è Admin -> Approvato subito (stato: null o 'approved'), ALTRIMENTI 'pending'
+        const initialStatus = state.user ? 'approved' : 'pending';
+
         const { data, error } = await _sb.from('cambusa').insert([{
-            nome: nome, categoria: cat, quantita: qta, unita: unita, scadenza: scadenza, stato: 'pending'
+            nome: nome, 
+            categoria: cat, 
+            quantita: qta, 
+            unita: unita, 
+            scadenza: scadenza, 
+            stato: initialStatus
         }]).select();
 
         if (error) {
+             console.error(error);
              ui.toast("Errore inserimento", "error");
         } else {
-             // Salva nel local storage per sapere che è mio
-             const newId = data[0].id;
-             const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
-             myProds.push(newId);
-             localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
+             // Se è l'utente, salviamo nel local storage
+             if(!state.user) {
+                 const newId = data[0].id;
+                 const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
+                 myProds.push(newId);
+                 localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
+             }
 
-             ui.toast("Richiesta inviata!", "success");
+             const msg = state.user ? "Prodotto aggiunto!" : "Richiesta inviata!";
+             ui.toast(msg, "success");
              ui.closeModals();
              
+             // Reset campi
              document.getElementById('new-prod-name').value = '';
              document.getElementById('new-prod-qty').value = '';
              document.getElementById('new-prod-expiry').value = '';
 
+             // Ricarica dati generali
              await app.loadData();
+             // FORZA AGGIORNAMENTO LISTA RIFORNIMENTO
+             this.renderList(); 
         }
         loader.hide();
     },
@@ -442,15 +472,14 @@ const recipes = {
         el.innerHTML = filtered.map(r => {
             const portions = r.porzioni || 4; 
             const isMyRecipe = myRecipes.includes(r.id);
-            // Se non c'è status o è diverso da approved, è pending
             const isPending = !r.status || r.status !== 'approved'; 
 
-            // LOGICA PERMESSI AGGIORNATA
-            // Admin: Sempre TRUE.
-            // Utente Pubblico: SOLO se è sua (isMyRecipe) E se NON è ancora approvata (isPending).
-            const canEdit = isAdmin || (isMyRecipe && isPending);
+            // PERMESSI:
+            // 1. Modifica: TUTTI possono modificare.
+            // 2. Elimina: SOLO Admin o Chi l'ha creata (se pending).
+            const canEdit = true;
+            const canDelete = isAdmin || (isMyRecipe && isPending);
             
-            // Badge visibile a tutti se pending
             const statusBadge = isPending 
                 ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-2 py-1 rounded ml-2 border border-yellow-200 uppercase">⏳ In Approvazione</span>` 
                 : ``; 
@@ -459,11 +488,10 @@ const recipes = {
             <div class="bg-white rounded-xl border ${isPending ? 'border-yellow-300' : 'border-gray-200'} shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
                 <div class="h-2 ${isPending ? 'bg-yellow-400' : 'bg-red-500'} w-full"></div>
                 
-                ${canEdit ? `
                 <div class="absolute top-2 right-2 z-10 flex gap-1">
-                    <button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">🗑</button>
+                    ${canDelete ? `<button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">🗑</button>` : ''}
                     <button onclick="recipes.openModal('${r.id}')" class="bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-1.5 rounded-full shadow-sm transition">✏️</button>
-                </div>` : ''}
+                </div>
 
                 <div class="p-4 flex-grow">
                     <div class="flex flex-wrap items-center mb-2 pr-14"> 
@@ -478,12 +506,12 @@ const recipes = {
                     <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
                         <div class="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Ingredienti</div>
                         <ul class="text-sm text-gray-600 space-y-1">
-                            ${r.ingredienti_ricetta.map(i => `
+                            ${r.ingredienti_ricetta && r.ingredienti_ricetta.length > 0 ? r.ingredienti_ricetta.map(i => `
                                 <li class="flex justify-between border-b border-gray-100 last:border-0 pb-1 last:pb-0">
                                     <span>${i.nome_ingrediente}</span>
                                     <span class="font-bold text-gray-800">${i.quantita_necessaria} <small>${i.unita}</small></span>
                                 </li>
-                            `).join('')}
+                            `).join('') : '<li class="italic text-gray-400 text-xs">Nessun ingrediente</li>'}
                         </ul>
                     </div>
                 </div>
@@ -495,18 +523,19 @@ const recipes = {
         // Pulisci i campi
         document.getElementById('rec-name').value = '';
         document.getElementById('rec-portions').value = 4;
-        document.getElementById('rec-cat').value = 'pasti'; // Default
+        document.getElementById('rec-cat').value = 'pasti'; 
         this.currentIngredients = [];
-        this.editingId = id;
+        this.editingId = id; // IMPORTANTE: salvare l'ID qui
 
-        if (id) {
-            const r = state.recipes.find(x => x.id === id);
+        if (id && id !== 'undefined' && id !== 'null') {
+            const r = state.recipes.find(x => String(x.id) === String(id));
             if (r) {
                 document.getElementById('rec-name').value = r.nome;
                 document.getElementById('rec-portions').value = r.porzioni || 4;
-                // Carica la categoria (se non c'è, mette default)
                 document.getElementById('rec-cat').value = r.categoria || 'pasti'; 
                 this.currentIngredients = r.ingredienti_ricetta || [];
+                // Debug per vedere se li trova
+                console.log("Edit ricetta:", r.nome, this.currentIngredients);
             }
         }
         this.renderIngredientsList();
@@ -772,22 +801,26 @@ const planner = {
         document.getElementById('slot-type').value = mIdx;
         document.getElementById('slot-packed').checked = meal.isPacked || false;
 
-        // --- LOGICA FILTRO CATEGORIE ---
-        // Se è colazione o merenda -> cerco 'snack'
-        // Se è pranzo o cena -> cerco 'pasti'
-        // Se la ricetta non ha categoria (vecchie), la mostro sempre per sicurezza
-        const targetCat = (meal.type === 'colazione' || meal.type === 'merenda') ? 'snack' : 'pasti';
+        // --- LOGICA FILTRO CATEGORIE AGGIORNATA ---
+        // Ricette categorie: 'pasti' (Pranzo/Cena) o 'snack' (Colazione/Merenda)
+        // Pasti eventi: 'colazione', 'merenda' -> 'snack'
+        // Pasti eventi: 'pranzo', 'cena' -> 'pasti'
+        
+        let targetCat = 'pasti';
+        if (meal.type === 'colazione' || meal.type === 'merenda') {
+            targetCat = 'snack';
+        }
 
         const filteredRecipes = state.recipes.filter(r => {
-            if (!r.categoria) return true; // Mostra vecchie ricette senza categoria
-            return r.categoria === targetCat;
+            // Se la ricetta non ha categoria, assumiamo 'pasti' se non è specificato
+            const rCat = r.categoria || 'pasti';
+            return rCat === targetCat;
         });
 
         const sel = document.getElementById('slot-recipe-select');
         sel.innerHTML = '<option value="">-- Nessuna / Piatto Pronto --</option>' + 
             filteredRecipes.map(r => {
                 const isPending = !r.status || r.status !== 'approved';
-                // BUG FIX: anche qui converti in String per il confronto 'selected'
                 const isSelected = String(r.id) === String(meal.recipeId) ? 'selected' : '';
                 return `<option value="${r.id}" ${isSelected}>
                     ${r.nome} ${isPending ? '(In Approvazione)' : ''}
