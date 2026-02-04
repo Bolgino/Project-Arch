@@ -424,7 +424,6 @@ const restock = {
         loader.hide();
     }
 };
-};
 // --- CARRELLO ---
 const cart = {
     // --- DENTRO L'OGGETTO cart ---
