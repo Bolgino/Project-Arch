@@ -1,5 +1,5 @@
 // cambusa.js
-const MAINTENANCE_MODE = false; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
+const MAINTENANCE_MODE = true; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
 // --- CONFIGURAZIONE ---
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
@@ -626,53 +626,80 @@ const recipes = {
 
         loader.show();
         
-        // Se è una nuova ricetta creata da utente, salviamo ID in localStorage
         const isNew = !this.editingId;
         
-        const payload = {
+        // 1. Prepariamo il payload SOLO per la tabella 'ricette' (senza ingredienti)
+        const recipePayload = {
             nome: nome,
             porzioni: porz,
             categoria: cat,
-            ingredienti_ricetta: this.currentIngredients,
-            status: state.user ? 'approved' : 'pending' // Admin approva subito
+            status: state.user ? 'approved' : 'pending' 
         };
 
+        let recipeId = this.editingId;
         let error = null;
         let data = null;
         
-        if (this.editingId) {
+        // 2. Salviamo la Ricetta
+        if (recipeId) {
             // Update
-            const res = await _sb.from('ricette').update(payload).eq('id', this.editingId).select();
+            const res = await _sb.from('ricette').update(recipePayload).eq('id', recipeId).select();
             error = res.error;
             data = res.data;
         } else {
             // Insert
-            const res = await _sb.from('ricette').insert([payload]).select();
+            const res = await _sb.from('ricette').insert([recipePayload]).select();
             error = res.error;
             data = res.data;
+            if (data && data.length > 0) recipeId = data[0].id;
         }
 
         if (error) {
             console.error(error);
-            ui.toast("Errore salvataggio", "error");
-        } else {
-            // Se nuovo e utente pubblico, salva ownership
-            if (isNew && !state.user && data && data[0]) {
-                const newId = data[0].id;
-                let myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
-                myRecipes.push(newId);
-                localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
-            }
+            ui.toast("Errore salvataggio ricetta", "error");
+            loader.hide();
+            return;
+        }
 
-            ui.toast("Ricetta salvata!", "success");
-            ui.closeModals();
-            await this.load(); 
+        // 3. Salviamo gli Ingredienti (Tabella separata)
+        if (recipeId) {
+            // A) Cancelliamo i vecchi ingredienti di questa ricetta (per evitare duplicati o mix)
+            await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', recipeId);
+
+            // B) Prepariamo i nuovi ingredienti con l'ID della ricetta corretto
+            const ingredientsPayload = this.currentIngredients.map(ing => ({
+                ricetta_id: recipeId,
+                nome_ingrediente: ing.nome_ingrediente,
+                quantita_necessaria: ing.quantita_necessaria,
+                unita: ing.unita
+            }));
+
+            // C) Inseriamo i nuovi ingredienti
+            const ingRes = await _sb.from('ingredienti_ricetta').insert(ingredientsPayload);
             
-            // Se eravamo nel planner, aggiorna griglia
-            if(!document.getElementById('planner-step-grid').classList.contains('hidden')) {
-                planner.renderGrid();
+            if (ingRes.error) {
+                console.error(ingRes.error);
+                ui.toast("Ricetta salvata ma errore ingredienti", "warning");
+            } else {
+                // TUTTO OK
+                // Se nuovo e utente pubblico, salva ownership nel localStorage
+                if (isNew && !state.user) {
+                    let myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
+                    myRecipes.push(recipeId);
+                    localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
+                }
+
+                ui.toast("Ricetta salvata!", "success");
+                ui.closeModals();
+                await this.load(); 
+                
+                // Se eravamo nel planner, aggiorna griglia
+                if(!document.getElementById('planner-step-grid').classList.contains('hidden')) {
+                    planner.renderGrid();
+                }
             }
         }
+        
         loader.hide();
     },
 
