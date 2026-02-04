@@ -491,33 +491,27 @@ const recipes = {
         }).join('');
     },
 
-    openModal(editId = null) { 
-        this.tempIng = []; 
-        document.getElementById('recipe-id').value = '';
-        document.getElementById('new-recipe-name').value = '';
-        document.getElementById('new-recipe-portions').value = ''; 
-        document.getElementById('ing-input-name').value = '';
-        document.getElementById('ing-input-qty').value = '';
-        
-        const delBtn = document.getElementById('btn-del-recipe');
-        if(delBtn) delBtn.classList.add('hidden');
+    openModal(id = null) {
+        // Pulisci i campi
+        document.getElementById('rec-name').value = '';
+        document.getElementById('rec-portions').value = 4;
+        document.getElementById('rec-cat').value = 'pasti'; // Default
+        this.currentIngredients = [];
+        this.editingId = id;
 
-        if (editId) {
-            const r = state.recipes.find(x => x.id === editId);
-            if(r) {
-                document.getElementById('recipe-id').value = r.id;
-                document.getElementById('new-recipe-name').value = r.nome;
-                document.getElementById('new-recipe-portions').value = r.porzioni;
-                
-                this.tempIng = r.ingredienti_ricetta.map(i => ({
-                    nome: i.nome_ingrediente, qty: i.quantita_necessaria, unita: i.unita
-                }));
+        if (id) {
+            const r = state.recipes.find(x => x.id === id);
+            if (r) {
+                document.getElementById('rec-name').value = r.nome;
+                document.getElementById('rec-portions').value = r.porzioni || 4;
+                // Carica la categoria (se non c'è, mette default)
+                document.getElementById('rec-cat').value = r.categoria || 'pasti'; 
+                this.currentIngredients = r.ingredienti_ricetta || [];
             }
         }
-        this.renderIngList();
-        ui.modal('modal-recipe'); 
+        this.renderIngredientsList();
+        ui.modal('modal-recipe');
     },
-
     addIngFromInput() {
         const name = document.getElementById('ing-input-name').value.trim();
         const qty = parseFloat(document.getElementById('ing-input-qty').value);
@@ -553,54 +547,43 @@ const recipes = {
         `).join('');
     },
 
-    async save() {
-        const id = document.getElementById('recipe-id').value;
-        const nome = document.getElementById('new-recipe-name').value;
-        const portions = parseInt(document.getElementById('new-recipe-portions').value) || 4;
-        
-        if(!nome || !this.tempIng.length) return ui.toast("Dati mancanti", "error");
+   async save() {
+        const nome = document.getElementById('rec-name').value;
+        const porz = parseInt(document.getElementById('rec-portions').value);
+        const cat = document.getElementById('rec-cat').value; // NUOVO
+
+        if (!nome || this.currentIngredients.length === 0) return ui.toast("Nome e ingredienti obbligatori", "error");
 
         loader.show();
-        let recipeId = id;
-        
-        const isAdmin = state.user !== null;
-        let statusToSet = 'pending'; 
+        const payload = {
+            nome: nome,
+            porzioni: porz,
+            categoria: cat, // SALVIAMO LA CATEGORIA
+            ingredienti_ricetta: this.currentIngredients,
+            status: 'pending' // Torna in approvazione se modificata
+        };
 
-        if (isAdmin) {
-            statusToSet = 'approved'; 
-        } else if (id) {
-             const existing = state.recipes.find(r => r.id === id);
-             statusToSet = existing ? existing.status : 'pending';
-        }
-
-        const recipeData = { nome: nome, porzioni: portions, status: statusToSet };
-        
-        if (id) {
-            const { error } = await _sb.from('ricette').update(recipeData).eq('id', id);
-            if(error) { loader.hide(); return ui.toast("Errore update", "error"); }
-            await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
+        let error = null;
+        if (this.editingId) {
+            const res = await _sb.from('ricette').update(payload).eq('id', this.editingId);
+            error = res.error;
         } else {
-            const { data, error } = await _sb.from('ricette').insert([recipeData]).select();
-            if(error) { loader.hide(); return ui.toast("Errore insert", "error"); }
-            recipeId = data[0].id;
-            
-            const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
-            myRecipes.push(recipeId);
-            localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
+            const res = await _sb.from('ricette').insert([payload]);
+            error = res.error;
         }
 
-        const ingData = this.tempIng.map(i => ({
-            ricetta_id: recipeId, nome_ingrediente: i.nome, quantita_necessaria: i.qty, unita: i.unita
-        }));
-        
-        if (ingData.length > 0) await _sb.from('ingredienti_ricetta').insert(ingData);
-
-        await this.load(); // Reload completo per sicurezza
-        if(state.user) admin.renderRecipes();
-
+        if (error) {
+            ui.toast("Errore salvataggio", "error");
+        } else {
+            ui.toast("Ricetta salvata (In attesa di approvazione)", "success");
+            ui.closeModals();
+            await this.load(); // Ricarica lista
+            // Se eravamo nel planner, potremmo voler aggiornare la vista
+            if(!document.getElementById('planner-step-grid').classList.contains('hidden')) {
+                planner.renderGrid();
+            }
+        }
         loader.hide();
-        ui.toast("Salvato!", "success");
-        ui.closeModals();
     },
 
     async delete(idIn = null) {
@@ -720,12 +703,15 @@ const planner = {
 
     renderGrid() {
         const container = document.getElementById('planner-grid-container');
+        if(!container) return;
+
         container.innerHTML = this.eventData.days.map((day, dIdx) => {
             const dateStr = day.date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
             
             const mealsHtml = day.meals.map((meal, mIdx) => {
-                const recipe = state.recipes.find(r => r.id === meal.recipeId);
-                // Controllo se è pending per mostrare un'icona
+                // BUG FIX: Uso String() per essere sicuro che il confronto funzioni (id numero vs id stringa)
+                const recipe = state.recipes.find(r => String(r.id) === String(meal.recipeId));
+                
                 const isPending = recipe && (!recipe.status || recipe.status !== 'approved');
                 const recipeName = recipe 
                     ? (isPending ? `⏳ ${recipe.nome}` : recipe.nome) 
@@ -733,57 +719,63 @@ const planner = {
                 
                 const isPacked = meal.isPacked ? '🎒 AL SACCO' : '';
                 
-                // STILI COLORI AGGIORNATI CON MERENDA
+                // Gestione colori bordi
                 let styleClass = 'border-l-4 ';
                 if (meal.type === 'pranzo') styleClass += 'border-orange-400';
                 else if (meal.type === 'cena') styleClass += 'border-blue-400';
-                else if (meal.type === 'merenda') styleClass += 'border-purple-400'; // Colore Merenda
-                else styleClass += 'border-yellow-300'; // Colore Colazione
+                else if (meal.type === 'merenda') styleClass += 'border-purple-400';
+                else styleClass += 'border-yellow-300';
 
+                // Passiamo l'indice in modo sicuro
                 return `
                 <div onclick="planner.openSlotEditor(${dIdx}, ${mIdx})" 
-                     class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 flex justify-between items-center ${styleClass}">
-                    <div>
-                        <span class="text-xs font-bold uppercase text-gray-500 block">${meal.name}</span>
-                        <span class="font-bold text-gray-800 text-lg">${recipeName}</span>
+                     class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 flex justify-between items-center ${styleClass} mb-2">
+                    <div class="overflow-hidden">
+                        <span class="text-[10px] font-bold uppercase text-gray-400 block tracking-wider">${meal.name}</span>
+                        <span class="font-bold text-gray-800 text-sm leading-tight block truncate">${recipeName}</span>
                     </div>
-                    <div class="text-xs font-bold text-orange-600">${isPacked}</div>
+                    <div class="text-[10px] font-bold text-orange-600 ml-2 whitespace-nowrap">${isPacked}</div>
                 </div>`;
             }).join('');
 
             return `
-            <div class="bg-green-50 p-4 rounded-xl border border-green-100">
-                <h4 class="font-extrabold text-green-900 mb-3 capitalize text-lg">${dateStr}</h4>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 shadow-sm">
+                <h4 class="font-extrabold text-gray-700 mb-2 capitalize text-sm border-b border-gray-200 pb-1">${dateStr}</h4>
+                <div class="flex flex-col gap-1">
                     ${mealsHtml}
                 </div>
             </div>`;
         }).join('');
     },
-
     openSlotEditor(dIdx, mIdx) {
         const meal = this.eventData.days[dIdx].meals[mIdx];
         document.getElementById('slot-day-index').value = dIdx;
         document.getElementById('slot-type').value = mIdx;
         document.getElementById('slot-packed').checked = meal.isPacked || false;
 
-        // Popola select includendo ANCHE le ricette in approvazione
+        // --- LOGICA FILTRO CATEGORIE ---
+        // Se è colazione o merenda -> cerco 'snack'
+        // Se è pranzo o cena -> cerco 'pasti'
+        // Se la ricetta non ha categoria (vecchie), la mostro sempre per sicurezza
+        const targetCat = (meal.type === 'colazione' || meal.type === 'merenda') ? 'snack' : 'pasti';
+
+        const filteredRecipes = state.recipes.filter(r => {
+            if (!r.categoria) return true; // Mostra vecchie ricette senza categoria
+            return r.categoria === targetCat;
+        });
+
         const sel = document.getElementById('slot-recipe-select');
         sel.innerHTML = '<option value="">-- Nessuna / Piatto Pronto --</option>' + 
-            state.recipes.map(r => {
+            filteredRecipes.map(r => {
                 const isPending = !r.status || r.status !== 'approved';
-                return `<option value="${r.id}" ${r.id === meal.recipeId ? 'selected' : ''}>
+                // BUG FIX: anche qui converti in String per il confronto 'selected'
+                const isSelected = String(r.id) === String(meal.recipeId) ? 'selected' : '';
+                return `<option value="${r.id}" ${isSelected}>
                     ${r.nome} ${isPending ? '(In Approvazione)' : ''}
                 </option>`;
             }).join('');
 
         ui.modal('modal-slot-edit');
-    },
-    createNewRecipeFromPlanner() {
-        ui.closeModals(); // Chiude il planner slot editor
-        recipes.openModal(); // Apre editor ricetta
-        // Quando salva, dovrà aggiornare la lista. Il realtime o il reload in recipes.save() ci aiuterà.
-        // L'utente dovrà riaprire lo slot dopo aver creato la ricetta, ma la troverà in elenco.
     },
 
     saveSlot() {
@@ -792,13 +784,16 @@ const planner = {
         const recipeId = document.getElementById('slot-recipe-select').value;
         const isPacked = document.getElementById('slot-packed').checked;
 
-        this.eventData.days[dIdx].meals[mIdx].recipeId = recipeId || null;
+        // Aggiorna i dati
+        // Nota: se recipeId è stringa vuota, salviamo null per pulizia
+        this.eventData.days[dIdx].meals[mIdx].recipeId = (recipeId && recipeId !== "") ? recipeId : null;
         this.eventData.days[dIdx].meals[mIdx].isPacked = isPacked;
 
         ui.closeModals();
+        
+        // Ridisegna
         this.renderGrid();
     },
-
     calculateShopping() {
         if (!this.eventData.days.length) return;
 
