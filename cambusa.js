@@ -920,25 +920,19 @@ const planner = {
 
         let needs = {}; 
 
-        // 1. Calcola Fabbisogno Totale
+        // 1. Calcola Fabbisogno Totale (come prima, ma normalizziamo i nomi)
         this.eventData.days.forEach(day => {
             if(!day.meals) return;
-            
             day.meals.forEach(meal => {
-                // FIX: Controlliamo che ci sia un recipeId
                 if(meal.recipeId) {
-                    // FIX CRITICO: Convertiamo entrambi in String per il confronto
                     const r = state.recipes.find(x => String(x.id) === String(meal.recipeId));
-                    
                     if(r && r.ingredienti_ricetta && Array.isArray(r.ingredienti_ricetta)) {
-                        // Scala dosi: (DoseRicetta / PorzioniRicetta) * PaxEvento
                         const basePortions = parseFloat(r.porzioni) || 4;
                         const targetPax = parseFloat(this.eventData.pax) || 1;
                         const ratio = targetPax / basePortions;
                         
                         r.ingredienti_ricetta.forEach(ing => {
                             if(!ing.nome_ingrediente) return;
-                            
                             const name = ing.nome_ingrediente.toLowerCase().trim();
                             const qty = parseFloat(ing.quantita_necessaria) * ratio;
                             
@@ -954,37 +948,57 @@ const planner = {
             });
         });
 
-        // 2. Confronta con Dispensa
+        // 2. Confronta con Dispensa con CONVERSIONE
         const el = document.getElementById('shopping-result-list');
         if(!el) return;
 
         const ingredientKeys = Object.keys(needs).sort();
-        
         if (ingredientKeys.length === 0) {
-            el.innerHTML = '<div class="text-center py-10 text-gray-500">Nessun ingrediente necessario trovato. Assicurati di aver assegnato le ricette agli slot.</div>';
+            el.innerHTML = '<div class="text-center py-10 text-gray-500">Nessun ingrediente necessario trovato.</div>';
             return;
         }
 
         const today = new Date().toISOString().split('T')[0];
         let resultHtml = '';
 
+        // Helper per convertire tutto in unità base (grammi o millilitri)
+        const getBaseFactor = (unit) => {
+            const u = unit.toLowerCase().trim();
+            if (['kg', 'chilogrammi'].includes(u)) return 1000;
+            if (['hg', 'etti'].includes(u)) return 100;
+            if (['lt', 'l', 'litri'].includes(u)) return 1000;
+            if (['cl'].includes(u)) return 10;
+            return 1; // g, ml, pz, conf restano 1
+        };
+
         ingredientKeys.forEach(ingName => {
             const need = needs[ingName];
+            const needFactor = getBaseFactor(need.unit);
+            const needInBase = need.qty * needFactor; // Es: 2.5kg diventa 2500
             
-            // Cerca in dispensa prodotti simili non scaduti
+            // Cerca in dispensa
             const inPantryItems = state.pantry.filter(p => 
                 p.nome.toLowerCase().includes(ingName) && 
                 (!p.scadenza || p.scadenza >= today) &&
-                p.quantita > 0
+                p.quantita > 0 && 
+                p.stato !== 'pending' // Ignora i pending nel calcolo
             );
 
-            const totalInPantry = inPantryItems.reduce((acc, curr) => acc + curr.quantita, 0);
-            const missing = need.qty - totalInPantry;
+            // Somma le quantità in dispensa convertendole
+            const totalInPantryBase = inPantryItems.reduce((acc, curr) => {
+                const pantryFactor = getBaseFactor(curr.unita);
+                return acc + (curr.quantita * pantryFactor);
+            }, 0);
+
+            const missingBase = needInBase - totalInPantryBase;
             
+            // Riconvertiamo il mancante nell'unità della ricetta per visualizzarlo
+            const missingDisplay = missingBase / needFactor;
+
             let statusColor = 'text-red-600 bg-red-50';
-            let statusText = `MANCANO: <strong>${Math.max(0, missing).toFixed(1)} ${need.unit}</strong>`;
+            let statusText = `MANCANO: <strong>${Math.max(0, missingDisplay).toFixed(1)} ${need.unit}</strong>`;
             
-            if (missing <= 0) {
+            if (missingBase <= 0) {
                 statusColor = 'text-green-700 bg-green-50';
                 statusText = '✅ Coperto dalla dispensa!';
             }
@@ -1015,7 +1029,6 @@ const planner = {
         });
 
         el.innerHTML = resultHtml;
-        
         document.getElementById('planner-step-grid').classList.add('hidden');
         document.getElementById('planner-step-list').classList.remove('hidden');
     },
@@ -1082,22 +1095,41 @@ const admin = {
     },
     
     async renderRequests() {
-        const { data } = await _sb.from('richieste_cambusa').select('*').order('created_at', { ascending: false });
+        // Cerca direttamente in cambusa gli elementi in attesa
+        const { data } = await _sb.from('cambusa')
+                                  .select('*')
+                                  .eq('stato', 'pending')
+                                  .order('created_at', { ascending: false });
+                                  
         const el = document.getElementById('admin-approval-list');
         if(!el) return;
         
-        if(!data || !data.length) { el.innerHTML = '<p class="text-gray-400 text-sm italic">Nessuna richiesta pending.</p>'; return; }
+        if(!data || !data.length) { 
+            el.innerHTML = '<p class="text-gray-400 text-sm italic">Nessun prodotto in attesa di approvazione.</p>'; 
+            // Nasconde il badge se non ci sono richieste
+            const badge = document.getElementById('badge-approvals');
+            if(badge) badge.classList.add('hidden');
+            return; 
+        }
+
+        // Mostra il badge
+        const badge = document.getElementById('badge-approvals');
+        if(badge) {
+            badge.innerText = data.length;
+            badge.classList.remove('hidden');
+        }
 
         el.innerHTML = data.map(r => `
             <div class="bg-white p-3 rounded border-l-4 border-yellow-400 shadow-sm flex justify-between items-center mb-2">
                 <div>
-                    <div class="font-bold text-gray-800">${r.prodotto}</div>
-                    <div class="text-xs text-gray-500">Richiesto da: ${r.richiedente || 'Anonimo'}</div>
-                    <div class="text-xs font-mono bg-gray-100 inline-block px-1 rounded mt-1">Qt: ${r.quantita}</div>
+                    <div class="font-bold text-gray-800">${r.nome}</div>
+                    <div class="text-xs text-gray-500">Categoria: ${r.categoria}</div>
+                    <div class="text-xs font-mono bg-gray-100 inline-block px-1 rounded mt-1">Qt: ${r.quantita} ${r.unita}</div>
+                    ${r.scadenza ? `<div class="text-[10px] text-red-500">Scad: ${r.scadenza}</div>` : ''}
                 </div>
                 <div class="flex gap-2">
-                    <button onclick="admin.processReq('${r.id}', false)" class="text-red-500 hover:bg-red-50 p-2 rounded">✗</button>
-                    <button onclick="admin.processReq('${r.id}', true)" class="text-green-600 hover:bg-green-50 p-2 rounded">✓</button>
+                    <button onclick="admin.processReq('${r.id}', false)" class="text-red-500 hover:bg-red-50 p-2 rounded" title="Rifiuta ed Elimina">🗑 Rifiuta</button>
+                    <button onclick="admin.processReq('${r.id}', true)" class="bg-green-600 text-white font-bold px-3 py-2 rounded text-xs hover:bg-green-700 shadow-sm">✓ APPROVA</button>
                 </div>
             </div>
         `).join('');
@@ -1106,21 +1138,22 @@ const admin = {
     async processReq(id, approved) {
         loader.show();
         if(approved) {
-            const { data: req } = await _sb.from('richieste_cambusa').select('*').eq('id', id).single();
-            if(req) {
-                const { data: exist } = await _sb.from('cambusa').select('*').ilike('nome', req.prodotto).single();
-                if(exist) {
-                    await _sb.from('cambusa').update({ quantita: exist.quantita + req.quantita }).eq('id', exist.id);
-                } else {
-                    await _sb.from('cambusa').insert([{ nome: req.prodotto, quantita: req.quantita, unita: 'pz', categoria: 'altro' }]);
-                }
-            }
+            // Se approvato, cambia lo stato in 'approved' (o null, a seconda di come gestisci i pubblicati)
+            // Se nel tuo DB i pubblicati hanno stato 'approved', usa quello. Se hanno NULL, usa null.
+            // Dal tuo codice precedente usavi 'approved'.
+            const { error } = await _sb.from('cambusa').update({ stato: 'approved' }).eq('id', id);
+            if(error) ui.toast("Errore approvazione", "error");
+            else ui.toast("Prodotto Approvato e Pubblicato", "success");
+        } else {
+            // Se rifiutato, elimina la riga dalla cambusa
+            const { error } = await _sb.from('cambusa').delete().eq('id', id);
+            if(error) ui.toast("Errore eliminazione", "error");
+            else ui.toast("Richiesta Rifiutata ed Eliminata", "error");
         }
-        await _sb.from('richieste_cambusa').delete().eq('id', id);
+        
         loader.hide();
-        ui.toast(approved ? "Richiesta Approvata" : "Richiesta Rifiutata", approved ? "success" : "error");
         this.renderRequests();
-        app.loadData();
+        app.loadData(); // Ricarica la dispensa generale
     },
     renderStock() {
         const term = document.getElementById('admin-search') ? document.getElementById('admin-search').value.toLowerCase() : '';
