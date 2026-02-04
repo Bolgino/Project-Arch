@@ -1158,11 +1158,20 @@ const admin = {
     renderStock() {
         const term = document.getElementById('admin-search') ? document.getElementById('admin-search').value.toLowerCase() : '';
         const el = document.getElementById('admin-list');
+        const countEl = document.getElementById('stock-count'); // Elemento contatore
+        
         if(!el) return;
 
-        const filtered = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
+        // Filtra solo quelli non pending (quelli approvati) per la gestione stock
+        const filtered = state.pantry.filter(p => 
+            p.nome.toLowerCase().includes(term) && 
+            p.stato !== 'pending'
+        );
         
-        if(!filtered.length) { el.innerHTML = '<p class="text-gray-400 p-4">Nessun oggetto.</p>'; return; }
+        // Aggiorna il contatore
+        if(countEl) countEl.innerText = filtered.length;
+        
+        if(!filtered.length) { el.innerHTML = '<p class="text-gray-400 p-4">Nessun oggetto in dispensa.</p>'; return; }
 
         el.innerHTML = filtered.map(p => {
             // FORMATTAZIONE DATA SCADENZA
@@ -1176,9 +1185,10 @@ const admin = {
             <div class="flex justify-between items-center py-3 px-3 bg-white mb-2 rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition">
                 <div>
                     <div class="font-bold text-gray-800 text-lg">${p.nome}</div>
-                    <div class="text-xs flex items-center gap-2 mt-1">
+                    <div class="text-xs text-gray-500 mb-1">${p.categoria}</div>
+                    <div class="text-xs flex items-center gap-2">
                         <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-bold">${p.quantita} ${p.unita}</span>
-                        <span class="${dateClass}">📅 Scad: ${scadenzaStr}</span>
+                        <span class="${dateClass}">📅 ${scadenzaStr}</span>
                     </div>
                 </div>
                 
