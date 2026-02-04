@@ -652,7 +652,7 @@ const planner = {
             const isLastDay = current.toDateString() === end.toDateString();
 
             // Logica orari (es. se arrivo alle 18, niente pranzo)
-            let includeBreakfast = true, includeLunch = true, includeDinner = true;
+            let includeBreakfast = true, includeLunch = true, includeMerenda = true, includeDinner = true;
 
             if (isFirstDay) {
                 if (h > 9) includeBreakfast = false;
