@@ -440,9 +440,17 @@
             <input type="hidden" id="recipe-id"> <div class="flex flex-col h-full overflow-hidden">
                 <div class="p-4 bg-white shadow-sm z-10 shrink-0 space-y-3">
                     <div class="grid grid-cols-4 gap-3">
-                        <div class="col-span-3">
-                            <label class="text-[10px] font-bold text-gray-500 uppercase">Nome Piatto</label>
-                            <input type="text" id="new-recipe-name" placeholder="Es. Carbonara" class="w-full p-2 border rounded font-bold text-gray-800 focus:border-red-500 outline-none">
+                        <div class="mb-4">
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Ricetta</label>
+                            <input type="text" id="rec-name" class="w-full p-3 border rounded-xl font-bold bg-gray-50 text-gray-800">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo di pasto</label>
+                            <select id="rec-cat" class="w-full p-3 border rounded-xl font-bold bg-white text-gray-800">
+                                <option value="pasti">Pranzo / Cena (Salato)</option>
+                                <option value="snack">Colazione / Merenda (Dolce/Snack)</option>
+                            </select>
                         </div>
                         <div class="col-span-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">Persone</label>
