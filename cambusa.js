@@ -211,77 +211,45 @@ const restock = {
         this.renderList();
     },
 
-    // --- Cerca la funzione renderList dentro l'oggetto recipes ---
-
     renderList() {
-        const term = document.getElementById('recipe-search') ? document.getElementById('recipe-search').value.toLowerCase() : '';
-        const el = document.getElementById('recipes-list');
+        const term = document.getElementById('restock-search') ? document.getElementById('restock-search').value.toLowerCase() : '';
+        const el = document.getElementById('restock-full-list');
         if(!el) return;
 
-        const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
-        const isAdmin = state.user !== null;
-
-        const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
+        // Filtra la dispensa (pantry), non le ricette!
+        const filtered = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
 
         if(filtered.length === 0) {
-            el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata.</div>`;
+            el.innerHTML = `<div class="text-center py-10 text-gray-400 italic">Nessun prodotto trovato.</div>`;
             return;
         }
 
-        el.innerHTML = filtered.map(r => {
-            const portions = r.porzioni || 4; 
-            const isMyRecipe = myRecipes.includes(r.id);
-            const isPending = !r.status || r.status !== 'approved'; 
-
-            // NUOVA LOGICA PERMESSI (Richiesta Utente):
-            // Modifica: TUTTI possono modificare sempre (canEdit = true).
-            // Elimina: Solo Admin SEMPRE, oppure Creatore SOLO se è pending.
-            
-            const canEdit = true; 
-            const canDelete = isAdmin || (isMyRecipe && isPending);
-            
-            const statusBadge = isPending 
-                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-2 py-1 rounded ml-2 border border-yellow-200 uppercase">⏳ In Approvazione</span>` 
-                : ``; 
-
+        el.innerHTML = filtered.map(p => {
             return `
-            <div class="bg-white rounded-xl border ${isPending ? 'border-yellow-300' : 'border-gray-200'} shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
-                <div class="h-2 ${isPending ? 'bg-yellow-400' : 'bg-red-500'} w-full"></div>
-                
-                <div class="absolute top-2 right-2 z-10 flex gap-1">
-                    ${canDelete ? `
-                    <button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">🗑</button>
-                    ` : ''}
-                    
-                    <button onclick="recipes.openModal('${r.id}')" class="bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-1.5 rounded-full shadow-sm transition">✏️</button>
-                </div>
-
-                <div class="p-4 flex-grow">
-                    <div class="flex flex-wrap items-center mb-2 pr-14"> 
-                        <h3 class="font-extrabold text-gray-800 text-lg leading-tight">${r.nome}</h3>
-                        ${statusBadge}
+            <div class="bg-white rounded-xl p-3 border border-orange-100 shadow-sm flex flex-col gap-2">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="font-bold text-gray-800 text-lg leading-tight">${p.nome}</div>
+                        <div class="text-xs text-gray-400 font-mono">Attuali: ${p.quantita} ${p.unita} | Scad: ${p.scadenza ? new Date(p.scadenza).toLocaleDateString() : 'N/A'}</div>
                     </div>
-                    
-                    <span class="inline-block bg-red-50 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded border border-red-100 mb-3">
-                        👥 Per ${portions} persone
-                    </span>
-                    
-                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        <div class="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Ingredienti</div>
-                        <ul class="text-sm text-gray-600 space-y-1">
-                            ${r.ingredienti_ricetta.map(i => `
-                                <li class="flex justify-between border-b border-gray-100 last:border-0 pb-1 last:pb-0">
-                                    <span>${i.nome_ingrediente}</span>
-                                    <span class="font-bold text-gray-800">${i.quantita_necessaria} <small>${i.unita}</small></span>
-                                </li>
-                            `).join('')}
-                        </ul>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-2 bg-orange-50 p-2 rounded-lg">
+                    <div>
+                        <label class="text-[9px] font-bold text-orange-800 uppercase">Aggiungi Qtà</label>
+                        <input type="number" placeholder="0" class="w-full p-1 text-center border rounded text-sm font-bold outline-none focus:border-orange-500"
+                            onchange="restock.trackChange('${p.id}', 'addQty', this.value)">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-bold text-orange-800 uppercase">Nuova Scadenza</label>
+                        <input type="date" class="w-full p-1 border rounded text-xs outline-none focus:border-orange-500 bg-white"
+                            onchange="restock.trackChange('${p.id}', 'newExpiry', this.value)">
                     </div>
                 </div>
             </div>`;
         }).join('');
     },
-
+    
     trackChange(id, field, value) {
         if (!state.restockCart[id]) state.restockCart[id] = { addQty: '', newExpiry: '' };
         state.restockCart[id][field] = value;
@@ -689,17 +657,20 @@ const planner = {
             if (isFirstDay) {
                 if (h > 9) includeBreakfast = false;
                 if (h > 14) includeLunch = false;
+                if (h > 17) includeMerenda = false;
                 if (h > 20) includeDinner = false;
             }
             if (isLastDay) {
                 const endH = end.getHours();
                 if (endH < 8) includeBreakfast = false;
                 if (endH < 13) includeLunch = false;
+                if (endH < 16) includeMerenda = false;
                 if (endH < 20) includeDinner = false;
             }
 
             if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeId: null });
             if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeId: null });
+            if(includeMerenda) meals.push({ type: 'merenda', name: 'Merenda', recipeId: null });
             if(includeDinner) meals.push({ type: 'cena', name: 'Cena', recipeId: null });
 
             this.eventData.days.push({
@@ -754,9 +725,20 @@ const planner = {
             
             const mealsHtml = day.meals.map((meal, mIdx) => {
                 const recipe = state.recipes.find(r => r.id === meal.recipeId);
-                const recipeName = recipe ? recipe.nome : '<span class="text-gray-400 italic">Seleziona Ricetta...</span>';
+                // Controllo se è pending per mostrare un'icona
+                const isPending = recipe && (!recipe.status || recipe.status !== 'approved');
+                const recipeName = recipe 
+                    ? (isPending ? `⏳ ${recipe.nome}` : recipe.nome) 
+                    : '<span class="text-gray-400 italic">Seleziona Ricetta...</span>';
+                
                 const isPacked = meal.isPacked ? '🎒 AL SACCO' : '';
-                const styleClass = meal.type === 'pranzo' ? 'border-l-4 border-orange-400' : (meal.type === 'cena' ? 'border-l-4 border-blue-400' : 'border-l-4 border-yellow-300');
+                
+                // STILI COLORI AGGIORNATI CON MERENDA
+                let styleClass = 'border-l-4 ';
+                if (meal.type === 'pranzo') styleClass += 'border-orange-400';
+                else if (meal.type === 'cena') styleClass += 'border-blue-400';
+                else if (meal.type === 'merenda') styleClass += 'border-purple-400'; // Colore Merenda
+                else styleClass += 'border-yellow-300'; // Colore Colazione
 
                 return `
                 <div onclick="planner.openSlotEditor(${dIdx}, ${mIdx})" 
@@ -782,15 +764,26 @@ const planner = {
     openSlotEditor(dIdx, mIdx) {
         const meal = this.eventData.days[dIdx].meals[mIdx];
         document.getElementById('slot-day-index').value = dIdx;
-        document.getElementById('slot-type').value = mIdx; // uso l'indice dell'array meals
+        document.getElementById('slot-type').value = mIdx;
         document.getElementById('slot-packed').checked = meal.isPacked || false;
 
-        // Popola select
+        // Popola select includendo ANCHE le ricette in approvazione
         const sel = document.getElementById('slot-recipe-select');
         sel.innerHTML = '<option value="">-- Nessuna / Piatto Pronto --</option>' + 
-            state.recipes.map(r => `<option value="${r.id}" ${r.id === meal.recipeId ? 'selected' : ''}>${r.nome}</option>`).join('');
+            state.recipes.map(r => {
+                const isPending = !r.status || r.status !== 'approved';
+                return `<option value="${r.id}" ${r.id === meal.recipeId ? 'selected' : ''}>
+                    ${r.nome} ${isPending ? '(In Approvazione)' : ''}
+                </option>`;
+            }).join('');
 
         ui.modal('modal-slot-edit');
+    },
+    createNewRecipeFromPlanner() {
+        ui.closeModals(); // Chiude il planner slot editor
+        recipes.openModal(); // Apre editor ricetta
+        // Quando salva, dovrà aggiornare la lista. Il realtime o il reload in recipes.save() ci aiuterà.
+        // L'utente dovrà riaprire lo slot dopo aver creato la ricetta, ma la troverà in elenco.
     },
 
     saveSlot() {
@@ -952,10 +945,10 @@ const admin = {
         // 3. Carica i dati specifici
         if (name === 'recipes') this.renderRecipes();
         if (name === 'approvals') this.renderRequests();
-        if (name === 'stock') this.filterStock(); // O renderStock se presente
+        if (name === 'stock') this.renderStock();
         if (name === 'movements') this.renderMovements(); // Se hai questa funzione
     },
-
+    
     async renderRequests() {
         const { data } = await _sb.from('richieste_cambusa').select('*').order('created_at', { ascending: false });
         const el = document.getElementById('admin-approval-list');
@@ -997,7 +990,76 @@ const admin = {
         this.renderRequests();
         app.loadData();
     },
+    renderStock() {
+        const term = document.getElementById('admin-search') ? document.getElementById('admin-search').value.toLowerCase() : '';
+        const el = document.getElementById('admin-list');
+        if(!el) return;
 
+        const filtered = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
+        
+        if(!filtered.length) { el.innerHTML = '<p class="text-gray-400 p-4">Nessun oggetto.</p>'; return; }
+
+        el.innerHTML = filtered.map(p => `
+            <div class="flex justify-between items-center py-3 px-2 hover:bg-gray-50">
+                <div>
+                    <div class="font-bold text-gray-800">${p.nome}</div>
+                    <div class="text-xs text-gray-500">${p.quantita} ${p.unita} | ${p.categoria}</div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="admin.editItem('${p.id}')" class="text-blue-500 text-xs font-bold border border-blue-200 px-2 py-1 rounded">MOD</button>
+                    <button onclick="admin.deleteItem('${p.id}')" class="text-red-500 text-xs font-bold border border-red-200 px-2 py-1 rounded">ELIM</button>
+                </div>
+            </div>
+        `).join('');
+    },
+    
+    // Funzione per filtrare (collegata all'input search admin)
+    filterStock() {
+        this.renderStock();
+    },
+
+    // Aggiungi queste funzioni per far funzionare i bottoni MOD ed ELIM
+    editItem(id) {
+        const item = state.pantry.find(x => x.id === id);
+        if(!item) return;
+        document.getElementById('modal-title').innerText = "Modifica Ingrediente";
+        document.getElementById('item-id').value = id;
+        document.getElementById('item-name').value = item.nome;
+        document.getElementById('item-cat').value = item.categoria;
+        document.getElementById('item-qty').value = item.quantita;
+        document.getElementById('item-unit').value = item.unita;
+        document.getElementById('item-expiry').value = item.scadenza || '';
+        document.getElementById('btn-del-item').classList.remove('hidden');
+        ui.modal('modal-item');
+    },
+
+    async saveItem() {
+        const id = document.getElementById('item-id').value;
+        const data = {
+            nome: document.getElementById('item-name').value,
+            categoria: document.getElementById('item-cat').value,
+            quantita: parseFloat(document.getElementById('item-qty').value),
+            unita: document.getElementById('item-unit').value,
+            scadenza: document.getElementById('item-expiry').value || null
+        };
+        
+        if(id) await _sb.from('cambusa').update(data).eq('id', id);
+        // else se volessi creare nuovo da admin...
+
+        ui.toast("Salvato!", "success");
+        ui.closeModals();
+        app.loadData();
+        this.renderStock();
+    },
+
+    async deleteItem(idIn) {
+        const id = idIn || document.getElementById('item-id').value;
+        if(!confirm("Eliminare definitivamente dalla dispensa?")) return;
+        await _sb.from('cambusa').delete().eq('id', id);
+        ui.closeModals();
+        app.loadData();
+        this.renderStock();
+    },
     // --- NUOVA GESTIONE RICETTE ADMIN ---
     renderRecipes() {
         const el = document.getElementById('admin-recipes-list');
@@ -1062,32 +1124,12 @@ const admin = {
             
             loader.hide();
         }
-    },// Dentro l'oggetto admin...
-
-    async approveRecipe(id) {
-        if(!confirm("Confermi l'approvazione? La ricetta diventerà pubblica.")) return;
-        
-        loader.show();
-        // 1. Aggiorna il DB
-        const { error } = await _sb.from('ricette').update({ status: 'approved' }).eq('id', id);
-        
-        if(error) {
-            loader.hide();
-            ui.toast("Errore Approvazione", "error");
-        } else {
-            ui.toast("Ricetta Pubblicata!", "success");
-            
-            // 2. FORZA IL RICARICAMENTO DEI DATI
-            await recipes.load(); // Ricarica dal server
-            this.renderRecipes(); // Ridisegna la tabella Admin
-            
-            loader.hide();
-        }
     },
-    
-    // Funzioni placeholder se nel tuo HTML ci sono ancora riferimenti
-    filterStock() { /* Logica filtro stock se serve */ },
-    renderMovements() { /* Logica movimenti se serve */ }
+    renderMovements() {
+        /* Se vuoi aggiungere la logica movimenti admin, inseriscila qui simile a armadio.js */ 
+        const el = document.getElementById('movements-list');
+        if(el) el.innerHTML = "<p class='text-gray-400 italic text-sm'>Funzione movimenti in sviluppo...</p>";
+    }
 };
 
 // --- AUTH ---
