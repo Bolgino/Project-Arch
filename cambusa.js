@@ -143,7 +143,11 @@ const app = {
                 if (isMine) {
                     badge = '<span class="absolute top-0 right-0 bg-yellow-100 text-yellow-800 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10 border border-yellow-300">IN ATTESA (TUO) ✏️</span>';
                     borderClass = 'border-yellow-400 bg-yellow-50/50';
-                    actionButtons = `<button onclick="restock.openEditPending('${item.id}')" class="w-full bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">MODIFICA RICHIESTA</button>`;
+                    actionButtons = `
+                    <div class="flex gap-1 w-full">
+                        <button onclick="restock.openEditPending('${item.id}')" class="flex-grow bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">MODIFICA</button>
+                        <button onclick="restock.deletePending('${item.id}')" class="bg-red-500 text-white font-bold px-3 py-2 rounded text-xs hover:bg-red-600 shadow-sm">🗑</button>
+                    </div>`;
                 } else {
                     badge = '<span class="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10">IN APPROVAZIONE ⏳</span>';
                     borderClass = 'border-gray-200 bg-gray-50';
