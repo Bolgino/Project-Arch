@@ -402,7 +402,28 @@ const restock = {
         ui.closeModals();
         await app.loadData();
         loader.hide();
+    },
+
+    async deletePending(id) {
+        if(!confirm("Eliminare questa richiesta in attesa?")) return;
+        loader.show();
+        
+        const { error } = await _sb.from('cambusa').delete().eq('id', id);
+        
+        if(!error) {
+            // Rimuovi anche dal local storage per non vederlo più come "mio"
+            let myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
+            myProds = myProds.filter(x => x != id);
+            localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
+            
+            ui.toast("Richiesta eliminata", "success");
+            await app.loadData();
+        } else {
+            ui.toast("Errore eliminazione", "error");
+        }
+        loader.hide();
     }
+};
 };
 // --- CARRELLO ---
 const cart = {
