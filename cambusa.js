@@ -105,9 +105,18 @@ const app = {
             colazione: '☕ Colazione', 
             merenda: '🍫 Merenda', 
             pasti: '🍝 Pasti', 
-            condimenti: '🧂 Condim.', 
+            condimenti: '🧂 Condimenti', 
             extra: '🧻 Extra' 
         };
+        
+        document.getElementById('pantry-filters').innerHTML = cats.map(c => `
+            <button id="btn-cat-${c}" onclick="app.setCategory('${c}')" 
+                class="filter-btn px-4 py-2 rounded-full text-xs font-bold border transition whitespace-nowrap
+                ${state.currentCategory === c ? 'bg-orange-700 text-white border-orange-700 shadow-md' : 'bg-white text-gray-600 border-gray-200'}">
+                ${labels[c] || c}
+            </button>
+        `).join('');
+    },
         
         document.getElementById('pantry-filters').innerHTML = cats.map(c => `
             <button id="btn-cat-${c}" onclick="app.setCategory('${c}')" 
