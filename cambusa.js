@@ -1,5 +1,5 @@
 // cambusa.js
-const MAINTENANCE_MODE = true; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
+const MAINTENANCE_MODE = false; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
 // --- CONFIGURAZIONE ---
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
@@ -1125,10 +1125,65 @@ const admin = {
             loader.hide();
         }
     },
-    renderMovements() {
-        /* Se vuoi aggiungere la logica movimenti admin, inseriscila qui simile a armadio.js */ 
-        const el = document.getElementById('movements-list');
-        if(el) el.innerHTML = "<p class='text-gray-400 italic text-sm'>Funzione movimenti in sviluppo...</p>";
+    // Dentro l'oggetto 'admin' in cambusa.js
+
+async renderMovements() {
+    const el = document.getElementById('movements-list');
+    if (!el) return;
+
+    el.innerHTML = '<div class="text-center py-10"><div class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-gray-400 rounded-full" role="status" aria-label="loading"></div></div>';
+
+    // 1. Scarica i dati da Supabase (Tabella: movimenti_cambusa)
+    const { data, error } = await _sb
+        .from('movimenti_cambusa')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50); // Mostra solo gli ultimi 50
+
+    if (error) {
+        console.error(error);
+        el.innerHTML = '<div class="text-center text-red-500 py-4">Errore caricamento movimenti.</div>';
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        el.innerHTML = '<div class="text-center text-gray-400 italic py-10">Nessun movimento registrato di recente.</div>';
+        return;
+    }
+
+        // 2. Genera HTML
+        el.innerHTML = data.map(m => {
+            const date = new Date(m.created_at);
+            const dateStr = date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+            const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            
+            // Stile per carico (+) o scarico (-)
+            const isPositive = m.quantita > 0;
+            const bgClass = isPositive ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100';
+            const textClass = isPositive ? 'text-green-700' : 'text-red-700';
+            const sign = isPositive ? '+' : '';
+            const icon = isPositive ? '📥' : '📤';
+    
+            return `
+            <div class="flex justify-between items-center p-3 mb-2 rounded-lg border ${bgClass} shadow-sm">
+                <div class="flex items-center gap-3">
+                    <div class="text-xl">${icon}</div>
+                    <div>
+                        <div class="font-bold text-gray-800 leading-tight">${m.prodotto}</div>
+                        <div class="text-[10px] text-gray-500 font-mono uppercase mt-0.5">
+                            ${dateStr} ${timeStr} • <span class="font-semibold">${m.utente || 'Admin'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="font-bold text-lg ${textClass} font-mono tracking-tight">
+                        ${sign}${m.quantita} <span class="text-xs text-gray-400">${m.unita || ''}</span>
+                    </div>
+                    <div class="text-[9px] text-gray-400 uppercase tracking-widest">${m.azione || 'MOV'}</div>
+                </div>
+            </div>
+            `;
+        }).join('');
     }
 };
 
