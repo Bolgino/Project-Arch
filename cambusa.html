@@ -251,7 +251,11 @@
 
             <div class="mb-4">
                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cerca Ricetta</label>
-                <select id="slot-recipe-select" class="w-full p-3 border rounded-xl font-bold bg-white"></select>
+                <div class="flex gap-2">
+                    <select id="slot-recipe-select" class="w-full p-3 border rounded-xl font-bold bg-white"></select>
+                    <button onclick="planner.createNewRecipeFromPlanner()" class="bg-red-500 text-white font-bold p-3 rounded-xl shadow hover:bg-red-600 text-xl" title="Nuova Ricetta">+</button>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-1">Se non trovi la ricetta, creane una nuova col pulsante +.</p>
             </div>
 
             <div class="flex items-center gap-2 mb-6">
