@@ -512,6 +512,25 @@ const recipes = {
         this.renderIngredientsList();
         ui.modal('modal-recipe');
     },
+    renderIngredientsList() {
+        const el = document.getElementById('recipe-ing-list');
+        if (!el) return;
+
+        if (this.currentIngredients.length === 0) {
+            el.innerHTML = '<div class="text-center text-gray-400 italic text-sm py-4">Nessun ingrediente inserito</div>';
+            return;
+        }
+
+        el.innerHTML = this.currentIngredients.map((ing, idx) => `
+            <div class="flex justify-between items-center bg-white p-2 mb-2 rounded border border-gray-200 shadow-sm">
+                <div class="text-sm">
+                    <span class="font-bold text-gray-800">${ing.nome_ingrediente}</span>
+                    <span class="text-xs text-gray-500 ml-2">${ing.quantita_necessaria} ${ing.unita}</span>
+                </div>
+                <button onclick="recipes.removeIngredient(${idx})" class="text-red-500 hover:bg-red-50 p-1 rounded">🗑</button>
+            </div>
+        `).join('');
+    },
     addIngFromInput() {
         const name = document.getElementById('ing-input-name').value.trim();
         const qty = parseFloat(document.getElementById('ing-input-qty').value);
@@ -1005,18 +1024,35 @@ const admin = {
         
         if(!filtered.length) { el.innerHTML = '<p class="text-gray-400 p-4">Nessun oggetto.</p>'; return; }
 
-        el.innerHTML = filtered.map(p => `
-            <div class="flex justify-between items-center py-3 px-2 hover:bg-gray-50">
+        el.innerHTML = filtered.map(p => {
+            // FORMATTAZIONE DATA SCADENZA
+            const scadenzaStr = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT') : 'Nessuna';
+            
+            // COLORE SCADENZA (Rosso se scaduto o vicino)
+            let dateClass = "text-gray-500";
+            if(p.scadenza && new Date(p.scadenza) < new Date()) dateClass = "text-red-600 font-bold";
+
+            return `
+            <div class="flex justify-between items-center py-3 px-3 bg-white mb-2 rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition">
                 <div>
-                    <div class="font-bold text-gray-800">${p.nome}</div>
-                    <div class="text-xs text-gray-500">${p.quantita} ${p.unita} | ${p.categoria}</div>
+                    <div class="font-bold text-gray-800 text-lg">${p.nome}</div>
+                    <div class="text-xs flex items-center gap-2 mt-1">
+                        <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-bold">${p.quantita} ${p.unita}</span>
+                        <span class="${dateClass}">📅 Scad: ${scadenzaStr}</span>
+                    </div>
                 </div>
+                
                 <div class="flex gap-2">
-                    <button onclick="admin.editItem('${p.id}')" class="text-blue-500 text-xs font-bold border border-blue-200 px-2 py-1 rounded">MOD</button>
-                    <button onclick="admin.deleteItem('${p.id}')" class="text-red-500 text-xs font-bold border border-red-200 px-2 py-1 rounded">ELIM</button>
+                    <button onclick="admin.editItem('${p.id}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 w-10 h-10 rounded-lg flex items-center justify-center transition" title="Modifica">
+                        ✏️
+                    </button>
+                    <button onclick="admin.deleteItem('${p.id}')" class="bg-red-100 hover:bg-red-200 text-red-600 w-10 h-10 rounded-lg flex items-center justify-center transition" title="Elimina">
+                        🗑
+                    </button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     },
     
     // Funzione per filtrare (collegata all'input search admin)
