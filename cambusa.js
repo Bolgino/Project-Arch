@@ -920,7 +920,7 @@ const planner = {
 
         let needs = {}; 
 
-        // 1. Calcola Fabbisogno Totale (come prima, ma normalizziamo i nomi)
+        // 1. Calcola Fabbisogno Totale
         this.eventData.days.forEach(day => {
             if(!day.meals) return;
             day.meals.forEach(meal => {
@@ -940,6 +940,7 @@ const planner = {
                                 needs[name] = { qty: 0, unit: ing.unita, usage: [] };
                             }
                             needs[name].qty += qty;
+                            // Crea stringa utilizzo per dettaglio: Nome Ricetta (Giorno Pasto)
                             const mealName = `${r.nome} (${day.date.toLocaleDateString('it-IT', {weekday:'short'})} ${meal.name})`;
                             if(!needs[name].usage.includes(mealName)) needs[name].usage.push(mealName);
                         });
@@ -948,7 +949,7 @@ const planner = {
             });
         });
 
-        // 2. Confronta con Dispensa con CONVERSIONE
+        // 2. Confronta con Dispensa
         const el = document.getElementById('shopping-result-list');
         if(!el) return;
 
@@ -961,38 +962,34 @@ const planner = {
         const today = new Date().toISOString().split('T')[0];
         let resultHtml = '';
 
-        // Helper per convertire tutto in unità base (grammi o millilitri)
+        // Helper conversione
         const getBaseFactor = (unit) => {
             const u = unit.toLowerCase().trim();
             if (['kg', 'chilogrammi'].includes(u)) return 1000;
             if (['hg', 'etti'].includes(u)) return 100;
             if (['lt', 'l', 'litri'].includes(u)) return 1000;
             if (['cl'].includes(u)) return 10;
-            return 1; // g, ml, pz, conf restano 1
+            return 1;
         };
 
         ingredientKeys.forEach(ingName => {
             const need = needs[ingName];
             const needFactor = getBaseFactor(need.unit);
-            const needInBase = need.qty * needFactor; // Es: 2.5kg diventa 2500
+            const needInBase = need.qty * needFactor;
             
-            // Cerca in dispensa
             const inPantryItems = state.pantry.filter(p => 
                 p.nome.toLowerCase().includes(ingName) && 
                 (!p.scadenza || p.scadenza >= today) &&
                 p.quantita > 0 && 
-                p.stato !== 'pending' // Ignora i pending nel calcolo
+                p.stato !== 'pending'
             );
 
-            // Somma le quantità in dispensa convertendole
             const totalInPantryBase = inPantryItems.reduce((acc, curr) => {
                 const pantryFactor = getBaseFactor(curr.unita);
                 return acc + (curr.quantita * pantryFactor);
             }, 0);
 
             const missingBase = needInBase - totalInPantryBase;
-            
-            // Riconvertiamo il mancante nell'unità della ricetta per visualizzarlo
             const missingDisplay = missingBase / needFactor;
 
             let statusColor = 'text-red-600 bg-red-50';
@@ -1005,11 +1002,25 @@ const planner = {
 
             const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita}`).join(', ') || '0 in dispensa';
 
+            // Genera lista utilizzi
+            const usageList = need.usage.map(u => `<li class="truncate">• ${u}</li>`).join('');
+
             resultHtml += `
-            <div class="py-4 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-gray-100 last:border-0">
+            <div class="py-4 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-gray-100 last:border-0 break-inside-avoid">
                 <div class="md:col-span-1">
                     <div class="font-extrabold text-lg capitalize text-gray-800">${ingName}</div>
-                    <div class="text-xs text-gray-500">Serve per: ${need.usage.length} ricette</div>
+                    
+                    <details class="mt-1 group">
+                        <summary class="text-[10px] text-blue-500 font-bold cursor-pointer hover:underline list-none print:hidden">
+                            👉 Vedi ${need.usage.length} ricette
+                        </summary>
+                        <ul class="text-[10px] text-gray-500 mt-1 pl-1 border-l-2 border-gray-200 print:block">
+                            ${usageList}
+                        </ul>
+                    </details>
+                    <div class="hidden print:block text-[9px] text-gray-500 mt-1 italic">
+                        Uso: ${need.usage.join(', ')}
+                    </div>
                 </div>
                 
                 <div class="md:col-span-1">
@@ -1106,7 +1117,6 @@ const admin = {
         
         if(!data || !data.length) { 
             el.innerHTML = '<p class="text-gray-400 text-sm italic">Nessun prodotto in attesa di approvazione.</p>'; 
-            // Nasconde il badge se non ci sono richieste
             const badge = document.getElementById('badge-approvals');
             if(badge) badge.classList.add('hidden');
             return; 
@@ -1120,16 +1130,17 @@ const admin = {
         }
 
         el.innerHTML = data.map(r => `
-            <div class="bg-white p-3 rounded border-l-4 border-yellow-400 shadow-sm flex justify-between items-center mb-2">
-                <div>
+            <div class="bg-white p-3 rounded border-l-4 border-yellow-400 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
+                <div class="flex-grow">
                     <div class="font-bold text-gray-800">${r.nome}</div>
                     <div class="text-xs text-gray-500">Categoria: ${r.categoria}</div>
                     <div class="text-xs font-mono bg-gray-100 inline-block px-1 rounded mt-1">Qt: ${r.quantita} ${r.unita}</div>
                     ${r.scadenza ? `<div class="text-[10px] text-red-500">Scad: ${r.scadenza}</div>` : ''}
                 </div>
-                <div class="flex gap-2">
-                    <button onclick="admin.processReq('${r.id}', false)" class="text-red-500 hover:bg-red-50 p-2 rounded" title="Rifiuta ed Elimina">🗑 Rifiuta</button>
-                    <button onclick="admin.processReq('${r.id}', true)" class="bg-green-600 text-white font-bold px-3 py-2 rounded text-xs hover:bg-green-700 shadow-sm">✓ APPROVA</button>
+                <div class="flex gap-2 self-end sm:self-center">
+                    <button onclick="admin.editItem('${r.id}')" class="bg-blue-100 text-blue-700 font-bold px-3 py-2 rounded text-xs hover:bg-blue-200 shadow-sm transition">✏️ MODIFICA</button>
+                    <button onclick="admin.processReq('${r.id}', false)" class="text-red-500 hover:bg-red-50 px-3 py-2 rounded text-xs border border-red-100 transition" title="Rifiuta ed Elimina">🗑 Rifiuta</button>
+                    <button onclick="admin.processReq('${r.id}', true)" class="bg-green-600 text-white font-bold px-3 py-2 rounded text-xs hover:bg-green-700 shadow-sm transition">✓ APPROVA</button>
                 </div>
             </div>
         `).join('');
