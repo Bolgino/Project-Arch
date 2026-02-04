@@ -795,20 +795,29 @@ const planner = {
         this.renderGrid();
     },
     calculateShopping() {
-        if (!this.eventData.days.length) return;
+        if (!this.eventData.days || this.eventData.days.length === 0) return;
 
-        let needs = {}; // { 'farina': { qty: 1000, unit: 'gr', usage: ['Pane Lunedì', 'Pizza Martedì'] } }
+        let needs = {}; 
 
         // 1. Calcola Fabbisogno Totale
         this.eventData.days.forEach(day => {
+            if(!day.meals) return;
+            
             day.meals.forEach(meal => {
+                // FIX: Controlliamo che ci sia un recipeId
                 if(meal.recipeId) {
-                    const r = state.recipes.find(x => x.id === meal.recipeId);
-                    if(r && r.ingredienti_ricetta) {
+                    // FIX CRITICO: Convertiamo entrambi in String per il confronto
+                    const r = state.recipes.find(x => String(x.id) === String(meal.recipeId));
+                    
+                    if(r && r.ingredienti_ricetta && Array.isArray(r.ingredienti_ricetta)) {
                         // Scala dosi: (DoseRicetta / PorzioniRicetta) * PaxEvento
-                        const ratio = this.eventData.pax / (r.porzioni || 4);
+                        const basePortions = parseFloat(r.porzioni) || 4;
+                        const targetPax = parseFloat(this.eventData.pax) || 1;
+                        const ratio = targetPax / basePortions;
                         
                         r.ingredienti_ricetta.forEach(ing => {
+                            if(!ing.nome_ingrediente) return;
+                            
                             const name = ing.nome_ingrediente.toLowerCase().trim();
                             const qty = parseFloat(ing.quantita_necessaria) * ratio;
                             
@@ -824,11 +833,21 @@ const planner = {
             });
         });
 
-        // 2. Confronta con Dispensa (solo NON SCADUTI)
+        // 2. Confronta con Dispensa
+        const el = document.getElementById('shopping-result-list');
+        if(!el) return;
+
+        const ingredientKeys = Object.keys(needs).sort();
+        
+        if (ingredientKeys.length === 0) {
+            el.innerHTML = '<div class="text-center py-10 text-gray-500">Nessun ingrediente necessario trovato. Assicurati di aver assegnato le ricette agli slot.</div>';
+            return;
+        }
+
         const today = new Date().toISOString().split('T')[0];
         let resultHtml = '';
 
-        Object.keys(needs).sort().forEach(ingName => {
+        ingredientKeys.forEach(ingName => {
             const need = needs[ingName];
             
             // Cerca in dispensa prodotti simili non scaduti
@@ -841,19 +860,18 @@ const planner = {
             const totalInPantry = inPantryItems.reduce((acc, curr) => acc + curr.quantita, 0);
             const missing = need.qty - totalInPantry;
             
-            // Colore: Rosso se manca molto, Giallo se manca poco, Verde se c'è tutto
             let statusColor = 'text-red-600 bg-red-50';
-            let statusText = `MANCANO: <strong>${missing.toFixed(1)} ${need.unit}</strong>`;
+            let statusText = `MANCANO: <strong>${Math.max(0, missing).toFixed(1)} ${need.unit}</strong>`;
             
             if (missing <= 0) {
                 statusColor = 'text-green-700 bg-green-50';
                 statusText = '✅ Coperto dalla dispensa!';
             }
 
-            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita}`).join(', ') || 'Nessuno';
+            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita}`).join(', ') || '0 in dispensa';
 
             resultHtml += `
-            <div class="py-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="py-4 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-gray-100 last:border-0">
                 <div class="md:col-span-1">
                     <div class="font-extrabold text-lg capitalize text-gray-800">${ingName}</div>
                     <div class="text-xs text-gray-500">Serve per: ${need.usage.length} ricette</div>
@@ -865,24 +883,17 @@ const planner = {
                 </div>
 
                 <div class="md:col-span-1">
-                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa (Validi)</div>
+                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa</div>
                     <div class="text-sm font-bold text-gray-700">${pantryDetail}</div>
-                    <div class="text-xs text-gray-400">Tot: ${totalInPantry}</div>
                 </div>
 
                 <div class="md:col-span-1 p-2 rounded-lg text-center flex flex-col justify-center ${statusColor}">
                     <div class="text-sm">${statusText}</div>
                 </div>
-                
-                <div class="md:col-span-4 text-xs text-gray-400 italic border-t border-gray-50 pt-2">
-                    Uso: ${need.usage.join(', ')}
-                </div>
             </div>`;
         });
 
-        if(!resultHtml) resultHtml = '<div class="text-center py-10">Nessun ingrediente necessario. Hai selezionato le ricette?</div>';
-
-        document.getElementById('shopping-result-list').innerHTML = resultHtml;
+        el.innerHTML = resultHtml;
         
         document.getElementById('planner-step-grid').classList.add('hidden');
         document.getElementById('planner-step-list').classList.remove('hidden');
