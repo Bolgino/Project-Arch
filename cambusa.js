@@ -1103,31 +1103,27 @@ const realtime = {
     }
 };
 // --- ADMIN ---
-// --- SOSTITUISCI INTERO OGGETTO admin IN cambusa.js ---
-
 const admin = {
+    currentTab: 'approvals', // <--- 1. Aggiungiamo la memoria della tab corrente
+
     async render() {
         if (!state.user) return;
-        
-        // Apre la tab "approvals" (Richieste) come default
-        this.tab('approvals');
+        // 2. Invece di forzare 'approvals', apriamo l'ultima tab visitata
+        this.tab(this.currentTab); 
     },
 
-    // Funzione Tab corretta per il tuo MENU LATERALE
     tab(name) {
-        // 1. Nascondi tutte le tab che hanno classe 'admin-tab'
+        this.currentTab = name; // <--- 3. Salviamo la tab corrente ogni volta che cambia
+
         document.querySelectorAll('.admin-tab').forEach(el => el.classList.add('hidden'));
-        
-        // 2. Mostra quella richiesta (es. admin-tab-recipes)
         const target = document.getElementById(`admin-tab-${name}`);
         if(target) target.classList.remove('hidden');
 
-        // 3. Carica i dati specifici
         if (name === 'recipes') this.renderRecipes();
         if (name === 'approvals') this.renderRequests();
         if (name === 'stock') this.renderStock();
-        if (name === 'movements') this.renderMovements(); // Se hai questa funzione
-        if (name === 'restock-admin') this.renderRestock(); // NUOVO
+        if (name === 'movements') this.renderMovements();
+        if (name === 'restock-admin') this.renderRestock();
     },
     
     // NUOVA FUNZIONE: Simile a restock.renderList ma per admin
