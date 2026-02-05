@@ -40,23 +40,18 @@ const loader = {
 // --- APP CONTROLLER ---
 const app = {
     async init() {
-    loader.show();
-    await auth.check(); // Controlla prima chi sei
+        loader.show();
+        await auth.check(); // Controlla prima chi sei
 
-    // LOGICA BLOCCO MANUTENZIONE
-    if (MAINTENANCE_MODE && !state.user) {
-        // Se manutenzione attiva e utente NON loggato
-        document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-        document.getElementById('view-maintenance').classList.remove('hidden');
+        // MODIFICA: Rimosso il blocco preventivo qui. 
+        // L'app si inizializza, ma le viste saranno bloccate in app.nav()
+        
+        await this.loadData();
         loader.hide();
-        return; // Ferma il caricamento dati
-    }
-
-    await this.loadData();
-    loader.hide();
-},
+    },
 
     async loadData() {
+        // Caricamento dati (rimane invariato)
         const { data: p } = await _sb.from('oggetti').select('*').order('nome');
         state.products = p || [];
         
@@ -66,26 +61,33 @@ const app = {
         const { data: c } = await _sb.from('componenti_pacchetto').select('*');
         state.packComponents = c || [];
         
-        // RENDERIZZA SEMPRE LA PARTE PUBBLICA (Così l'admin la vede se ci clicca)
         this.renderShop();
 
         if (state.user) {
-            // Se sei admin, carica ANCHE la parte admin
             admin.renderStock();
             admin.renderRestock();
             admin.renderPackBuilder();
             admin.renderMovements(); 
         } else {
-            // Se sei utente normale, vai subito allo shop
+            // Tenta di andare allo shop, ma app.nav deciderà se mostrare manutenzione
             this.nav('shop');
         }
     },
 
     nav(view) {
+        // NUOVA LOGICA MANUTENZIONE (stile Cambusa)
+        // Se c'è manutenzione, non sei admin, e stai cercando di vedere pagine pubbliche
+        if (MAINTENANCE_MODE && !state.user && ['shop', 'wishlist'].includes(view)) {
+            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-maintenance').classList.remove('hidden');
+            return;
+        }
+
+        // Logica standard di navigazione
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-        document.getElementById(`view-${view}`).classList.remove('hidden');
+        const target = document.getElementById(`view-${view}`);
+        if (target) target.classList.remove('hidden');
         
-        // Se apro la wishlist, carica i dati aggiornati
         if (view === 'wishlist') {
             wishlist.load();
         }
@@ -98,7 +100,7 @@ const app = {
         if(btn) btn.classList.add('active');
         this.filterProducts();
     },
-
+    
     filterProducts() {
         const term = document.getElementById('search-bar').value.toLowerCase().trim();
         const cards = document.querySelectorAll('#shop-products > div');
