@@ -1,5 +1,5 @@
 // --- CONFIGURAZIONE ---
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
     key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", 
