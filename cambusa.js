@@ -32,47 +32,66 @@ const app = {
     async init() {
         loader.show();
         await auth.check();
-        
-        // Attiviamo il realtime
         realtime.init(); 
-
         await this.loadData();
+        
+        // Controllo scadenze (una volta al giorno)
+        this.checkExpirations();
+        
         loader.hide();
     },
 
     async loadData() {
-        // 1. Carica Dispensa
         const { data: d } = await _sb.from('cambusa').select('*').order('nome');
         state.pantry = d || [];
-        
-        // 2. Carica Ricette
         await recipes.load();
-
-        // RENDERIZZA SEMPRE LA PARTE PUBBLICA
         this.renderPantry();
+        if (state.user) admin.render();      
+        else this.nav('pantry'); 
+    },
 
-        if (state.user) {
-            // ADMIN: Carica pannello di controllo
-            // PRIMA C'ERA L'ERRORE QUI. ORA CHIAMIAMO SOLO render()
-            admin.render();      
-        } else {
-            // PUBBLICO: Naviga alla dispensa
-            this.nav('pantry'); 
+    async checkExpirations() {
+        // Evita spam: esegue solo se non già fatto oggi
+        const lastCheck = localStorage.getItem('azimut_last_exp_check');
+        const today = new Date().toISOString().split('T')[0];
+        
+        if (lastCheck === today) return; 
+
+        const warningDate = new Date();
+        warningDate.setDate(warningDate.getDate() + 10); // 10 giorni da oggi
+
+        const expiring = state.pantry.filter(p => {
+            if(!p.scadenza || p.quantita <= 0) return false;
+            const d = new Date(p.scadenza);
+            return d <= warningDate && d >= new Date(); // Scadono tra oggi e 10gg
+        });
+
+        if (expiring.length > 0) {
+            const details = "<h3>⚠️ Prodotti in Scadenza (10gg)</h3><ul>" + 
+                            expiring.map(p => `<li><b>${p.nome}</b>: ${p.quantita} ${p.unita} (Scad: ${p.scadenza})</li>`).join('') + 
+                            "</ul>";
+            
+            try {
+                await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ details, admin_email: CONFIG.adminEmail, subject: "⚠️ CAMBUSA: Scadenze Imminenti" })
+                });
+                localStorage.setItem('azimut_last_exp_check', today);
+                console.log("Mail scadenze inviata.");
+            } catch(e) { console.error("Err mail", e); }
         }
     },
 
     nav(view) {
-        // Gestione manutenzione
         if (typeof MAINTENANCE_MODE !== 'undefined' && MAINTENANCE_MODE && !state.user && ['pantry', 'restock-public', 'recipes', 'planner'].includes(view)) {
             document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
             document.getElementById('view-maintenance').classList.remove('hidden');
             return;
         }
-
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         const target = document.getElementById(`view-${view}`);
         if(target) target.classList.remove('hidden');
-        
         if(view === 'restock-public' && typeof restock !== 'undefined') restock.init();
     },
 
@@ -87,7 +106,6 @@ const app = {
     filterPantry() {
         const term = document.getElementById('search-bar').value.toLowerCase().trim();
         const cards = document.querySelectorAll('#pantry-grid > div');
-
         cards.forEach(card => {
             const title = card.querySelector('h4').innerText.toLowerCase();
             const cat = card.dataset.category;
@@ -98,34 +116,23 @@ const app = {
     },
 
     renderFilters() {
-        // Standardizzazione Categorie: pasti, colazione, merenda, condimenti, extra
         const cats = ['all', 'colazione', 'merenda', 'pasti', 'condimenti', 'extra'];
-        const labels = { 
-            all: 'Tutto', 
-            colazione: '☕ Colazione', 
-            merenda: '🍫 Merenda', 
-            pasti: '🍝 Pasti', 
-            condimenti: '🧂 Condimenti', 
-            extra: '🧻 Extra' 
-        };
-        
+        const labels = { all: 'Tutto', colazione: '☕ Colazione', merenda: '🍫 Merenda', pasti: '🍝 Pasti', condimenti: '🧂 Condimenti', extra: '🧻 Extra' };
         document.getElementById('pantry-filters').innerHTML = cats.map(c => `
             <button id="btn-cat-${c}" onclick="app.setCategory('${c}')" 
                 class="filter-btn px-4 py-2 rounded-full text-xs font-bold border transition whitespace-nowrap
                 ${state.currentCategory === c ? 'bg-orange-700 text-white border-orange-700 shadow-md' : 'bg-white text-gray-600 border-gray-200'}">
                 ${labels[c] || c}
-            </button>
-        `).join('');
+            </button>`).join('');
     },
+
     renderPantry() {
         this.renderFilters();
         const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
-
         document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
             const isOut = item.quantita <= 0;
             const isPending = item.stato === 'pending';
             const isMine = myProds.includes(item.id);
-
             let isExpiring = false;
             let daysToExpiry = null;
             if (item.scadenza) {
@@ -133,7 +140,6 @@ const app = {
                 daysToExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 isExpiring = daysToExpiry <= 12 && daysToExpiry >= 0;
             }
-            
             let badge = '';
             let borderClass = 'border-orange-100';
             let overlayClass = '';
@@ -143,11 +149,7 @@ const app = {
                 if (isMine) {
                     badge = '<span class="absolute top-0 right-0 bg-yellow-100 text-yellow-800 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10 border border-yellow-300">IN ATTESA (TUO) ✏️</span>';
                     borderClass = 'border-yellow-400 bg-yellow-50/50';
-                    actionButtons = `
-                    <div class="flex gap-1 w-full">
-                        <button onclick="restock.openEditPending('${item.id}')" class="flex-grow bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">MODIFICA</button>
-                        <button onclick="restock.deletePending('${item.id}')" class="bg-red-500 text-white font-bold px-3 py-2 rounded text-xs hover:bg-red-600 shadow-sm">🗑</button>
-                    </div>`;
+                    actionButtons = `<div class="flex gap-1 w-full"><button onclick="restock.openEditPending('${item.id}')" class="flex-grow bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">MODIFICA</button><button onclick="restock.deletePending('${item.id}')" class="bg-red-500 text-white font-bold px-3 py-2 rounded text-xs hover:bg-red-600 shadow-sm">🗑</button></div>`;
                 } else {
                     badge = '<span class="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10">IN APPROVAZIONE ⏳</span>';
                     borderClass = 'border-gray-200 bg-gray-50';
@@ -164,25 +166,8 @@ const app = {
                 }
                 actionButtons = `<input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" class="w-14 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500"><button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-800 hover:bg-orange-200 font-bold py-2 rounded text-xs transition">USA</button>`;
             }
-
-            return `
-            <div class="rounded-xl shadow-sm border ${borderClass} overflow-hidden hover:shadow-md transition flex flex-col relative group bg-white min-h-[140px]" data-category="${item.categoria}">
-                ${badge}
-                <div class="p-3 flex flex-col flex-grow ${overlayClass}">
-                    <div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div>
-                    <h4 class="font-bold text-gray-800 leading-tight mb-2 text-md line-clamp-2">${item.nome}</h4>
-                    <div class="mt-auto">
-                        <p class="text-xs text-gray-500 mb-1 font-mono flex justify-between items-center">
-                            <span>Disp:</span> 
-                            <span class="font-bold ${isOut ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span>
-                        </p>
-                        ${item.scadenza ? `<p class="text-[10px] text-gray-400 mb-2 italic">Scade il: ${new Date(item.scadenza).toLocaleDateString()}</p>` : ''}
-                        <div class="flex gap-1 mt-1">${actionButtons}</div>
-                    </div>
-                </div>
-            </div>`;
+            return `<div class="rounded-xl shadow-sm border ${borderClass} overflow-hidden hover:shadow-md transition flex flex-col relative group bg-white min-h-[140px]" data-category="${item.categoria}">${badge}<div class="p-3 flex flex-col flex-grow ${overlayClass}"><div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div><h4 class="font-bold text-gray-800 leading-tight mb-2 text-md line-clamp-2">${item.nome}</h4><div class="mt-auto"><p class="text-xs text-gray-500 mb-1 font-mono flex justify-between items-center"><span>Disp:</span> <span class="font-bold ${isOut ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span></p>${item.scadenza ? `<p class="text-[10px] text-gray-400 mb-2 italic">Scade il: ${new Date(item.scadenza).toLocaleDateString()}</p>` : ''}<div class="flex gap-1 mt-1">${actionButtons}</div></div></div></div>`;
         }).join('');
-        
         this.filterPantry();
     },
 
@@ -191,30 +176,40 @@ const app = {
         if(state.cart.length === 0) return ui.toast("Lista vuota!", "error");
 
         loader.show();
-        // Registrazione su 'movimenti_cambusa' per ogni item
         const userLabel = state.user ? 'Admin' : (note || 'Utente');
+        let mailDetails = `<h3>Prelievo Cambusa (${userLabel})</h3><ul>`;
 
         for (let c of state.cart) {
             const item = state.pantry.find(x => x.id === c.id);
             if(item) {
-                // 1. Aggiorna quantità
                 const newQ = item.quantita - c.qty;
                 await _sb.from('cambusa').update({ quantita: newQ }).eq('id', c.id);
                 
-                // 2. Registra movimento singolo
                 await _sb.from('movimenti_cambusa').insert([{
                     prodotto: item.nome,
-                    quantita: -Math.abs(c.qty), // Negativo perché è un consumo
+                    quantita: -Math.abs(c.qty),
                     unita: item.unita,
-                    azione: 'scarico', // o 'consumo'
+                    azione: 'consumo',
                     utente: userLabel
                 }]);
+                
+                mailDetails += `<li>${item.nome}: <b>${c.qty} ${item.unita}</b> (Rimasti: ${newQ})</li>`;
             }
         }
+        mailDetails += "</ul>";
+
+        // Invio Email Riepilogo Consumo
+        try {
+            await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ details: mailDetails, admin_email: CONFIG.adminEmail, subject: "🥘 CAMBUSA: Riepilogo Prelievo" })
+            });
+        } catch(e) {}
 
         cart.empty();
         ui.toggleCart();
-        ui.toast("Registrato! 🥘", "success");
+        ui.toast("Registrato e inviata mail! 🥘", "success");
         await this.loadData();
         loader.hide();
     }
