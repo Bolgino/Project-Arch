@@ -30,55 +30,49 @@ const app = {
         loader.show();
         await auth.check();
 
-        // LOGICA MANUTENZIONE E BLOCCO MENU
-        if (MAINTENANCE_MODE && !state.user) {
-            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-            document.getElementById('view-maintenance').classList.remove('hidden');
-            
-            // FIX CRITICO: Nasconde fisicamente i link pubblici
-            const nav = document.getElementById('nav-public-links');
-            if(nav) nav.classList.add('hidden'); 
-            
-            loader.hide();
-            return;
-        } else {
-             // Ripristina link se non in manutenzione o se admin
-             const nav = document.getElementById('nav-public-links');
-             if(nav) nav.classList.remove('hidden');
-        }
+        // MODIFICA: Rimosso il blocco che nascondeva tutto e il menu nav-public-links.
+        // Lasciamo che i menu siano visibili, l'intercettazione avviene in nav().
 
         await this.loadData();
         loader.hide();
     },
 
     async loadData() {
-        // Carica Inventario
         const { data: invData } = await _sb.from('magazzino').select('*').order('nome');
         state.inventory = invData || [];
         
-        // Carica Cassoni
         const { data: casData } = await _sb.from('magazzino_cassoni').select('*').order('created_at', { ascending: false });
         state.cassoni = casData || [];
         
         this.renderInventory();
-        cassoni.renderList(); // Renderizza lista cassoni
+        cassoni.renderList(); 
 
         if (state.user) {
             admin.renderStock();
             admin.renderMovements();
         } else {
-            // Se eravamo in una vista specifica, rimaniamo lì, altrimenti inventory
-            if(!document.getElementById('view-cassoni').classList.contains('hidden')) return;
+            // Se eravamo in una vista specifica rimaniamo lì, altrimenti inventory
+            // Ma se c'è manutenzione attiva, app.nav intercetterà tutto.
+            if(!document.getElementById('view-cassoni').classList.contains('hidden')) return; 
             this.nav('inventory');
         }
     },
 
     nav(view) {
+        // NUOVA LOGICA MANUTENZIONE (stile Cambusa)
+        // Se c'è manutenzione, non sei admin e cerchi di aprire viste pubbliche (inventory o cassoni)
+        if (MAINTENANCE_MODE && !state.user && ['inventory', 'cassoni'].includes(view)) {
+            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-maintenance').classList.remove('hidden');
+            return;
+        }
+
+        // Navigazione standard
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         const el = document.getElementById(`view-${view}`);
         if(el) el.classList.remove('hidden');
     },
-
+    
     setCategory(cat) {
         state.currentCategory = cat;
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'bg-opacity-100', 'text-white'));
