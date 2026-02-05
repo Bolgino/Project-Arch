@@ -238,6 +238,72 @@ async loadData() {
         }
     },
 // --- ADMIN ---
+// --- CASSONI LOGIC ---
+const cassoni = {
+    tempItems: [], // Oggetti nel cassone in fase di modifica
+
+    renderList() {
+        const list = document.getElementById('cassoni-list');
+        if(!list) return;
+        
+        if(state.cassoni.length === 0) {
+            list.innerHTML = '<div class="text-center py-10 text-gray-400">Nessun cassone creato.</div>';
+            return;
+        }
+
+        list.innerHTML = state.cassoni.map(c => {
+            const statusBadge = c.approvato 
+                ? '<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-200">APPROVATO</span>' 
+                : '<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[10px] font-bold border border-yellow-200">IN REVISIONE</span>';
+
+            // Conta oggetti (gestisce il formato JSONB da Supabase)
+            const count = Array.isArray(c.contenuto) ? c.contenuto.reduce((a,b) => a + (parseInt(b.qty)||0), 0) : 0;
+
+            return `
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition cursor-pointer relative overflow-hidden" onclick="cassoni.openModal(${c.id})">
+                <div class="absolute top-0 right-0 p-2">${statusBadge}</div>
+                <div class="pr-20">
+                    <h3 class="font-bold text-lg text-blue-900 leading-tight">${c.nome}</h3>
+                    <p class="text-xs text-gray-500 font-bold uppercase mb-2">Resp: ${c.responsabile}</p>
+                </div>
+                <div class="bg-gray-50 p-2 rounded border border-gray-100 text-xs text-gray-600 truncate">
+                    📦 Contiene ${count} oggetti...
+                </div>
+                ${state.user ? `<div class="mt-2 text-[10px] text-red-400 text-right font-mono">ID: ${c.id}</div>` : ''}
+            </div>`;
+        }).join('');
+    },
+
+    openModal(id = null) {
+        // Reset e Popola Select Oggetti
+        const select = document.getElementById('cas-item-select');
+        select.innerHTML = '<option value="">-- Seleziona Materiale --</option>' + 
+            state.inventory.map(i => `<option value="${i.id}" data-name="${i.nome}">${i.nome} (Disp: ${i.quantita})</option>`).join('');
+        
+        document.getElementById('cas-item-qty').value = 1;
+        document.getElementById('cas-add-panel').classList.add('hidden');
+        document.getElementById('btn-cas-del').classList.add('hidden');
+        document.getElementById('cas-status-msg').innerText = "";
+        
+        // Rimuovi eventuali bottoni Approvazione vecchi (per evitare duplicati)
+        const oldBtn = document.getElementById('btn-approve-toggle');
+        if(oldBtn) oldBtn.remove();
+
+        if (id) {
+            // EDIT MODE
+            const c = state.cassoni.find(x => x.id === id);
+            if(!c) return;
+
+            document.getElementById('cas-id').value = c.id;
+            document.getElementById('cas-name').value = c.nome;
+            document.getElementById('cas-resp').value = c.responsabile;
+            document.getElementById('cas-notes').value = c.note || '';
+            document.getElementById('cassone-modal-title').innerText = c.approvato ? "Dettagli Cassone (Approvato)" : "Modifica Cassone";
+            
+            // Gestione permessi UI
+            const isApprovedAndPublic = c.approvato && !state.user;
+            document.getElementById('cas-name').disabled = isApprovedAndPublic; 
+            document.getElementById('cas-resp').disabled = isApprovedAndPublic;
 const admin = {
     tab(t) {
         document.querySelectorAll('.admin-tab').forEach(e => e.classList.add('hidden'));
