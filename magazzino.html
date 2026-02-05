@@ -60,12 +60,13 @@
                 </div>
 
                 <div class="flex flex-col gap-4">
-                    <div id="nav-public-links" class="hidden">
+                    <div id="nav-public-links" class="transition-opacity duration-300">
                         <button onclick="app.nav('inventory'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3 w-full mb-3">
                             <span>🔦</span> Inventario
                         </button>
+
                         <button onclick="app.nav('cassoni'); ui.toggleMenu()" class="text-left text-white font-bold text-lg hover:text-yellow-400 transition flex items-center gap-3 w-full mb-3">
-                            <span>📦</span> Cassoni Materiale
+                            <span>📦</span> Cassoni
                         </button>
                         
                         <button onclick="window.location.href='index.html'" class="text-left w-full text-blue-100 font-bold text-sm hover:text-white transition flex items-center justify-between gap-3 border border-blue-500 bg-blue-900/50 p-3 rounded-lg shadow-inner mt-4">
@@ -135,8 +136,9 @@
                     <button onclick="app.setCategory('all')" class="filter-btn active whitespace-nowrap px-4 py-1.5 rounded-full border border-gray-300 text-xs font-bold text-gray-600 bg-white transition" id="btn-cat-all">Tutto</button>
                     <button onclick="app.setCategory('tende')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-blue-300 text-xs font-bold text-blue-700 bg-blue-50 transition" id="btn-cat-tende">⛺ Tende</button>
                     <button onclick="app.setCategory('cucina')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-orange-300 text-xs font-bold text-orange-700 bg-orange-50 transition" id="btn-cat-cucina">🍳 Cucina</button>
+                    <button onclick="app.setCategory('pioneristica')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-green-300 text-xs font-bold text-green-700 bg-green-50 transition" id="btn-cat-pioneristica">🌲 Pioneristica</button>
                     <button onclick="app.setCategory('attrezzi')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-gray-400 text-xs font-bold text-gray-700 bg-gray-50 transition" id="btn-cat-attrezzi">🔨 Attrezzi</button>
-                    <button onclick="app.setCategory('altro')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-purple-300 text-xs font-bold text-purple-700 bg-purple-50 transition" id="btn-cat-altro">📦 Altro</button>
+                    <button onclick="app.setCategory('extra')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-purple-300 text-xs font-bold text-purple-700 bg-purple-50 transition" id="btn-cat-extra">✨ Extra</button>
                 </div>
             </div>
             
@@ -146,6 +148,17 @@
             </div>
 
             <div id="inventory-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+        </section>
+        <section id="view-cassoni" class="hidden fade-in pb-20">
+            <div class="mb-4 border-b border-gray-200 pb-2 flex justify-between items-end">
+                <div>
+                    <h1 class="text-2xl md:text-4xl font-extrabold text-blue-900">Cassoni</h1>
+                    <p class="text-gray-500 text-xs md:text-sm mt-1">Gestione materiale di squadra/staff.</p>
+                </div>
+                <button onclick="cassoni.openModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-blue-700 transition">+ Crea Cassone</button>
+            </div>
+
+            <div id="cassoni-list" class="space-y-4"></div>
         </section>
 
         <section id="view-admin" class="hidden fade-in">
@@ -237,7 +250,53 @@
             <button onclick="admin.deleteProd()" id="btn-del" class="w-full text-red-500 text-xs hover:underline py-2">Elimina Definitivamente</button>
         </div>
     </div>
-
+    <div id="modal-cassone" class="hidden fixed inset-0 bg-black/50 z-[70] flex items-center justify-center backdrop-blur-sm p-4">
+            <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg relative max-h-[90vh] overflow-y-auto flex flex-col">
+                <button onclick="ui.closeModals()" class="absolute top-2 right-4 text-2xl text-gray-400">&times;</button>
+                <h3 class="font-bold text-lg mb-4 text-blue-900" id="cassone-modal-title">Gestione Cassone</h3>
+                
+                <input type="hidden" id="cas-id">
+                
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Nome Cassone</label>
+                        <input type="text" id="cas-name" class="w-full p-2 border rounded font-bold text-gray-800" placeholder="Es. Cassone Sq. Aquile">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Responsabile</label>
+                        <input type="text" id="cas-resp" class="w-full p-2 border rounded font-bold text-gray-800" placeholder="Es. Capo Sq.">
+                    </div>
+                </div>
+    
+                <div class="mb-4">
+                    <label class="text-xs font-bold text-gray-500 uppercase flex justify-between items-center mb-1">
+                        <span>Contenuto</span>
+                        <span class="text-[10px] text-blue-500 cursor-pointer hover:underline" onclick="document.getElementById('cas-add-panel').classList.toggle('hidden')">+ Aggiungi Oggetto</span>
+                    </label>
+                    
+                    <div id="cas-add-panel" class="hidden bg-blue-50 p-2 rounded mb-2 border border-blue-100">
+                        <select id="cas-item-select" class="w-full p-2 border rounded text-sm mb-2 bg-white"></select>
+                        <div class="flex gap-2">
+                            <input type="number" id="cas-item-qty" value="1" min="1" class="w-20 p-2 border rounded text-center font-bold">
+                            <button onclick="cassoni.addItem()" class="flex-1 bg-blue-600 text-white font-bold text-xs rounded shadow">INSERISCI</button>
+                        </div>
+                    </div>
+    
+                    <div id="cas-items-list" class="bg-gray-50 rounded border border-gray-200 p-2 max-h-40 overflow-y-auto space-y-1">
+                        <p class="text-center text-gray-400 text-xs italic py-2">Cassone vuoto</p>
+                    </div>
+                </div>
+    
+                <label class="text-xs font-bold text-gray-500 uppercase">Note</label>
+                <textarea id="cas-notes" class="w-full p-2 border rounded mb-4 text-sm h-16" placeholder="Note aggiuntive..."></textarea>
+    
+                <div class="mt-auto flex gap-2">
+                    <button onclick="cassoni.save()" class="flex-1 bg-blue-700 text-white font-bold py-3 rounded-lg shadow hover:bg-blue-800">Salva Cassone</button>
+                    <button onclick="cassoni.delete()" id="btn-cas-del" class="hidden px-4 text-red-500 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 font-bold">🗑</button>
+                </div>
+                <p id="cas-status-msg" class="text-center text-[10px] text-gray-400 mt-2 uppercase tracking-wider"></p>
+            </div>
+        </div>
     <div id="login-modal" class="hidden fixed inset-0 bg-blue-900/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm relative">
             <button onclick="ui.closeModals()" class="absolute top-4 right-4 text-2xl text-gray-300 hover:text-gray-500">&times;</button>
