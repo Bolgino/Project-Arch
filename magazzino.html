@@ -13,7 +13,7 @@
     <style>
         body { 
             font-family: 'Outfit', sans-serif; 
-            background-color: #eff6ff;
+            background-color: #eff6ff; /* Blu chiarissimo */
             background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231e3a8a' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
         .fade-in { animation: fadeIn 0.4s ease-out; }
@@ -41,7 +41,7 @@
 
                 <div class="flex items-center gap-4">
                     <button onclick="ui.toggleCart()" class="relative">
-                        <span class="text-2xl">🎒</span>
+                        <span class="text-2xl">📋</span>
                         <span id="cart-count-mobile" class="absolute -top-1 -right-2 bg-yellow-400 text-blue-900 text-[10px] font-bold px-1.5 rounded-full shadow-sm">0</span>
                     </button>
                     <button onclick="ui.toggleMenu()" class="text-yellow-400 hover:text-white focus:outline-none transition transform active:scale-95">
@@ -105,7 +105,8 @@
             <div class="bg-white p-8 rounded-3xl shadow-2xl border-b-8 border-blue-600 max-w-sm">
                 <div class="text-6xl mb-4 animate-bounce">🚧</div>
                 <h1 class="text-2xl font-extrabold text-blue-900 mb-2">Magazzino Chiuso</h1>
-                <p class="text-gray-500 mb-6">Inventario in corso.</p>
+                <p class="text-gray-500 mb-6">Stiamo contando i picchetti e riparando le tende.</p>
+                <div class="text-xs font-mono bg-blue-50 p-3 rounded text-blue-800">Manutenzione in corso.</div>
                 <button onclick="ui.modal('login-modal')" class="mt-8 text-gray-300 text-xs hover:text-blue-600 transition underline">Accesso Admin</button>
             </div>
         </section>
@@ -113,7 +114,7 @@
         <section id="view-inventory" class="hidden fade-in">
             <div class="mb-4 border-b border-gray-200 pb-2">
                 <h1 class="text-2xl md:text-4xl font-extrabold text-blue-900">Magazzino</h1>
-                <p class="text-gray-500 text-xs md:text-sm mt-1">Prenotazione attrezzatura e kit.</p>
+                <p class="text-gray-500 text-xs md:text-sm mt-1">Attrezzatura da campo e logistica.</p>
             </div>
 
             <div class="mb-6 sticky top-0 bg-[#eff6ff] z-30 py-2">
@@ -122,24 +123,23 @@
                         <span class="text-gray-400 text-lg">🔎</span>
                     </div>
                     <input type="text" id="search-bar" onkeyup="app.filterProducts()" 
-                           placeholder="Cerca..." 
+                           placeholder="Cerca (es. Tenda, Pala, Cavo...)" 
                            class="w-full pl-10 p-3 border border-gray-300 rounded-xl focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition shadow-sm bg-white text-gray-700 font-bold text-sm">
                     <button onclick="document.getElementById('search-bar').value = ''; app.filterProducts()" class="absolute inset-y-0 right-0 pr-4 text-gray-300 hover:text-red-500 font-bold cursor-pointer">✕</button>
                 </div>
 
                 <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                     <button onclick="app.setCategory('all')" class="filter-btn active whitespace-nowrap px-4 py-1.5 rounded-full border border-gray-300 text-xs font-bold text-gray-600 bg-white transition" id="btn-cat-all">Tutto</button>
-                    <button onclick="app.toggleCassoniView()" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-gray-800 text-xs font-bold text-white bg-gray-800 transition shadow-lg" id="btn-mode-cassoni">📦 VISIONE CASSONI</button>
                     <button onclick="app.setCategory('tende')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-blue-300 text-xs font-bold text-blue-700 bg-blue-50 transition" id="btn-cat-tende">⛺ Tende</button>
                     <button onclick="app.setCategory('cucina')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-orange-300 text-xs font-bold text-orange-700 bg-orange-50 transition" id="btn-cat-cucina">🍳 Cucina</button>
-                    <button onclick="app.setCategory('pioneristica')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-emerald-300 text-xs font-bold text-emerald-700 bg-emerald-50 transition" id="btn-cat-pioneristica">🪢 Pioneristica</button>
-                    <button onclick="app.setCategory('animazione')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-purple-300 text-xs font-bold text-purple-700 bg-purple-50 transition" id="btn-cat-animazione">🎭 Animazione</button>
+                    <button onclick="app.setCategory('attrezzi')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-gray-400 text-xs font-bold text-gray-700 bg-gray-50 transition" id="btn-cat-attrezzi">🔨 Attrezzi</button>
+                    <button onclick="app.setCategory('altro')" class="filter-btn whitespace-nowrap px-4 py-1.5 rounded-full border border-purple-300 text-xs font-bold text-purple-700 bg-purple-50 transition" id="btn-cat-altro">📦 Altro</button>
                 </div>
             </div>
             
             <div id="no-results" class="hidden text-center py-8">
                 <div class="text-3xl mb-2">🤷‍♂️</div>
-                <p class="text-gray-400 font-bold text-sm">Nessun materiale trovato.</p>
+                <p class="text-gray-400 font-bold text-sm">Nessun attrezzo trovato.</p>
             </div>
 
             <div id="inventory-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
@@ -152,8 +152,7 @@
                         <h2 class="font-bold text-gray-800">Q.G. Magazzino</h2>
                     </div>
                     <button onclick="admin.tab('stock')" class="w-full text-left p-3 rounded bg-white hover:bg-blue-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-blue-600 transition">📦 Inventario</button>
-                    <button onclick="admin.tab('loans')" class="w-full text-left p-3 rounded bg-white hover:bg-blue-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-red-500 transition">⏳ Prestiti Attivi</button>
-                    <button onclick="admin.tab('movements')" class="w-full text-left p-3 rounded bg-white hover:bg-blue-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-teal-500 transition">📊 Storico</button>
+                    <button onclick="admin.tab('movements')" class="w-full text-left p-3 rounded bg-white hover:bg-blue-50 font-bold text-sm text-gray-700 shadow-sm border-l-4 border-transparent hover:border-teal-500 transition">📊 Movimenti</button>
                 </div>
 
                 <div class="lg:col-span-3 space-y-4">
@@ -173,17 +172,9 @@
                         <div id="admin-stock-list" class="divide-y text-sm max-h-[65vh] overflow-y-auto"></div>
                     </div>
 
-                    <div id="admin-tab-loans" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-red-500">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-xl text-red-900">Materiale Fuori</h3>
-                            <button onclick="admin.renderLoans()" class="text-xs text-blue-500 underline">Aggiorna</button>
-                        </div>
-                        <div id="loans-list" class="space-y-4 max-h-[65vh] overflow-y-auto"></div>
-                    </div>
-
                     <div id="admin-tab-movements" class="admin-tab hidden bg-white p-6 rounded-xl shadow border-t-4 border-teal-500">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-xl text-teal-900">Registro Storico</h3>
+                            <h3 class="font-bold text-xl text-teal-900">Registro Movimenti</h3>
                         </div>
                         <div id="movements-list" class="space-y-2 max-h-[70vh] overflow-y-auto"></div>
                     </div>
@@ -196,10 +187,10 @@
     <div id="cart-sidebar" class="fixed inset-y-0 right-0 w-full md:w-96 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-[60] flex flex-col">
         <div class="p-4 border-b flex justify-between items-center bg-blue-900 text-white shadow-md relative overflow-hidden">
             <div class="flex items-center gap-3 z-10">
-                <span class="text-2xl">🎒</span>
+                <span class="text-2xl">📋</span>
                 <div>
-                    <h2 class="font-extrabold text-xl tracking-wider uppercase">Zaino Prestiti</h2>
-                    <p class="text-[10px] text-blue-300 font-mono">CHECK-OUT MATERIALE</p>
+                    <h2 class="font-extrabold text-xl tracking-wider uppercase">Lista Prelievo</h2>
+                    <p class="text-[10px] text-blue-300 font-mono">USCITA MATERIALE</p>
                 </div>
             </div>
             <button onclick="ui.toggleCart()" class="text-2xl text-blue-200 p-2 relative z-50 hover:text-white transition">&times;</button>
@@ -207,8 +198,8 @@
         <div id="cart-items" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 pb-20"></div>
         <div class="p-4 border-t bg-white absolute bottom-0 w-full">
             <button onclick="cart.empty()" class="w-full text-red-400 text-xs font-bold mb-2 text-center">SVUOTA</button>
-            <input type="text" id="checkout-name" placeholder="Chi preleva? (es. Sq. Aquile)" class="w-full p-3 border-2 border-gray-200 rounded-lg mb-2 text-sm font-bold">
-            <button onclick="app.checkout()" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg shadow-lg">REGISTRA PRESTITO</button>
+            <input type="text" id="checkout-name" placeholder="Chi preleva? (es. Pattuglia Aquile)" class="w-full p-3 border-2 border-gray-200 rounded-lg mb-2 text-sm font-bold">
+            <button onclick="app.checkout()" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg shadow-lg">REGISTRA USCITA</button>
         </div>
     </div>
 
@@ -225,12 +216,9 @@
             <select id="prod-cat" class="w-full p-2 border rounded mb-3 bg-white text-sm">
                 <option value="tende">Tende</option>
                 <option value="cucina">Cucina</option>
-                <option value="pioneristica">Pioneristica</option>
-                <option value="animazione">Animazione</option>
+                <option value="attrezzi">Attrezzi</option>
+                <option value="altro">Altro</option>
             </select>
-            
-            <label class="text-xs font-bold text-gray-500 uppercase">Cassone / Kit (Opzionale)</label>
-            <input type="text" id="prod-cassone" placeholder="Es. Cassa Blu, Kit Sq..." class="w-full p-2 border rounded mb-3 font-bold text-gray-700 bg-blue-50">
 
             <div class="flex gap-2 mb-3">
                 <div class="w-1/2">
