@@ -732,9 +732,9 @@ const recipes = {
 // --- PLANNER (CALCOLO SPESA) ---
 const planner = {
     eventData: { days: [], pax: 0 },
-    
-    // Genera la struttura dei giorni in base alle date
-    async generateMenu() { // Nota: aggiunto async per il log
+    tempSlotRecipes: [], // Array temporaneo per l'editing del modale
+
+    async generateMenu() {
         const startStr = document.getElementById('evt-start').value;
         const endStr = document.getElementById('evt-end').value;
         const pax = parseInt(document.getElementById('evt-pax').value) || 30;
@@ -748,7 +748,6 @@ const planner = {
         this.eventData.days = [];
         let current = new Date(start);
         
-        // Logica creazione giorni (rimane invariata, omessa per brevità ma tu copiala dal vecchio file o lasciala così se sai unire)
         while (current <= end || current.toDateString() === end.toDateString()) {
              let meals = [];
              const h = current.getHours();
@@ -769,10 +768,11 @@ const planner = {
                 if (endH < 16) includeMerenda = false;
                 if (endH < 20) includeDinner = false;
              }
-             if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeId: null });
-             if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeId: null });
-             if(includeMerenda) meals.push({ type: 'merenda', name: 'Merenda', recipeId: null });
-             if(includeDinner) meals.push({ type: 'cena', name: 'Cena', recipeId: null });
+             // NOTA: recipeIds è ora un ARRAY
+             if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeIds: [] });
+             if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeIds: [] });
+             if(includeMerenda) meals.push({ type: 'merenda', name: 'Merenda', recipeIds: [] });
+             if(includeDinner) meals.push({ type: 'cena', name: 'Cena', recipeIds: [] });
 
              this.eventData.days.push({ date: new Date(current), meals: meals });
              current.setDate(current.getDate() + 1);
@@ -782,7 +782,6 @@ const planner = {
         this.autoFillRecipes();
         this.renderGrid();
         
-        // LOG MOVIMENTO
         await _sb.from('movimenti_cambusa').insert([{
             prodotto: 'MENU GENERATO',
             quantita: 0,
@@ -795,9 +794,7 @@ const planner = {
         document.getElementById('planner-step-grid').classList.remove('hidden');
     },
 
-    // Algoritmo semplice per proporre un menu equilibrato
     autoFillRecipes() {
-        // Cerchiamo ricette per categoria (se esistessero categorie nel DB sarebbe meglio, usiamo keyword nel nome)
         const findRecipe = (keywords) => {
             const matches = state.recipes.filter(r => keywords.some(k => r.nome.toLowerCase().includes(k)));
             return matches.length > 0 ? matches[Math.floor(Math.random() * matches.length)].id : null;
@@ -805,19 +802,16 @@ const planner = {
 
         const pastaRecipes = findRecipe(['pasta', 'riso', 'lasagne', 'fusilli', 'penne']);
         const meatRecipes = findRecipe(['pollo', 'carne', 'arrosto', 'scaloppine', 'uova', 'frittata']);
-        const lightRecipes = findRecipe(['minestra', 'zuppa', 'insalata', 'verdure']);
         const basicPasta = state.recipes.find(r => r.nome.toLowerCase().includes('pomodoro'))?.id;
 
-        this.eventData.days.forEach((day, idx) => {
+        this.eventData.days.forEach((day) => {
             day.meals.forEach(meal => {
+                // Riempie l'array recipeIds
                 if (meal.type === 'pranzo') {
-                    // Pranzi: Carboidrati
-                    meal.recipeId = pastaRecipes || basicPasta; 
+                    if(pastaRecipes || basicPasta) meal.recipeIds.push(pastaRecipes || basicPasta);
                 } else if (meal.type === 'cena') {
-                    // Cene: Proteine o cose calde
-                    meal.recipeId = meatRecipes || lightRecipes;
+                    if(meatRecipes) meal.recipeIds.push(meatRecipes);
                 }
-                // Se non trova nulla, lascia null (verrà mostrato come "Scegli...")
             });
         });
     },
@@ -830,125 +824,165 @@ const planner = {
             const dateStr = day.date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
             
             const mealsHtml = day.meals.map((meal, mIdx) => {
-                // BUG FIX: Uso String() per essere sicuro che il confronto funzioni (id numero vs id stringa)
-                const recipe = state.recipes.find(r => String(r.id) === String(meal.recipeId));
+                let recipeNamesHtml = '<span class="text-gray-400 italic">Nessuna pietanza...</span>';
                 
-                const isPending = recipe && (!recipe.status || recipe.status !== 'approved');
-                const recipeName = recipe 
-                    ? (isPending ? `⏳ ${recipe.nome}` : recipe.nome) 
-                    : '<span class="text-gray-400 italic">Seleziona Ricetta...</span>';
+                if (meal.recipeIds && meal.recipeIds.length > 0) {
+                    recipeNamesHtml = meal.recipeIds.map(rid => {
+                        const r = state.recipes.find(x => String(x.id) === String(rid));
+                        const isPending = r && (!r.status || r.status !== 'approved');
+                        return `<div class="truncate">• ${r ? r.nome : '???'} ${isPending ? '⏳' : ''}</div>`;
+                    }).join('');
+                }
                 
-                const isPacked = meal.isPacked ? '🎒 AL SACCO' : '';
+                const isPacked = meal.isPacked ? '🎒 SACCO' : '';
                 
-                // Gestione colori bordi
                 let styleClass = 'border-l-4 ';
                 if (meal.type === 'pranzo') styleClass += 'border-orange-400';
                 else if (meal.type === 'cena') styleClass += 'border-blue-400';
                 else if (meal.type === 'merenda') styleClass += 'border-purple-400';
                 else styleClass += 'border-yellow-300';
 
-                // Passiamo l'indice in modo sicuro
                 return `
                 <div onclick="planner.openSlotEditor(${dIdx}, ${mIdx})" 
-                     class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 flex justify-between items-center ${styleClass} mb-2">
-                    <div class="overflow-hidden">
-                        <span class="text-[10px] font-bold uppercase text-gray-400 block tracking-wider">${meal.name}</span>
-                        <span class="font-bold text-gray-800 text-sm leading-tight block truncate">${recipeName}</span>
+                     class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 flex justify-between items-start ${styleClass} mb-2 min-h-[60px]">
+                    <div class="overflow-hidden w-full">
+                        <div class="flex justify-between items-center mb-1">
+                             <span class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">${meal.name}</span>
+                             <span class="text-[10px] font-bold text-green-700 bg-green-50 px-1 rounded">${isPacked}</span>
+                        </div>
+                        <div class="font-bold text-gray-800 text-sm leading-tight flex flex-col gap-0.5">
+                            ${recipeNamesHtml}
+                        </div>
                     </div>
-                    <div class="text-[10px] font-bold text-orange-600 ml-2 whitespace-nowrap">${isPacked}</div>
                 </div>`;
             }).join('');
 
             return `
             <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 shadow-sm">
                 <h4 class="font-extrabold text-gray-700 mb-2 capitalize text-sm border-b border-gray-200 pb-1">${dateStr}</h4>
-                <div class="flex flex-col gap-1">
-                    ${mealsHtml}
-                </div>
+                <div class="flex flex-col gap-1">${mealsHtml}</div>
             </div>`;
         }).join('');
     },
+
     openSlotEditor(dIdx, mIdx) {
         const meal = this.eventData.days[dIdx].meals[mIdx];
         document.getElementById('slot-day-index').value = dIdx;
         document.getElementById('slot-type').value = mIdx;
         document.getElementById('slot-packed').checked = meal.isPacked || false;
 
-        // --- LOGICA FILTRO CATEGORIE AGGIORNATA ---
-        // Ricette categorie: 'pasti' (Pranzo/Cena) o 'snack' (Colazione/Merenda)
-        // Pasti eventi: 'colazione', 'merenda' -> 'snack'
-        // Pasti eventi: 'pranzo', 'cena' -> 'pasti'
-        
-        let targetCat = 'pasti';
-        if (meal.type === 'colazione' || meal.type === 'merenda') {
-            targetCat = 'snack';
-        }
+        // Clona le ricette attuali nell'array temporaneo
+        this.tempSlotRecipes = meal.recipeIds ? [...meal.recipeIds] : [];
 
+        this.refreshRecipeSelect();
+        this.renderTempList();
+        ui.modal('modal-slot-edit');
+    },
+
+    refreshRecipeSelect() {
+        const isPacked = document.getElementById('slot-packed').checked;
+        const dIdx = parseInt(document.getElementById('slot-day-index').value);
+        const mIdx = parseInt(document.getElementById('slot-type').value);
+        const mealType = this.eventData.days[dIdx].meals[mIdx].type;
+
+        let targetCat = 'pasti';
+        if (mealType === 'colazione' || mealType === 'merenda') targetCat = 'snack';
+
+        // FILTRO: Se è "Al Sacco", mostra solo quelle con categoria 'packed'
+        // Se non è al sacco, mostra Pasti o Snack
         const filteredRecipes = state.recipes.filter(r => {
-            // Se la ricetta non ha categoria, assumiamo 'pasti' se non è specificato
+            if (isPacked) return r.categoria === 'packed';
+            // Se non è packed, mostra la categoria corretta, MA escludi le 'packed'
             const rCat = r.categoria || 'pasti';
             return rCat === targetCat;
         });
 
         const sel = document.getElementById('slot-recipe-select');
-        sel.innerHTML = '<option value="">-- Nessuna / Piatto Pronto --</option>' + 
-            filteredRecipes.map(r => {
-                const isPending = !r.status || r.status !== 'approved';
-                const isSelected = String(r.id) === String(meal.recipeId) ? 'selected' : '';
-                return `<option value="${r.id}" ${isSelected}>
-                    ${r.nome} ${isPending ? '(In Approvazione)' : ''}
-                </option>`;
-            }).join('');
+        sel.innerHTML = filteredRecipes.map(r => {
+             const isPending = !r.status || r.status !== 'approved';
+             return `<option value="${r.id}">${r.nome} ${isPending ? '(In Appr.)' : ''}</option>`;
+        }).join('');
+        
+        if(filteredRecipes.length === 0) sel.innerHTML = '<option value="">-- Nessuna ricetta trovata --</option>';
+    },
 
-        ui.modal('modal-slot-edit');
+    addRecipeToSlot() {
+        const sel = document.getElementById('slot-recipe-select');
+        const id = sel.value;
+        if(!id) return;
+        
+        // Evita duplicati dello stesso piatto nello stesso pasto
+        if(!this.tempSlotRecipes.includes(id)) {
+            this.tempSlotRecipes.push(id);
+            this.renderTempList();
+        }
+    },
+
+    removeRecipeFromSlot(idx) {
+        this.tempSlotRecipes.splice(idx, 1);
+        this.renderTempList();
+    },
+
+    renderTempList() {
+        const el = document.getElementById('slot-selected-list');
+        if(this.tempSlotRecipes.length === 0) {
+            el.innerHTML = '<div class="text-center text-gray-400 text-xs italic py-2">Nessuna pietanza aggiunta</div>';
+            return;
+        }
+
+        el.innerHTML = this.tempSlotRecipes.map((rid, idx) => {
+            const r = state.recipes.find(x => String(x.id) === String(rid));
+            return `
+            <div class="flex justify-between items-center bg-white border p-2 rounded-lg shadow-sm">
+                <span class="font-bold text-sm text-gray-700">${r ? r.nome : '???'}</span>
+                <button onclick="planner.removeRecipeFromSlot(${idx})" class="text-red-500 hover:bg-red-50 p-1 rounded font-bold text-xs">✕</button>
+            </div>`;
+        }).join('');
     },
 
     saveSlot() {
         const dIdx = parseInt(document.getElementById('slot-day-index').value);
         const mIdx = parseInt(document.getElementById('slot-type').value);
-        const recipeId = document.getElementById('slot-recipe-select').value;
         const isPacked = document.getElementById('slot-packed').checked;
 
-        // Aggiorna i dati
-        // Nota: se recipeId è stringa vuota, salviamo null per pulizia
-        this.eventData.days[dIdx].meals[mIdx].recipeId = (recipeId && recipeId !== "") ? recipeId : null;
+        this.eventData.days[dIdx].meals[mIdx].recipeIds = [...this.tempSlotRecipes];
         this.eventData.days[dIdx].meals[mIdx].isPacked = isPacked;
 
         ui.closeModals();
-        
-        // Ridisegna
         this.renderGrid();
     },
+
     calculateShopping() {
         if (!this.eventData.days || this.eventData.days.length === 0) return;
         let needs = {}; 
         
-        // Recupera date evento
         const evtStart = new Date(document.getElementById('evt-start').value);
         const evtEnd = new Date(document.getElementById('evt-end').value);
 
-        // 1. Calcola Fabbisogno (Identico a prima)
         this.eventData.days.forEach(day => {
             if(!day.meals) return;
             day.meals.forEach(meal => {
-                if(meal.recipeId) {
-                    const r = state.recipes.find(x => String(x.id) === String(meal.recipeId));
-                    if(r && r.ingredienti_ricetta) {
-                        const ratio = (parseFloat(this.eventData.pax) || 1) / (parseFloat(r.porzioni) || 4);
-                        r.ingredienti_ricetta.forEach(ing => {
-                            const name = ing.nome_ingrediente.toLowerCase().trim();
-                            const qty = parseFloat(ing.quantita_necessaria) * ratio;
-                            if(!needs[name]) needs[name] = { qty: 0, unit: ing.unita, usage: [] };
-                            needs[name].qty += qty;
-                            const mealName = `${r.nome} (${day.date.toLocaleDateString('it-IT', {weekday:'short'})} ${meal.name})`;
-                            if(!needs[name].usage.includes(mealName)) needs[name].usage.push(mealName);
-                        });
-                    }
+                // Iteriamo su TUTTE le ricette del pasto
+                if(meal.recipeIds && meal.recipeIds.length > 0) {
+                    meal.recipeIds.forEach(rid => {
+                        const r = state.recipes.find(x => String(x.id) === String(rid));
+                        if(r && r.ingredienti_ricetta) {
+                            const ratio = (parseFloat(this.eventData.pax) || 1) / (parseFloat(r.porzioni) || 4);
+                            r.ingredienti_ricetta.forEach(ing => {
+                                const name = ing.nome_ingrediente.toLowerCase().trim();
+                                const qty = parseFloat(ing.quantita_necessaria) * ratio;
+                                if(!needs[name]) needs[name] = { qty: 0, unit: ing.unita, usage: [] };
+                                needs[name].qty += qty;
+                                const mealName = `${r.nome} (${day.date.toLocaleDateString('it-IT', {weekday:'short'})} ${meal.name})`;
+                                if(!needs[name].usage.includes(mealName)) needs[name].usage.push(mealName);
+                            });
+                        }
+                    });
                 }
             });
         });
 
-        // 2. Confronta con Dispensa (MODIFICATO PER DATE)
+        // 2. Confronta con Dispensa (Identico a prima, solo il rendering cambia poco)
         const el = document.getElementById('shopping-result-list');
         if(!el) return;
         const ingredientKeys = Object.keys(needs).sort();
@@ -966,23 +1000,18 @@ const planner = {
             const needFactor = getBaseFactor(need.unit);
             const needInBase = need.qty * needFactor;
             
-            // Filtro dispensa: NON SCADUTI ALLA PARTENZA
             const inPantryItems = state.pantry.filter(p => {
                 const nameMatch = p.nome.toLowerCase().includes(ingName);
                 if(!nameMatch || p.quantita <= 0 || p.stato === 'pending') return false;
-                
-                // Controllo Data
                 if(p.scadenza) {
                     const exp = new Date(p.scadenza);
-                    if (exp < evtStart) return false; // Scaduto prima dell'evento
+                    if (exp < evtStart) return false; 
                 }
                 return true;
             });
 
-            // Calcolo totale disponibile
-            let warningExpiry = false; // Flag per scadenza DURANTE l'evento
+            let warningExpiry = false; 
             const totalInPantryBase = inPantryItems.reduce((acc, curr) => {
-                // Check se scade DURANTE l'evento
                 if(curr.scadenza) {
                     const exp = new Date(curr.scadenza);
                     if (exp >= evtStart && exp <= evtEnd) warningExpiry = true;
@@ -1001,13 +1030,11 @@ const planner = {
                 statusColor = 'text-green-700 bg-green-50';
                 statusText = '✅ Coperto!';
             }
-            
-            // Aggiungi avviso scadenza intermedia
             if(warningExpiry) {
-                statusText += `<br><span class="text-[9px] bg-yellow-200 text-yellow-800 px-1 rounded">⚠️ Alcuni scadono durante il campo!</span>`;
+                statusText += `<br><span class="text-[9px] bg-yellow-200 text-yellow-800 px-1 rounded">⚠️ Scadenze durante il campo!</span>`;
             }
 
-            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita} ${p.scadenza ? '('+new Date(p.scadenza).toLocaleDateString()+')' : ''}`).join('<br>') || '0 validi';
+            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita}`).join('<br>') || '0 validi';
             const usageList = need.usage.map(u => `<li class="truncate">• ${u}</li>`).join('');
 
             resultHtml += `
@@ -1021,7 +1048,7 @@ const planner = {
                     <div class="font-mono text-xl font-bold">${need.qty.toFixed(1)} <span class="text-sm">${need.unit}</span></div>
                 </div>
                 <div class="md:col-span-1">
-                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa (Validi)</div>
+                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa</div>
                     <div class="text-[10px] font-bold text-gray-700 leading-tight">${pantryDetail}</div>
                 </div>
                 <div class="md:col-span-1 p-2 rounded-lg text-center flex flex-col justify-center ${statusColor}">
@@ -1041,8 +1068,8 @@ const planner = {
     },
 
     createNewRecipeFromPlanner() {
-        ui.closeModals(); // Chiude il modale slot
-        recipes.openModal(); // Apre il modale creazione ricetta
+        ui.closeModals(); 
+        recipes.openModal(); 
     }
 };
 // --- NUOVO OGGETTO PER LA SINCRONIZZAZIONE ---
