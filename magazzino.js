@@ -216,28 +216,7 @@ const cart = {
         `).join('') : '<p class="text-center text-gray-400 italic text-sm">Lista vuota</p>';
     }
 };
-async loadData() {
-        // Carica Inventario
-        const { data: invData } = await _sb.from('magazzino').select('*').order('nome');
-        state.inventory = invData || [];
-        
-        // Carica Cassoni
-        const { data: casData } = await _sb.from('magazzino_cassoni').select('*').order('created_at', { ascending: false });
-        state.cassoni = casData || [];
-        
-        this.renderInventory();
-        cassoni.renderList(); // Renderizza lista cassoni
 
-        if (state.user) {
-            admin.renderStock();
-            admin.renderMovements();
-        } else {
-            // Se eravamo in una vista specifica, rimaniamo lì, altrimenti inventory
-            if(!document.getElementById('view-cassoni').classList.contains('hidden')) return;
-            this.nav('inventory');
-        }
-    },
-// --- ADMIN ---
 // --- CASSONI LOGIC ---
 const cassoni = {
     tempItems: [], // Oggetti nel cassone in fase di modifica
@@ -256,7 +235,7 @@ const cassoni = {
                 ? '<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-200">APPROVATO</span>' 
                 : '<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[10px] font-bold border border-yellow-200">IN REVISIONE</span>';
 
-            // Conta oggetti (gestisce il formato JSONB da Supabase)
+            // Conta oggetti
             const count = Array.isArray(c.contenuto) ? c.contenuto.reduce((a,b) => a + (parseInt(b.qty)||0), 0) : 0;
 
             return `
@@ -275,7 +254,6 @@ const cassoni = {
     },
 
     openModal(id = null) {
-        // Reset e Popola Select Oggetti
         const select = document.getElementById('cas-item-select');
         select.innerHTML = '<option value="">-- Seleziona Materiale --</option>' + 
             state.inventory.map(i => `<option value="${i.id}" data-name="${i.nome}">${i.nome} (Disp: ${i.quantita})</option>`).join('');
@@ -285,7 +263,6 @@ const cassoni = {
         document.getElementById('btn-cas-del').classList.add('hidden');
         document.getElementById('cas-status-msg').innerText = "";
         
-        // Rimuovi eventuali bottoni Approvazione vecchi (per evitare duplicati)
         const oldBtn = document.getElementById('btn-approve-toggle');
         if(oldBtn) oldBtn.remove();
 
@@ -300,10 +277,144 @@ const cassoni = {
             document.getElementById('cas-notes').value = c.note || '';
             document.getElementById('cassone-modal-title').innerText = c.approvato ? "Dettagli Cassone (Approvato)" : "Modifica Cassone";
             
-            // Gestione permessi UI
             const isApprovedAndPublic = c.approvato && !state.user;
             document.getElementById('cas-name').disabled = isApprovedAndPublic; 
             document.getElementById('cas-resp').disabled = isApprovedAndPublic;
+            
+            if (state.user || !c.approvato) {
+                document.getElementById('btn-cas-del').classList.remove('hidden');
+            }
+
+            this.tempItems = Array.isArray(c.contenuto) ? [...c.contenuto] : [];
+            
+            if (c.approvato && !state.user) {
+                document.getElementById('cas-status-msg').innerText = "Cassone approvato: puoi modificare solo il contenuto.";
+            }
+
+            // Tasto Admin Toggle Approvazione
+            if (state.user) {
+                const btnApprove = document.createElement('button');
+                btnApprove.id = "btn-approve-toggle";
+                btnApprove.className = "w-full mt-2 mb-2 p-2 rounded text-xs font-bold border transition " + (c.approvato ? "border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100" : "border-green-500 text-green-600 bg-green-50 hover:bg-green-100");
+                btnApprove.innerText = c.approvato ? "REVOCA APPROVAZIONE" : "✅ APPROVA CASSONE";
+                btnApprove.onclick = async () => {
+                    if(!confirm("Cambiare lo stato di approvazione?")) return;
+                    await _sb.from('magazzino_cassoni').update({ approvato: !c.approvato }).eq('id', id);
+                    ui.closeModals();
+                    app.loadData();
+                };
+                const noteLabel = document.querySelector('label[for="cas-notes"]') || document.getElementById('cas-notes').previousElementSibling;
+                noteLabel.parentNode.insertBefore(btnApprove, noteLabel);
+            }
+
+        } else {
+            // CREATE MODE
+            document.getElementById('cas-id').value = "";
+            document.getElementById('cas-name').value = "";
+            document.getElementById('cas-name').disabled = false;
+            document.getElementById('cas-resp').value = "";
+            document.getElementById('cas-resp').disabled = false;
+            document.getElementById('cas-notes').value = "";
+            document.getElementById('cassone-modal-title').innerText = "Nuovo Cassone";
+            this.tempItems = [];
+        }
+        
+        this.renderTempItems();
+        ui.modal('modal-cassone');
+    },
+
+    addItem() {
+        const sel = document.getElementById('cas-item-select');
+        const id = sel.value;
+        const name = sel.options[sel.selectedIndex]?.dataset.name;
+        const qty = parseInt(document.getElementById('cas-item-qty').value);
+
+        if(!id || !name || qty < 1) return ui.toast("Seleziona oggetto e quantità valida", "error");
+
+        const existing = this.tempItems.find(x => x.id == id);
+        if(existing) existing.qty += qty;
+        else this.tempItems.push({ id, name, qty });
+
+        this.renderTempItems();
+        ui.toast("Aggiunto al cassone", "success");
+    },
+
+    removeItem(idx) {
+        this.tempItems.splice(idx, 1);
+        this.renderTempItems();
+    },
+
+    renderTempItems() {
+        const el = document.getElementById('cas-items-list');
+        if(this.tempItems.length === 0) {
+            el.innerHTML = '<p class="text-center text-gray-400 text-xs italic py-2">Cassone vuoto</p>';
+            return;
+        }
+        el.innerHTML = this.tempItems.map((item, idx) => `
+            <div class="flex justify-between items-center bg-white p-2 rounded shadow-sm border border-gray-100">
+                <span class="text-sm font-bold text-gray-700">${item.name} <span class="text-blue-600">x${item.qty}</span></span>
+                <button onclick="cassoni.removeItem(${idx})" class="text-red-400 hover:text-red-600 font-bold px-2">✕</button>
+            </div>
+        `).join('');
+    },
+
+    async save() {
+        const id = document.getElementById('cas-id').value;
+        const name = document.getElementById('cas-name').value;
+        const resp = document.getElementById('cas-resp').value;
+        
+        if(!name || !resp) return ui.toast("Nome e Responsabile obbligatori!", "error");
+
+        const payload = {
+            nome: name,
+            responsabile: resp,
+            contenuto: this.tempItems,
+            note: document.getElementById('cas-notes').value
+        };
+
+        loader.show();
+        let error = null;
+
+        if (id) {
+            const { error: err } = await _sb.from('magazzino_cassoni').update(payload).eq('id', id);
+            error = err;
+        } else {
+            const { error: err } = await _sb.from('magazzino_cassoni').insert([payload]);
+            error = err;
+        }
+
+        loader.hide();
+        if(error) {
+            console.error(error);
+            ui.toast("Errore salvataggio", "error");
+        } else {
+            ui.toast("Cassone salvato!", "success");
+            ui.closeModals();
+            app.loadData();
+        }
+    },
+
+    async delete() {
+        const id = document.getElementById('cas-id').value;
+        if(!id) return;
+
+        const c = state.cassoni.find(x => x.id == id);
+        if(!state.user && c && c.approvato) {
+            return ui.toast("Non puoi eliminare un cassone già approvato!", "error");
+        }
+
+        if(!confirm("Eliminare questo cassone?")) return;
+
+        loader.show();
+        await _sb.from('magazzino_cassoni').delete().eq('id', id);
+        loader.hide();
+        ui.toast("Cassone eliminato", "success");
+        ui.closeModals();
+        app.loadData();
+    }
+};
+
+// --- ADMIN ---
 const admin = {
     tab(t) {
         document.querySelectorAll('.admin-tab').forEach(e => e.classList.add('hidden'));
@@ -372,8 +483,6 @@ const admin = {
     },
 
     async renderMovements() {
-        // Filtra i movimenti che contengono "MAGAZZINO" nel nome utente (trucco per distinguere se usi stessa tabella)
-        // Oppure se usi tabella dedicata: await _sb.from('movimenti_magazzino')...
         const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false }).limit(50);
         
         const el = document.getElementById('movements-list');
