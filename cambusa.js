@@ -1,5 +1,5 @@
 // cambusa.js
-const MAINTENANCE_MODE = true; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
+const MAINTENANCE_MODE = false; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
 // --- CONFIGURAZIONE ---
 const CONFIG = {
     url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
@@ -768,7 +768,7 @@ const planner = {
                 if (endH < 16) includeMerenda = false;
                 if (endH < 20) includeDinner = false;
              }
-             // NOTA: recipeIds è ora un ARRAY
+             
              if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeIds: [] });
              if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeIds: [] });
              if(includeMerenda) meals.push({ type: 'merenda', name: 'Merenda', recipeIds: [] });
@@ -806,7 +806,6 @@ const planner = {
 
         this.eventData.days.forEach((day) => {
             day.meals.forEach(meal => {
-                // Riempie l'array recipeIds
                 if (meal.type === 'pranzo') {
                     if(pastaRecipes || basicPasta) meal.recipeIds.push(pastaRecipes || basicPasta);
                 } else if (meal.type === 'cena') {
@@ -870,6 +869,10 @@ const planner = {
         document.getElementById('slot-day-index').value = dIdx;
         document.getElementById('slot-type').value = mIdx;
         document.getElementById('slot-packed').checked = meal.isPacked || false;
+        
+        // Reset Search Input
+        const searchInput = document.getElementById('slot-recipe-search');
+        if(searchInput) searchInput.value = '';
 
         // Clona le ricette attuali nell'array temporaneo
         this.tempSlotRecipes = meal.recipeIds ? [...meal.recipeIds] : [];
@@ -879,7 +882,13 @@ const planner = {
         ui.modal('modal-slot-edit');
     },
 
-    refreshRecipeSelect() {
+    // Funzione collegata all'onkeyup dell'input di ricerca
+    filterSlotRecipes() {
+        const term = document.getElementById('slot-recipe-search').value.toLowerCase();
+        this.refreshRecipeSelect(term);
+    },
+
+    refreshRecipeSelect(searchTerm = '') {
         const isPacked = document.getElementById('slot-packed').checked;
         const dIdx = parseInt(document.getElementById('slot-day-index').value);
         const mIdx = parseInt(document.getElementById('slot-type').value);
@@ -888,11 +897,12 @@ const planner = {
         let targetCat = 'pasti';
         if (mealType === 'colazione' || mealType === 'merenda') targetCat = 'snack';
 
-        // FILTRO: Se è "Al Sacco", mostra solo quelle con categoria 'packed'
-        // Se non è al sacco, mostra Pasti o Snack
         const filteredRecipes = state.recipes.filter(r => {
+            // Filtro ricerca nome
+            if (searchTerm && !r.nome.toLowerCase().includes(searchTerm)) return false;
+
+            // Filtro Categorie
             if (isPacked) return r.categoria === 'packed';
-            // Se non è packed, mostra la categoria corretta, MA escludi le 'packed'
             const rCat = r.categoria || 'pasti';
             return rCat === targetCat;
         });
@@ -911,11 +921,9 @@ const planner = {
         const id = sel.value;
         if(!id) return;
         
-        // Evita duplicati dello stesso piatto nello stesso pasto
-        if(!this.tempSlotRecipes.includes(id)) {
-            this.tempSlotRecipes.push(id);
-            this.renderTempList();
-        }
+        // MODIFICA: Rimosso il controllo duplicati. Ora puoi aggiungere lo stesso piatto N volte.
+        this.tempSlotRecipes.push(id);
+        this.renderTempList();
     },
 
     removeRecipeFromSlot(idx) {
@@ -962,7 +970,6 @@ const planner = {
         this.eventData.days.forEach(day => {
             if(!day.meals) return;
             day.meals.forEach(meal => {
-                // Iteriamo su TUTTE le ricette del pasto
                 if(meal.recipeIds && meal.recipeIds.length > 0) {
                     meal.recipeIds.forEach(rid => {
                         const r = state.recipes.find(x => String(x.id) === String(rid));
@@ -982,7 +989,6 @@ const planner = {
             });
         });
 
-        // 2. Confronta con Dispensa (Identico a prima, solo il rendering cambia poco)
         const el = document.getElementById('shopping-result-list');
         if(!el) return;
         const ingredientKeys = Object.keys(needs).sort();
