@@ -245,27 +245,35 @@
 
     <div id="modal-slot-edit" class="hidden fixed inset-0 bg-black/60 z-[300] flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 class="font-bold text-lg mb-4 text-green-900">Modifica Pasto</h3>
+            <h3 class="font-bold text-lg mb-4 text-green-900">Componi il Pasto</h3>
             <input type="hidden" id="slot-day-index">
             <input type="hidden" id="slot-type">
-
+    
+            <div class="flex items-center gap-2 mb-4 bg-green-50 p-3 rounded-lg border border-green-100">
+                <input type="checkbox" id="slot-packed" onchange="planner.refreshRecipeSelect()" class="w-5 h-5 accent-green-600">
+                <label for="slot-packed" class="font-bold text-green-800 text-sm">🎒 È un pranzo al sacco?</label>
+            </div>
+    
             <div class="mb-4">
-                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cerca Ricetta</label>
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Aggiungi Portata</label>
                 <div class="flex gap-2">
-                    <select id="slot-recipe-select" class="w-full p-3 border rounded-xl font-bold bg-white"></select>
-                    <button onclick="planner.createNewRecipeFromPlanner()" class="bg-red-500 text-white font-bold p-3 rounded-xl shadow hover:bg-red-600 text-xl" title="Nuova Ricetta">+</button>
+                    <select id="slot-recipe-select" class="w-full p-3 border rounded-xl font-bold bg-white text-sm"></select>
+                    <button onclick="planner.addRecipeToSlot()" class="bg-green-600 text-white font-bold px-4 rounded-xl shadow hover:bg-green-700 text-xl" title="Aggiungi al Menu">⇩</button>
                 </div>
-                <p class="text-[10px] text-gray-400 mt-1">Se non trovi la ricetta, creane una nuova col pulsante +.</p>
+                
+                <div class="mt-2 text-right">
+                     <button onclick="planner.createNewRecipeFromPlanner()" class="text-[10px] text-blue-500 font-bold hover:underline">+ Crea nuova ricetta</button>
+                </div>
             </div>
-
-            <div class="flex items-center gap-2 mb-6">
-                <input type="checkbox" id="slot-packed" class="w-5 h-5 accent-green-600">
-                <label for="slot-packed" class="font-bold text-gray-700">È un pranzo al sacco?</label>
+    
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Menu del pasto</label>
+                <div id="slot-selected-list" class="space-y-2 border-2 border-dashed border-gray-200 rounded-xl p-2 min-h-[80px] bg-gray-50"></div>
             </div>
-
+    
             <div class="grid grid-cols-2 gap-3">
                 <button onclick="document.getElementById('modal-slot-edit').classList.add('hidden')" class="bg-gray-200 text-gray-700 font-bold py-3 rounded-lg">Annulla</button>
-                <button onclick="planner.saveSlot()" class="bg-green-600 text-white font-bold py-3 rounded-lg shadow">Conferma</button>
+                <button onclick="planner.saveSlot()" class="bg-green-600 text-white font-bold py-3 rounded-lg shadow">Salva Menu</button>
             </div>
         </div>
     </div>
@@ -466,6 +474,7 @@
                         <select id="rec-cat" class="w-full p-3 border border-gray-200 rounded-xl font-bold text-gray-800 focus:border-orange-500 outline-none bg-white">
                             <option value="pasti">Pasti</option>
                             <option value="snack">Colazioni / Merende</option>
+                            <option value="packed">🎒 Al Sacco</option>
                         </select>
                     </div>
                 </div>
