@@ -255,10 +255,13 @@
             </div>
     
             <div class="mb-4">
-                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Aggiungi Portata</label>
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cerca e Aggiungi</label>
+                
+                <input type="text" id="slot-recipe-search" onkeyup="planner.filterSlotRecipes()" placeholder="🔍 Cerca ricetta..." class="w-full p-2 border rounded-xl mb-2 text-sm bg-gray-50 outline-none focus:border-green-500 font-bold">
+                
                 <div class="flex gap-2">
                     <select id="slot-recipe-select" class="w-full p-3 border rounded-xl font-bold bg-white text-sm"></select>
-                    <button onclick="planner.addRecipeToSlot()" class="bg-green-600 text-white font-bold px-4 rounded-xl shadow hover:bg-green-700 text-xl" title="Aggiungi al Menu">⇩</button>
+                    <button onclick="planner.addRecipeToSlot()" class="bg-green-600 text-white font-bold px-4 rounded-xl shadow hover:bg-green-700 text-xl" title="Aggiungi al Menu">+</button>
                 </div>
                 
                 <div class="mt-2 text-right">
