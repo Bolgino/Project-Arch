@@ -51,34 +51,43 @@ const app = {
     },
 
     async checkExpirations() {
-        // Evita spam: esegue solo se non già fatto oggi
-        const lastCheck = localStorage.getItem('azimut_last_exp_check');
-        const today = new Date().toISOString().split('T')[0];
+        // Recupera la lista degli ID per cui abbiamo GIÀ mandato una mail
+        let notifiedIds = JSON.parse(localStorage.getItem('azimut_notified_ids') || '[]');
         
-        if (lastCheck === today) return; 
-
         const warningDate = new Date();
-        warningDate.setDate(warningDate.getDate() + 10); // 10 giorni da oggi
+        warningDate.setDate(warningDate.getDate() + 10); // Finestra di 10 giorni
 
-        const expiring = state.pantry.filter(p => {
+        // Filtra prodotti: 
+        // 1. Devono essere in scadenza
+        // 2. NON devono essere già nella lista "notifiedIds"
+        const expiringNew = state.pantry.filter(p => {
             if(!p.scadenza || p.quantita <= 0) return false;
             const d = new Date(p.scadenza);
-            return d <= warningDate && d >= new Date(); // Scadono tra oggi e 10gg
+            
+            // È nella finestra di scadenza?
+            const isExpiring = d <= warningDate && d >= new Date();
+            
+            // Se scade E non l'ho ancora detto all'admin -> includilo
+            return isExpiring && !notifiedIds.includes(p.id);
         });
 
-        if (expiring.length > 0) {
-            const details = "<h3>⚠️ Prodotti in Scadenza (10gg)</h3><ul>" + 
-                            expiring.map(p => `<li><b>${p.nome}</b>: ${p.quantita} ${p.unita} (Scad: ${p.scadenza})</li>`).join('') + 
+        if (expiringNew.length > 0) {
+            const details = "<h3>⚠️ Nuovi Prodotti in Scadenza</h3><ul>" + 
+                            expiringNew.map(p => `<li><b>${p.nome}</b>: ${p.quantita} ${p.unita} (Scad: ${new Date(p.scadenza).toLocaleDateString()})</li>`).join('') + 
                             "</ul>";
             
             try {
                 await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ details, admin_email: CONFIG.adminEmail, subject: "⚠️ CAMBUSA: Scadenze Imminenti" })
+                    body: JSON.stringify({ details, admin_email: CONFIG.adminEmail, subject: "⚠️ CAMBUSA: Avviso Scadenze" })
                 });
-                localStorage.setItem('azimut_last_exp_check', today);
-                console.log("Mail scadenze inviata.");
+
+                // Aggiunge i nuovi ID alla lista "già notificati" e salva
+                expiringNew.forEach(p => notifiedIds.push(p.id));
+                localStorage.setItem('azimut_notified_ids', JSON.stringify(notifiedIds));
+                
+                console.log("Mail inviata per:", expiringNew.map(x=>x.nome));
             } catch(e) { console.error("Err mail", e); }
         }
     },
