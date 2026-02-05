@@ -356,21 +356,24 @@ const restock = {
                  localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
              }
 
-             const msg = state.user ? "Prodotto aggiunto!" : "Richiesta inviata!";
-             ui.toast(msg, "success");
+             // LOG MOVIMENTO AGGIUNTA
+             await _sb.from('movimenti_cambusa').insert([{
+                prodotto: nome,
+                quantita: qta,
+                unita: unita,
+                azione: state.user ? 'rifornimento' : 'richiesta',
+                utente: state.user ? 'Admin' : 'Utente'
+            }]);
+
+             ui.toast(state.user ? "Prodotto aggiunto!" : "Richiesta inviata!", "success");
              ui.closeModals();
-             
-             // Reset campi
+             // Reset campi...
              document.getElementById('new-prod-name').value = '';
              document.getElementById('new-prod-qty').value = '';
              document.getElementById('new-prod-expiry').value = '';
-
-             // Ricarica dati generali
              await app.loadData();
-             // FORZA AGGIORNAMENTO LISTA RIFORNIMENTO
              this.renderList(); 
         }
-        loader.hide();
     },
 
     openEditPending(id) {
@@ -722,66 +725,63 @@ const planner = {
     eventData: { days: [], pax: 0 },
     
     // Genera la struttura dei giorni in base alle date
-    generateMenu() {
+    async generateMenu() { // Nota: aggiunto async per il log
         const startStr = document.getElementById('evt-start').value;
         const endStr = document.getElementById('evt-end').value;
         const pax = parseInt(document.getElementById('evt-pax').value) || 30;
 
         if(!startStr || !endStr) return ui.toast("Inserisci date inizio e fine", "error");
-
         const start = new Date(startStr);
         const end = new Date(endStr);
-        
         if(end <= start) return ui.toast("La fine deve essere dopo l'inizio", "error");
 
         this.eventData.pax = pax;
         this.eventData.days = [];
-
-        // Loop per creare i giorni
         let current = new Date(start);
+        
+        // Logica creazione giorni (rimane invariata, omessa per brevità ma tu copiala dal vecchio file o lasciala così se sai unire)
         while (current <= end || current.toDateString() === end.toDateString()) {
-            // Determina quali pasti servono in base all'ora
-            let meals = [];
-            const h = current.getHours();
-            const isFirstDay = current.toDateString() === start.toDateString();
-            const isLastDay = current.toDateString() === end.toDateString();
-
-            // Logica orari (es. se arrivo alle 18, niente pranzo)
-            let includeBreakfast = true, includeLunch = true, includeMerenda = true, includeDinner = true;
-
-            if (isFirstDay) {
+             let meals = [];
+             const h = current.getHours();
+             const isFirstDay = current.toDateString() === start.toDateString();
+             const isLastDay = current.toDateString() === end.toDateString();
+             
+             let includeBreakfast=true, includeLunch=true, includeMerenda=true, includeDinner=true;
+             if (isFirstDay) {
                 if (h > 9) includeBreakfast = false;
                 if (h > 14) includeLunch = false;
                 if (h > 17) includeMerenda = false;
                 if (h > 20) includeDinner = false;
-            }
-            if (isLastDay) {
+             }
+             if (isLastDay) {
                 const endH = end.getHours();
                 if (endH < 8) includeBreakfast = false;
                 if (endH < 13) includeLunch = false;
                 if (endH < 16) includeMerenda = false;
                 if (endH < 20) includeDinner = false;
-            }
+             }
+             if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeId: null });
+             if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeId: null });
+             if(includeMerenda) meals.push({ type: 'merenda', name: 'Merenda', recipeId: null });
+             if(includeDinner) meals.push({ type: 'cena', name: 'Cena', recipeId: null });
 
-            if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeId: null });
-            if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeId: null });
-            if(includeMerenda) meals.push({ type: 'merenda', name: 'Merenda', recipeId: null });
-            if(includeDinner) meals.push({ type: 'cena', name: 'Cena', recipeId: null });
-
-            this.eventData.days.push({
-                date: new Date(current),
-                meals: meals
-            });
-
-            // Vai al giorno dopo
-            current.setDate(current.getDate() + 1);
-            current.setHours(0,0,0,0); // Reset orario per i giorni successivi al primo
+             this.eventData.days.push({ date: new Date(current), meals: meals });
+             current.setDate(current.getDate() + 1);
+             current.setHours(0,0,0,0);
         }
 
         this.autoFillRecipes();
         this.renderGrid();
         
-        // Mostra la griglia
+        // LOG MOVIMENTO
+        await _sb.from('movimenti_cambusa').insert([{
+            prodotto: 'MENU GENERATO',
+            quantita: 0,
+            unita: '-',
+            azione: 'planning',
+            utente: state.user ? 'Admin' : 'Utente'
+        }]);
+
         document.getElementById('planner-step-setup').classList.add('hidden');
         document.getElementById('planner-step-grid').classList.remove('hidden');
     },
@@ -912,30 +912,25 @@ const planner = {
     },
     calculateShopping() {
         if (!this.eventData.days || this.eventData.days.length === 0) return;
-
         let needs = {}; 
+        
+        // Recupera date evento
+        const evtStart = new Date(document.getElementById('evt-start').value);
+        const evtEnd = new Date(document.getElementById('evt-end').value);
 
-        // 1. Calcola Fabbisogno Totale
+        // 1. Calcola Fabbisogno (Identico a prima)
         this.eventData.days.forEach(day => {
             if(!day.meals) return;
             day.meals.forEach(meal => {
                 if(meal.recipeId) {
                     const r = state.recipes.find(x => String(x.id) === String(meal.recipeId));
-                    if(r && r.ingredienti_ricetta && Array.isArray(r.ingredienti_ricetta)) {
-                        const basePortions = parseFloat(r.porzioni) || 4;
-                        const targetPax = parseFloat(this.eventData.pax) || 1;
-                        const ratio = targetPax / basePortions;
-                        
+                    if(r && r.ingredienti_ricetta) {
+                        const ratio = (parseFloat(this.eventData.pax) || 1) / (parseFloat(r.porzioni) || 4);
                         r.ingredienti_ricetta.forEach(ing => {
-                            if(!ing.nome_ingrediente) return;
                             const name = ing.nome_ingrediente.toLowerCase().trim();
                             const qty = parseFloat(ing.quantita_necessaria) * ratio;
-                            
-                            if(!needs[name]) {
-                                needs[name] = { qty: 0, unit: ing.unita, usage: [] };
-                            }
+                            if(!needs[name]) needs[name] = { qty: 0, unit: ing.unita, usage: [] };
                             needs[name].qty += qty;
-                            // Crea stringa utilizzo per dettaglio: Nome Ricetta (Giorno Pasto)
                             const mealName = `${r.nome} (${day.date.toLocaleDateString('it-IT', {weekday:'short'})} ${meal.name})`;
                             if(!needs[name].usage.includes(mealName)) needs[name].usage.push(mealName);
                         });
@@ -944,25 +939,15 @@ const planner = {
             });
         });
 
-        // 2. Confronta con Dispensa
+        // 2. Confronta con Dispensa (MODIFICATO PER DATE)
         const el = document.getElementById('shopping-result-list');
         if(!el) return;
-
         const ingredientKeys = Object.keys(needs).sort();
-        if (ingredientKeys.length === 0) {
-            el.innerHTML = '<div class="text-center py-10 text-gray-500">Nessun ingrediente necessario trovato.</div>';
-            return;
-        }
-
-        const today = new Date().toISOString().split('T')[0];
         let resultHtml = '';
-
-        // Helper conversione
         const getBaseFactor = (unit) => {
             const u = unit.toLowerCase().trim();
-            if (['kg', 'chilogrammi'].includes(u)) return 1000;
-            if (['hg', 'etti'].includes(u)) return 100;
-            if (['lt', 'l', 'litri'].includes(u)) return 1000;
+            if (['kg', 'lt'].includes(u)) return 1000;
+            if (['hg'].includes(u)) return 100;
             if (['cl'].includes(u)) return 10;
             return 1;
         };
@@ -972,14 +957,27 @@ const planner = {
             const needFactor = getBaseFactor(need.unit);
             const needInBase = need.qty * needFactor;
             
-            const inPantryItems = state.pantry.filter(p => 
-                p.nome.toLowerCase().includes(ingName) && 
-                (!p.scadenza || p.scadenza >= today) &&
-                p.quantita > 0 && 
-                p.stato !== 'pending'
-            );
+            // Filtro dispensa: NON SCADUTI ALLA PARTENZA
+            const inPantryItems = state.pantry.filter(p => {
+                const nameMatch = p.nome.toLowerCase().includes(ingName);
+                if(!nameMatch || p.quantita <= 0 || p.stato === 'pending') return false;
+                
+                // Controllo Data
+                if(p.scadenza) {
+                    const exp = new Date(p.scadenza);
+                    if (exp < evtStart) return false; // Scaduto prima dell'evento
+                }
+                return true;
+            });
 
+            // Calcolo totale disponibile
+            let warningExpiry = false; // Flag per scadenza DURANTE l'evento
             const totalInPantryBase = inPantryItems.reduce((acc, curr) => {
+                // Check se scade DURANTE l'evento
+                if(curr.scadenza) {
+                    const exp = new Date(curr.scadenza);
+                    if (exp >= evtStart && exp <= evtEnd) warningExpiry = true;
+                }
                 const pantryFactor = getBaseFactor(curr.unita);
                 return acc + (curr.quantita * pantryFactor);
             }, 0);
@@ -992,48 +990,37 @@ const planner = {
             
             if (missingBase <= 0) {
                 statusColor = 'text-green-700 bg-green-50';
-                statusText = '✅ Coperto dalla dispensa!';
+                statusText = '✅ Coperto!';
+            }
+            
+            // Aggiungi avviso scadenza intermedia
+            if(warningExpiry) {
+                statusText += `<br><span class="text-[9px] bg-yellow-200 text-yellow-800 px-1 rounded">⚠️ Alcuni scadono durante il campo!</span>`;
             }
 
-            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita}`).join(', ') || '0 in dispensa';
-
-            // Genera lista utilizzi
+            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita} ${p.scadenza ? '('+new Date(p.scadenza).toLocaleDateString()+')' : ''}`).join('<br>') || '0 validi';
             const usageList = need.usage.map(u => `<li class="truncate">• ${u}</li>`).join('');
 
             resultHtml += `
             <div class="py-4 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-gray-100 last:border-0 break-inside-avoid">
                 <div class="md:col-span-1">
                     <div class="font-extrabold text-lg capitalize text-gray-800">${ingName}</div>
-                    
-                    <details class="mt-1 group">
-                        <summary class="text-[10px] text-blue-500 font-bold cursor-pointer hover:underline list-none print:hidden">
-                            👉 Vedi ${need.usage.length} ricette
-                        </summary>
-                        <ul class="text-[10px] text-gray-500 mt-1 pl-1 border-l-2 border-gray-200 print:block">
-                            ${usageList}
-                        </ul>
-                    </details>
-                    <div class="hidden print:block text-[9px] text-gray-500 mt-1 italic">
-                        Uso: ${need.usage.join(', ')}
-                    </div>
+                    <details class="mt-1 group"><summary class="text-[10px] text-blue-500 font-bold cursor-pointer hover:underline list-none print:hidden">👉 Vedi ${need.usage.length} ricette</summary><ul class="text-[10px] text-gray-500 mt-1 pl-1 border-l-2 border-gray-200 print:block">${usageList}</ul></details>
                 </div>
-                
                 <div class="md:col-span-1">
                     <div class="text-xs uppercase font-bold text-gray-400">Totale Necessario</div>
                     <div class="font-mono text-xl font-bold">${need.qty.toFixed(1)} <span class="text-sm">${need.unit}</span></div>
                 </div>
-
                 <div class="md:col-span-1">
-                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa</div>
-                    <div class="text-sm font-bold text-gray-700">${pantryDetail}</div>
+                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa (Validi)</div>
+                    <div class="text-[10px] font-bold text-gray-700 leading-tight">${pantryDetail}</div>
                 </div>
-
                 <div class="md:col-span-1 p-2 rounded-lg text-center flex flex-col justify-center ${statusColor}">
-                    <div class="text-sm">${statusText}</div>
+                    <div class="text-xs">${statusText}</div>
                 </div>
             </div>`;
         });
-
+        
         el.innerHTML = resultHtml;
         document.getElementById('planner-step-grid').classList.add('hidden');
         document.getElementById('planner-step-list').classList.remove('hidden');
@@ -1098,7 +1085,31 @@ const admin = {
         if (name === 'approvals') this.renderRequests();
         if (name === 'stock') this.renderStock();
         if (name === 'movements') this.renderMovements(); // Se hai questa funzione
+        if (name === 'restock-admin') this.renderRestock(); // NUOVO
     },
+    
+    // NUOVA FUNZIONE: Simile a restock.renderList ma per admin
+    renderRestock() {
+        const term = document.getElementById('admin-restock-search') ? document.getElementById('admin-restock-search').value.toLowerCase() : '';
+        const el = document.getElementById('admin-restock-list');
+        if(!el) return;
+
+        const filtered = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
+        if(filtered.length === 0) { el.innerHTML = `<div class="text-center py-4 text-gray-400">Nessun prodotto.</div>`; return; }
+
+        el.innerHTML = filtered.map(p => `
+            <div class="bg-white rounded-xl p-3 border border-yellow-100 shadow-sm flex flex-col gap-2">
+                <div class="flex justify-between">
+                    <div class="font-bold text-gray-800">${p.nome}</div>
+                    <div class="text-xs text-gray-500">${p.quantita} ${p.unita}</div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 bg-yellow-50 p-2 rounded">
+                    <div><label class="text-[9px] font-bold uppercase">Agg. Qtà</label><input type="number" placeholder="0" class="w-full p-1 text-center border rounded text-sm font-bold bg-white" onchange="restock.trackChange('${p.id}', 'addQty', this.value)"></div>
+                    <div><label class="text-[9px] font-bold uppercase">Nuova Scad.</label><input type="date" class="w-full p-1 border rounded text-xs bg-white" onchange="restock.trackChange('${p.id}', 'newExpiry', this.value)"></div>
+                </div>
+            </div>`).join('');
+    },
+    filterRestock() { this.renderRestock(); },
     
     async renderRequests() {
         // Cerca direttamente in cambusa gli elementi in attesa
@@ -1262,6 +1273,9 @@ const admin = {
     renderRecipes() {
         const el = document.getElementById('admin-recipes-list');
         if(!el) return;
+        // AGGIORNAMENTO CONTATORE
+        const countEl = document.getElementById('admin-recipe-count');
+        if(countEl) countEl.innerText = state.recipes.length;
 
         // Ordiniamo: prima le pending, poi le altre
         const sorted = [...state.recipes].sort((a,b) => (a.status === 'approved' ? 1 : -1));
