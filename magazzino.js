@@ -9,7 +9,8 @@ const CONFIG = {
 const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
 
 // --- STATO ---
-const state = { inventory: [], cart: [], user: null, currentCategory: 'all' };
+const state = { inventory: [], cart: [], cassoni: [], user: null, currentCategory: 'all' };
+
 
 // --- LOADER ---
 const loader = {
@@ -29,11 +30,21 @@ const app = {
         loader.show();
         await auth.check();
 
+        // LOGICA MANUTENZIONE E BLOCCO MENU
         if (MAINTENANCE_MODE && !state.user) {
             document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
             document.getElementById('view-maintenance').classList.remove('hidden');
+            
+            // FIX CRITICO: Nasconde fisicamente i link pubblici
+            const nav = document.getElementById('nav-public-links');
+            if(nav) nav.classList.add('hidden'); 
+            
             loader.hide();
             return;
+        } else {
+             // Ripristina link se non in manutenzione o se admin
+             const nav = document.getElementById('nav-public-links');
+             if(nav) nav.classList.remove('hidden');
         }
 
         await this.loadData();
@@ -41,16 +52,23 @@ const app = {
     },
 
     async loadData() {
-        // Usa la tabella 'magazzino' (creala su Supabase se non esiste: id, nome, categoria, quantita, note)
-        const { data } = await _sb.from('magazzino').select('*').order('nome');
-        state.inventory = data || [];
+        // Carica Inventario
+        const { data: invData } = await _sb.from('magazzino').select('*').order('nome');
+        state.inventory = invData || [];
+        
+        // Carica Cassoni
+        const { data: casData } = await _sb.from('magazzino_cassoni').select('*').order('created_at', { ascending: false });
+        state.cassoni = casData || [];
         
         this.renderInventory();
+        cassoni.renderList(); // Renderizza lista cassoni
 
         if (state.user) {
             admin.renderStock();
             admin.renderMovements();
         } else {
+            // Se eravamo in una vista specifica, rimaniamo lì, altrimenti inventory
+            if(!document.getElementById('view-cassoni').classList.contains('hidden')) return;
             this.nav('inventory');
         }
     },
@@ -101,7 +119,7 @@ const app = {
             <div class="bg-white rounded-xl shadow-sm border border-blue-100 p-4 hover:shadow-md transition group" data-category="${p.categoria || 'altro'}">
                 <div class="flex justify-between items-start mb-2">
                     <div>
-                        <span class="text-[10px] font-bold uppercase text-blue-500 bg-blue-50 px-2 py-1 rounded">${p.categoria || 'Altro'}</span>
+                        <span class="text-[10px] font-bold uppercase text-blue-500 bg-blue-50 px-2 py-1 rounded">${p.categoria || 'Extra'}</span>
                         <h4 class="font-bold text-lg text-gray-800 leading-tight mt-1">${p.nome}</h4>
                     </div>
                     <div class="text-right">
@@ -198,7 +216,27 @@ const cart = {
         `).join('') : '<p class="text-center text-gray-400 italic text-sm">Lista vuota</p>';
     }
 };
+async loadData() {
+        // Carica Inventario
+        const { data: invData } = await _sb.from('magazzino').select('*').order('nome');
+        state.inventory = invData || [];
+        
+        // Carica Cassoni
+        const { data: casData } = await _sb.from('magazzino_cassoni').select('*').order('created_at', { ascending: false });
+        state.cassoni = casData || [];
+        
+        this.renderInventory();
+        cassoni.renderList(); // Renderizza lista cassoni
 
+        if (state.user) {
+            admin.renderStock();
+            admin.renderMovements();
+        } else {
+            // Se eravamo in una vista specifica, rimaniamo lì, altrimenti inventory
+            if(!document.getElementById('view-cassoni').classList.contains('hidden')) return;
+            this.nav('inventory');
+        }
+    },
 // --- ADMIN ---
 const admin = {
     tab(t) {
