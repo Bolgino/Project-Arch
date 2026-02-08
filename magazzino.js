@@ -9,8 +9,7 @@ const CONFIG = {
 const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
 
 // --- STATO ---
-const state = { inventory: [], cart: [], cassoni: [], user: null, currentCategory: 'all' };
-
+const state = { inventory: [], cart: [], cassoni: [], wishlist: [], user: null, currentCategory: 'all' };
 
 // --- LOADER ---
 const loader = {
@@ -43,9 +42,13 @@ const app = {
         
         const { data: casData } = await _sb.from('magazzino_cassoni').select('*').order('created_at', { ascending: false });
         state.cassoni = casData || [];
+
+        const { data: wishData } = await _sb.from('lista_desideri').select('*').order('completato', { ascending: true }).order('created_at', { ascending: false });
+        state.wishlist = wishData || [];
         
         this.renderInventory();
         cassoni.renderList(); 
+        wishlist.render();
 
         if (state.user) {
             admin.renderStock();
@@ -261,12 +264,11 @@ const cassoni = {
             return `
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition cursor-pointer relative overflow-hidden" onclick="cassoni.openModal(${c.id})">
                 <div class="absolute top-0 right-0 p-2">${statusBadge}</div>
-                <div class="pr-20">
-                    <h3 class="font-bold text-lg text-blue-900 leading-tight">${c.nome}</h3>
-                    <p class="text-xs text-gray-500 font-bold uppercase mb-2">Resp: ${c.responsabile}</p>
+                <div class="pr-10">
+                    <h3 class="font-bold text-lg text-blue-900 leading-tight mb-2">${c.nome}</h3>
                 </div>
                 <div class="bg-gray-50 p-2 rounded border border-gray-100 text-xs text-gray-600 truncate">
-                    📦 Contiene ${count} oggetti...
+                    📦 Collezione di ${count} oggetti
                 </div>
                 ${state.user ? `<div class="mt-2 text-[10px] text-red-400 text-right font-mono">ID: ${c.id}</div>` : ''}
             </div>`;
@@ -293,13 +295,12 @@ const cassoni = {
 
             document.getElementById('cas-id').value = c.id;
             document.getElementById('cas-name').value = c.nome;
-            document.getElementById('cas-resp').value = c.responsabile;
+            // Resp rimosso
             document.getElementById('cas-notes').value = c.note || '';
-            document.getElementById('cassone-modal-title').innerText = c.approvato ? "Dettagli Cassone (Approvato)" : "Modifica Cassone";
+            document.getElementById('cassone-modal-title').innerText = c.approvato ? "Dettagli Collezione" : "Modifica Collezione";
             
             const isApprovedAndPublic = c.approvato && !state.user;
-            document.getElementById('cas-name').disabled = isApprovedAndPublic; 
-            document.getElementById('cas-resp').disabled = isApprovedAndPublic;
+            document.getElementById('cas-name').disabled = isApprovedAndPublic;
             
             if (state.user || !c.approvato) {
                 document.getElementById('btn-cas-del').classList.remove('hidden');
@@ -332,8 +333,6 @@ const cassoni = {
             document.getElementById('cas-id').value = "";
             document.getElementById('cas-name').value = "";
             document.getElementById('cas-name').disabled = false;
-            document.getElementById('cas-resp').value = "";
-            document.getElementById('cas-resp').disabled = false;
             document.getElementById('cas-notes').value = "";
             document.getElementById('cassone-modal-title').innerText = "Nuovo Cassone";
             this.tempItems = [];
@@ -347,16 +346,18 @@ const cassoni = {
         const sel = document.getElementById('cas-item-select');
         const id = sel.value;
         const name = sel.options[sel.selectedIndex]?.dataset.name;
-        const qty = parseInt(document.getElementById('cas-item-qty').value);
+        // Se vuoto o <1, imposta a 1
+        let qtyVal = document.getElementById('cas-item-qty').value;
+        const qty = (!qtyVal || qtyVal < 1) ? 1 : parseInt(qtyVal);
 
-        if(!id || !name || qty < 1) return ui.toast("Seleziona oggetto e quantità valida", "error");
+        if(!id || !name) return ui.toast("Seleziona un oggetto", "error");
 
         const existing = this.tempItems.find(x => x.id == id);
         if(existing) existing.qty += qty;
         else this.tempItems.push({ id, name, qty });
 
         this.renderTempItems();
-        ui.toast("Aggiunto al cassone", "success");
+        ui.toast(`Aggiunto (x${qty})`, "success");
     },
 
     removeItem(idx) {
@@ -381,13 +382,12 @@ const cassoni = {
     async save() {
         const id = document.getElementById('cas-id').value;
         const name = document.getElementById('cas-name').value;
-        const resp = document.getElementById('cas-resp').value;
         
-        if(!name || !resp) return ui.toast("Nome e Responsabile obbligatori!", "error");
+        if(!name) return ui.toast("Il nome è obbligatorio!", "error");
 
         const payload = {
             nome: name,
-            responsabile: resp,
+            // Responsabile rimosso
             contenuto: this.tempItems,
             note: document.getElementById('cas-notes').value
         };
@@ -569,5 +569,71 @@ const ui = {
         setTimeout(() => t.remove(), 3000);
     }
 };
+// --- WISHLIST LOGIC ---
+const wishlist = {
+    render() {
+        const el = document.getElementById('wishlist-container');
+        if(!el) return;
+        
+        if(state.wishlist.length === 0) {
+            el.innerHTML = '<div class="text-center py-10 text-gray-300 font-bold text-lg">Tutto a posto, nulla da comprare!</div>';
+            return;
+        }
 
+        el.innerHTML = state.wishlist.map(w => `
+            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${w.completato ? 'border-green-500 opacity-60' : 'border-yellow-400'} flex justify-between items-center group">
+                <div class="flex items-center gap-3">
+                    <button onclick="wishlist.toggle(${w.id}, ${!w.completato})" class="text-2xl hover:scale-110 transition">
+                        ${w.completato ? '✅' : '⬜'}
+                    </button>
+                    <div>
+                        <div class="font-bold text-gray-800 ${w.completato ? 'line-through' : ''}">${w.oggetto}</div>
+                        <div class="text-[10px] text-gray-400 font-mono">${new Date(w.created_at).toLocaleDateString()}</div>
+                    </div>
+                </div>
+                ${state.user ? `<button onclick="wishlist.delete(${w.id})" class="text-gray-300 hover:text-red-500 font-bold px-2">✕</button>` : ''}
+            </div>
+        `).join('');
+    },
+
+    async add() {
+        const inp = document.getElementById('wish-input');
+        const val = inp.value.trim();
+        if(!val) return;
+
+        loader.show();
+        await _sb.from('lista_desideri').insert([{ oggetto: val }]);
+        inp.value = "";
+        
+        // Ricarica veloce
+        const { data } = await _sb.from('lista_desideri').select('*').order('completato', { ascending: true }).order('created_at', { ascending: false });
+        state.wishlist = data;
+        
+        loader.hide();
+        this.render();
+        ui.toast("Aggiunto ai desideri!", "success");
+    },
+
+    async toggle(id, status) {
+        // Solo Admin o chiunque? Per ora lasciamo libero o aggiungi check state.user
+        loader.show();
+        await _sb.from('lista_desideri').update({ completato: status }).eq('id', id);
+        
+        // Aggiorna locale per velocità
+        const item = state.wishlist.find(i => i.id === id);
+        if(item) item.completato = status;
+        
+        loader.hide();
+        this.render();
+    },
+
+    async delete(id) {
+        if(!confirm("Rimuovere dalla lista?")) return;
+        loader.show();
+        await _sb.from('lista_desideri').delete().eq('id', id);
+        state.wishlist = state.wishlist.filter(i => i.id !== id);
+        loader.hide();
+        this.render();
+    }
+};
 app.init();
