@@ -795,24 +795,7 @@ const planner = {
     },
 
     autoFillRecipes() {
-        const findRecipe = (keywords) => {
-            const matches = state.recipes.filter(r => keywords.some(k => r.nome.toLowerCase().includes(k)));
-            return matches.length > 0 ? matches[Math.floor(Math.random() * matches.length)].id : null;
-        };
-
-        const pastaRecipes = findRecipe(['pasta', 'riso', 'lasagne', 'fusilli', 'penne']);
-        const meatRecipes = findRecipe(['pollo', 'carne', 'arrosto', 'scaloppine', 'uova', 'frittata']);
-        const basicPasta = state.recipes.find(r => r.nome.toLowerCase().includes('pomodoro'))?.id;
-
-        this.eventData.days.forEach((day) => {
-            day.meals.forEach(meal => {
-                if (meal.type === 'pranzo') {
-                    if(pastaRecipes || basicPasta) meal.recipeIds.push(pastaRecipes || basicPasta);
-                } else if (meal.type === 'cena') {
-                    if(meatRecipes) meal.recipeIds.push(meatRecipes);
-                }
-            });
-        });
+        
     },
 
     renderGrid() {
