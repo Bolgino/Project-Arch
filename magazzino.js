@@ -88,7 +88,12 @@ const app = {
 
         cards.forEach(card => {
             const title = card.querySelector('h4').innerText.toLowerCase();
-            const cat = card.dataset.category || 'altro';
+            let cat = card.dataset.category || 'extra';
+            
+            // MAPPING CATEGORIE VECCHIE -> NUOVE
+            if (['tende', 'pioneristica', 'attrezzi'].includes(cat)) cat = 'campismo';
+            if (['altro'].includes(cat)) cat = 'extra';
+
             const matchesText = title.includes(term);
             const matchesCat = state.currentCategory === 'all' || cat === state.currentCategory;
 
@@ -137,39 +142,60 @@ const app = {
 
     async checkout() {
         const name = document.getElementById('checkout-name').value;
-        if (!name || state.cart.length === 0) return ui.toast("Inserisci nome e materiale!", "error");
+        const dateInput = document.getElementById('checkout-date').value;
+        
+        if (!name || !dateInput) return ui.toast("Nome e Data Restituzione obbligatori!", "error");
+        if (state.cart.length === 0) return ui.toast("Carrello vuoto!", "error");
     
         loader.show(); 
-        let details = `<h3>Prelievo Magazzino: ${name}</h3><ul>`;
+        
+        // Formatta la data per l'email
+        const returnDate = new Date(dateInput).toLocaleDateString('it-IT');
+        
+        let details = `
+            <h3>📦 Nuovo Prestito Magazzino</h3>
+            <p><b>Chi:</b> ${name}</p>
+            <p><b>Restituzione Prevista:</b> ${returnDate}</p>
+            <hr>
+            <h4>Materiale Prelevato:</h4>
+            <ul>`;
+            
         let logDetails = [];
     
         for (let i of state.cart) {
             const nQ = i.max - i.qty;
+            // Aggiorna DB
             await _sb.from('magazzino').update({ quantita: nQ }).eq('id', i.id);
-            details += `<li>${i.name} <b>x${i.qty}</b> (Rimasti: ${nQ})</li>`;
+            
+            // Costruisci Email e Log
+            details += `<li>${i.name} <b>x${i.qty}</b> (Rimasti in magazzino: ${nQ})</li>`;
             logDetails.push(`${i.name} x${i.qty}`);
         }
-        details += `</ul>`;
+        details += `</ul><p><i>Il materiale è stato scaricato dall'inventario.</i></p>`;
         
-        // Log Movimenti (Usiamo tabella 'movimenti_magazzino' se esiste, o generica 'movimenti' con tipo)
-        // Per semplicità usiamo 'movimenti' come armadio, specificando nel dettaglio
+        // Log nel Database (Tabella movimenti)
         await _sb.from('movimenti').insert([{
-            utente: `MAGAZZINO: ${name}`,
-            dettagli: logDetails.join(', ') 
+            utente: `PRESTITO: ${name}`,
+            dettagli: `RESTITUZIONE: ${returnDate} | ${logDetails.join(', ')}` 
         }]);
     
+        // Invio Notifica Email
         try {
             await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ details, admin_email: CONFIG.adminEmail })
+                body: JSON.stringify({ 
+                    details: details, 
+                    admin_email: CONFIG.adminEmail,
+                    subject: `[MAGAZZINO] Prestito per ${name}` // Se supportato dalla tua Edge Function
+                })
             });
-        } catch(e) {}
+        } catch(e) { console.error("Errore mail", e); }
     
         cart.empty();
         ui.toggleCart();
         loader.hide();
-        ui.toast("Uscita registrata correttamente.", "success");
+        ui.toast("Prestito registrato! Email inviata.", "success");
         setTimeout(() => location.reload(), 1500);
     }
 };
