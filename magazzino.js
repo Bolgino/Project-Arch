@@ -177,7 +177,8 @@ const app = {
         details += `</ul><p><i>Il materiale è stato scaricato dall'inventario.</i></p>`;
         
         // Log nel Database (Tabella movimenti)
-        await _sb.from('movimenti').insert([{
+        // Log nel Database (Tabella movimenti_magazzino)
+        await _sb.from('movimenti_magazzino').insert([{
             utente: `PRESTITO: ${name}`,
             dettagli: `RESTITUZIONE: ${returnDate} | ${logDetails.join(', ')}` 
         }]);
@@ -503,12 +504,16 @@ const admin = {
     },
 
     async renderMovements() {
-        const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false }).limit(50);
+        // Ora leggiamo dalla tabella specifica del magazzino
+        const { data } = await _sb.from('movimenti_magazzino').select('*').order('created_at', { ascending: false }).limit(50);
         
         const el = document.getElementById('movements-list');
-        if(!data) { el.innerHTML = ''; return; }
+        if(!data || data.length === 0) { 
+            el.innerHTML = '<p class="text-gray-400 text-center italic py-4">Nessun movimento recente.</p>'; 
+            return; 
+        }
         
-        el.innerHTML = data.filter(m => m.utente && m.utente.includes('MAGAZZINO')).map(m => `
+        el.innerHTML = data.map(m => `
             <div class="bg-teal-50 p-3 rounded border border-teal-100 mb-2">
                 <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-teal-900 text-sm">${m.utente}</span>
