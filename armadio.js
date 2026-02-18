@@ -267,7 +267,8 @@ const app = {
         }
     
         // 1. INSERIMENTO LOG MOVIMENTI
-        await _sb.from('movimenti').insert([{
+        // 1. INSERIMENTO LOG MOVIMENTI (Tabella dedicata)
+        await _sb.from('movimenti_armadio').insert([{
             utente: name,
             dettagli: logDetails.join(', ') 
         }]);
@@ -548,7 +549,8 @@ const admin = {
     
     // --- MODERAZIONE & STORICO & MOVIMENTI ---
     async renderMovements() {
-        const { data } = await _sb.from('movimenti').select('*').order('created_at', { ascending: false });
+        // Lettura da tabella dedicata Armadio
+        const { data } = await _sb.from('movimenti_armadio').select('*').order('created_at', { ascending: false });
         if(!data || data.length === 0) {
             document.getElementById('movements-list').innerHTML = "<p class='text-gray-400 text-center text-xs'>Nessun movimento recente.</p>";
             return;
