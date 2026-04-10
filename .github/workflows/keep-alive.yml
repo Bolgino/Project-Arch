@@ -1,0 +1,16 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    - cron: '0 10 */3 * *' # Esegue in automatico ogni 3 giorni alle 10:00
+  workflow_dispatch: # Ti fa comparire un tasto su GitHub per testarlo a mano quando vuoi
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          curl -s -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/magazzino?select=*&limit=1" \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
