@@ -93,10 +93,12 @@ const app = {
     },
 
     nav(view) {
-        if (typeof MAINTENANCE_MODE !== 'undefined' && MAINTENANCE_MODE && !state.user && ['pantry', 'restock-public', 'recipes', 'planner'].includes(view)) {
-            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-            document.getElementById('view-maintenance').classList.remove('hidden');
-            return;
+        if (typeof MAINTENANCE_MODE !== 'undefined' && MAINTENANCE_MODE) {
+            if (!state.user || state.user.email !== CONFIG.adminEmail) {
+                document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+                document.getElementById('view-maintenance').classList.remove('hidden');
+                return;
+            }
         }
         document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
         const target = document.getElementById(`view-${view}`);
