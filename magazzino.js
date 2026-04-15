@@ -64,10 +64,12 @@ const app = {
     nav(view) {
         // NUOVA LOGICA MANUTENZIONE (stile Cambusa)
         // Se c'è manutenzione, non sei admin e cerchi di aprire viste pubbliche (inventory o cassoni)
-        if (MAINTENANCE_MODE && !state.user && ['inventory', 'cassoni'].includes(view)) {
-            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-            document.getElementById('view-maintenance').classList.remove('hidden');
-            return;
+        if (MAINTENANCE_MODE) {
+            if (!state.user || state.user.email !== CONFIG.adminEmail) {
+                document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+                document.getElementById('view-maintenance').classList.remove('hidden');
+                return;
+            }
         }
 
         // Navigazione standard
