@@ -70,7 +70,6 @@
                 </button>
 
                 <div id="tech-login-form" class="hidden flex-col gap-2 mt-2">
-                    <input type="password" id="tech-pass" placeholder="Password" class="text-xs p-2 border rounded text-gray-800 outline-none focus:border-red-500 text-center bg-gray-50">
                     <button onclick="verifyTechAccess()" class="bg-red-600 text-white text-xs font-bold py-2 rounded hover:bg-red-700 shadow">SBLOCCA</button>
                 </div>
                 <p id="tech-error" class="hidden text-red-500 text-[10px] font-bold mt-1">Password Errata!</p>
@@ -78,34 +77,55 @@
         </div>
     </div>
 
-    <script>
-        // Service Worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js');
-        }
+   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-        // Logica Manutenzione
+<script>
+    // Configurazione Supabase (usa le tue chiavi)
+    const _sb = supabase.createClient("https://jmildwxjaviqkrkhjzhl.supabase.co", "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS");
+    const ADMIN_EMAIL = "marcobolge@gmail.com";
+
+    // Service Worker
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js'); }
+
+    // Controllo Manutenzione all'avvio
+    async function initPortal() {
+        const { data: { user } } = await _sb.auth.getUser();
+        
+        // Se è attiva la manutenzione E l'utente non è l'admin loggato
         if (typeof GLOBAL_MAINTENANCE !== 'undefined' && GLOBAL_MAINTENANCE) {
-            document.getElementById('maintenance-overlay').classList.remove('hidden');
-            document.getElementById('main-portal').classList.add('hidden');
-        }
-
-        // Funzioni Accesso
-        function enableTechLogin() {
-            document.getElementById('btn-tech-init').classList.add('hidden');
-            document.getElementById('tech-login-form').classList.remove('hidden');
-            document.getElementById('tech-login-form').classList.add('flex');
-        }
-
-        function verifyTechAccess() {
-            const pass = document.getElementById('tech-pass').value;
-            if (pass === 'el.Archivio12') {
-                document.getElementById('maintenance-overlay').classList.add('hidden');
-                document.getElementById('main-portal').classList.remove('hidden');
-            } else {
-                document.getElementById('tech-error').classList.remove('hidden');
+            if (!user || user.email !== ADMIN_EMAIL) {
+                document.getElementById('maintenance-overlay').classList.remove('hidden');
+                document.getElementById('main-portal').classList.add('hidden');
             }
         }
-    </script>
+    }
+
+    function enableTechLogin() {
+        // Invece di mostrare un campo password, reindirizziamo al login di uno dei moduli
+        // Oppure implementa qui un piccolo form email/pass che chiama _sb.auth.signInWithPassword
+        document.getElementById('tech-login-form').innerHTML = `
+            <input type="email" id="admin-email" placeholder="Email Admin" class="text-xs p-2 border rounded text-gray-800 mb-2">
+            <input type="password" id="admin-pass" placeholder="Password" class="text-xs p-2 border rounded text-gray-800 mb-2">
+            <button onclick="loginAdmin()" class="bg-red-600 text-white text-xs font-bold py-2 rounded">ACCEDI</button>
+        `;
+        document.getElementById('tech-login-form').classList.remove('hidden');
+        document.getElementById('tech-login-form').classList.add('flex');
+    }
+
+    async function loginAdmin() {
+        const email = document.getElementById('admin-email').value;
+        const password = document.getElementById('admin-pass').value;
+        
+        const { data, error } = await _sb.auth.signInWithPassword({ email, password });
+        
+        if (!error && data.user.email === ADMIN_EMAIL) {
+            location.reload(); // Ricarica e initPortal sbloccherà tutto
+        } else {
+            alert("Accesso negato: credenziali errate o non sei l'admin.");
+        }
+    }
+
+    initPortal();
+</script>
 </body>
 </html>
