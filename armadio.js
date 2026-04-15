@@ -77,10 +77,13 @@ const app = {
     nav(view) {
         // NUOVA LOGICA MANUTENZIONE (stile Cambusa)
         // Se c'è manutenzione, non sei admin, e stai cercando di vedere pagine pubbliche
-        if (MAINTENANCE_MODE && !state.user && ['shop', 'wishlist'].includes(view)) {
-            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-            document.getElementById('view-maintenance').classList.remove('hidden');
-            return;
+        if (MAINTENANCE_MODE) {
+            // Sblocca SOLO se l'utente è loggato E l'email corrisponde a CONFIG.adminEmail
+            if (!state.user || state.user.email !== CONFIG.adminEmail) {
+                document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+                document.getElementById('view-maintenance').classList.remove('hidden');
+                return;
+            }
         }
 
         // Logica standard di navigazione
