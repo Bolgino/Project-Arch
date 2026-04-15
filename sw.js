@@ -1,10 +1,15 @@
-const CACHE_NAME = 'azimut-arch-v2';
+// Cambia la versione per forzare l'aggiornamento sui dispositivi degli utenti
+const CACHE_NAME = 'azimut-arch-v3'; 
+
 const urlsToCache = [
   './',
-  './index.html',     // Il portale
-  './armadio.html',   // Il vecchio index
-  './armadio.js',     // Il vecchio script
+  './index.html',     
+  './armadio.html',   
+  './armadio.js',     
   './cambusa.html',
+  './cambusa.js',     // AGGIUNTO: mancava la logica della cambusa
+  './magazzino.html', // AGGIUNTO: mancava la pagina magazzino
+  './magazzino.js',   // AGGIUNTO: mancava la logica del magazzino
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
