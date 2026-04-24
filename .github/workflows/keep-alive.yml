@@ -2,23 +2,23 @@ name: Supabase Keep Alive
 
 on:
   schedule:
-    - cron: '0 10 */3 * *' # Esegue in automatico ogni 3 giorni alle 10:00
-  workflow_dispatch: # Ti fa comparire un tasto su GitHub per testarlo a mano quando vuoi
+    - cron: '0 0 * * *' # Gira ogni notte a mezzanotte
+  workflow_dispatch: # Ti permette di provarlo a mano subito
 
 jobs:
-  ping:
+  supabase-ping:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Permesso obbligatorio per permettere al bot di fare il commit automatico
     steps:
-      - name: Checkout del codice
-        uses: actions/checkout@v4
-        
-      - name: Ping Supabase REST API
-        run: |
-          curl -s -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/magazzino?select=*&limit=1" \
-          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-      - name: Evita lo stop di GitHub (Keepalive)
-        uses: gautamkrishnar/keepalive-workflow@v2
+      - name: Install Dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Run Ping Script
+        run: node ping-db.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
