@@ -2,10 +2,10 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Assicurati che il tuo file keep-alive.yml passi queste variabili d'ambiente
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY; // Usa la Service Role Key o la Anon Key
+const supabaseKey = process.env.SUPABASE_ANON_KEY; // Usa la Service Role Key o la Anon Key
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('Errore: Variabili SUPABASE_URL o SUPABASE_KEY mancanti.');
+  console.error('Errore: Variabili SUPABASE_URL o SUPABASE_ANON_KEY mancanti.');
   process.exit(1);
 }
 
