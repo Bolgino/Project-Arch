@@ -28,6 +28,3 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-
-      - name: Evita la disattivazione dopo 60 giorni
-        uses: gautamkrishnar/keepalive-workflow@v2
