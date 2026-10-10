@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write        # serve all'azione keepalive per riattivare il workflow
+  actions: write        
 
 jobs:
   ping:
