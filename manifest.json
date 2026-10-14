@@ -3,8 +3,8 @@
   "short_name": "Azimut.Arch",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#14532d",
-  "theme_color": "#14532d",
+  "background_color": "#f1f3ee",
+  "theme_color": "#163f30",
   "orientation": "portrait",
   "icons": [
     {
@@ -17,5 +17,6 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "description": "Armadio e cambusa del gruppo scout"
 }
