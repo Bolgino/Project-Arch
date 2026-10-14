@@ -1,50 +1,57 @@
-// Cambia la versione per forzare l'aggiornamento sui dispositivi degli utenti
-const CACHE_NAME = 'azimut-arch-v3'; 
+// Cambia la versione per forzare l'aggiornamento sui telefoni
+const CACHE_NAME = 'azimut-arch-v4';
 
-const urlsToCache = [
+const FILE_DEL_SITO = [
   './',
-  './index.html',     
-  './armadio.html',   
-  './armadio.js',     
+  './index.html',
+  './armadio.html',
+  './armadio.js',
   './cambusa.html',
-  './cambusa.js',     // AGGIUNTO: mancava la logica della cambusa
-  './magazzino.html', // AGGIUNTO: mancava la pagina magazzino
-  './magazzino.js',   // AGGIUNTO: mancava la logica del magazzino
+  './cambusa.js',
+  './common.js',
+  './common.css',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './img/curve.svg',
+  './fonts/BarlowCondensed-SemiBold.woff',
+  './fonts/BarlowCondensed-Bold.woff',
+  './fonts/AtkinsonHyperlegible-Regular.woff',
+  './fonts/AtkinsonHyperlegible-Bold.woff'
 ];
 
-// Installazione del Service Worker
+// Librerie esterne da tenere anche offline (i dati di Supabase invece no: devono essere sempre freschi)
+const ESTERNI = ['https://cdn.jsdelivr.net/'];
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(urlsToCache);
-      })
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(FILE_DEL_SITO)));
+  self.skipWaiting();
 });
 
-// Strategia: Network First (Cerca online, se non va usa la cache)
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
-  );
-});
-
-// Attivazione e pulizia vecchie cache
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys()
+      .then((nomi) => Promise.all(nomi.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))))
+      .then(() => self.clients.claim())
+  );
+});
+
+// Prima la rete (così si vede sempre l'ultima versione), la copia salvata solo se si è offline
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  const daSalvare = url.origin === self.location.origin || ESTERNI.some((e) => req.url.startsWith(e));
+  if (!daSalvare) return;
+  event.respondWith(
+    fetch(req)
+      .then((res) => {
+        if (res.ok) {
+          const copia = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copia));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req, { ignoreSearch: true }))
   );
 });

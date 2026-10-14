@@ -1,1494 +1,927 @@
-// cambusa.js
-const MAINTENANCE_MODE = false; // <--- METTI TRUE PER CHIUDERE AL PUBBLICO, FALSE PER APRIRE
-// --- CONFIGURAZIONE ---
-const CONFIG = {
-    url: "https://jmildwxjaviqkrkhjzhl.supabase.co", 
-    key: "sb_publishable_PwYQxh8l7HLR49EC_wHa7A_gppKi_FS", 
-    adminEmail: "marcobolge@gmail.com",
-    bucket: "immagini-oggetti"
+// =====================================================================
+// Azimut.Arch · Cambusa
+// Menu dei campi salvati, lista della spesa da telefono, ricette per
+// pasto, dispensa (uso e rifornimento), gestione admin.
+// =====================================================================
+
+const PASTI = { colazione: 'Colazione', pranzo: 'Pranzo', merenda: 'Merenda', cena: 'Cena', sacco: 'Al sacco' };
+const ORDINE_PASTI = ['colazione', 'pranzo', 'merenda', 'cena'];
+const CAT_DISPENSA = { colazione: 'Colazione', merenda: 'Merenda', pasti: 'Pasti', condimenti: 'Condimenti', extra: 'Extra' };
+const UNITA = ['gr', 'kg', 'ml', 'lt', 'pz', 'conf'];
+
+// Reparti nell'ordine in cui si gira il supermercato
+const REPARTI = [
+    ['frutta-verdura', 'Frutta e verdura'], ['pane', 'Pane e forno'], ['pasta-riso', 'Pasta, riso e farine'],
+    ['carne-salumi', 'Carne e salumi'], ['pesce', 'Pesce'], ['latticini-uova', 'Latticini e uova'], ['surgelati', 'Surgelati'],
+    ['dispensa', 'Scatolame e condimenti'], ['colazione-dolci', 'Colazione e dolci'], ['bevande', 'Bevande'], ['altro', 'Altro']
+];
+const NOME_REPARTO = Object.fromEntries(REPARTI);
+// Prima ipotesi dal nome (l'ordine conta: "frutta secca" non è frutta fresca)
+const INDOVINA = [
+    ['surgelati', /bastoncin|surgel|gelat|sofficin/],
+    ['colazione-dolci', /cappuc|caff|cioccolat|biscott|marmellat|nutella|zucchero|merendin|frutta secca|miele|cacao|fette biscottate|cereali|crostat/],
+    ['frutta-verdura', /mel[ae]\b|pomodor|zucchin|cipoll|patat|limon|verdur|insalat|carot|banan|frutta|aglio|basilico|prezzemol|pere\b|arance|melanzan|peperon/],
+    ['pane', /pane|panin|piadin|rosetta|cracker|grissin|focacc|tortill/],
+    ['pasta-riso', /pasta|ditalin|pastina|riso|cous|farina|polenta|gnocch|tortellin|raviol|spaghett|penne|fusill/],
+    ['latticini-uova', /latte|burro|formagg|mozzarell|uova|uovo|yogurt|parmigian|grana|ricotta|panna|stracchino|sottilet/],
+    ['carne-salumi', /carne|macinat|salsicc|w[uü]e?rstel|wustel|pancetta|prosciutt|sopressa|salame|pollo|bresaola|speck|hamburger|cotolett/],
+    ['pesce', /tonno|merluzz|pesce|sgombro|salmone/],
+    ['bevande', /acqua|succo|\bthe\b|\bt[eè]\b|bibit|aranciata/],
+    ['dispensa', /olio|sale|aceto|dado|passata|sugo|pesto|fagiol|ceci|lenticch|salvia|spezie|origano|pepe|maionese|ketchup|pur[eè]|brodo|piselli|mais/]
+];
+
+const state = {
+    dispensa: [], ricette: [], menu: [], reparti: new Map(),
+    vista: 'menu', menuId: null,
+    filtroRic: { testo: '', pasto: 'tutti' },
+    filtroDisp: { testo: '', cat: 'tutte' },
+    uso: store.get('uso_cambusa', []),                 // [{ id, qty }]
+    rifornisci: {},                                    // id -> { qty, scad }
+    rifTesto: '',
+    tab: store.get('tab_cambusa', 'approvazioni'),
+    movimenti: null,
+    pasto: null,                                       // { g, p } pasto aperto nel foglio
+    ricMod: null,                                      // ricetta in modifica
+    dopoRicetta: null,
+    usaId: null,
+    formMenu: null,                                    // { modo: 'nuovo' | 'duplica' | 'modifica', id }
+    reparto: null
 };
 
-const _sb = supabase.createClient(CONFIG.url, CONFIG.key);
+// ---------- Utilità ----------
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const corrisponde = (testo, parole) => { const t = norm(testo); return parole.every(p => t.includes(p)); };
+const parole = s => norm(s).split(/\s+/).filter(Boolean);
+const maiuscola = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const inAttesa = r => r.status && r.status !== 'approved';
+const pastiDi = r => Array.isArray(r.pasti) && r.pasti.length ? r.pasti : ({ snack: ['colazione', 'merenda'], packed: ['sacco'] }[r.categoria] || ['pranzo', 'cena']);
+const mie = (k) => store.get(k, []);
+const aggiungiMio = (k, id) => store.set(k, [...new Set([...mie(k), id])]);
 
-// --- STATO ---
-const state = { 
-    pantry: [], 
-    recipes: [], 
-    cart: [],    
-    restockCart: {}, // MODIFICATO: Oggetto mappa per modifiche rapide
-    user: null, 
-    currentCategory: 'all' 
-};
+function base(unita) {
+    const u = norm(unita);
+    if (['g', 'gr', 'grammi'].includes(u)) return { dim: 'massa', f: 1 };
+    if (u === 'hg') return { dim: 'massa', f: 100 };
+    if (u === 'kg') return { dim: 'massa', f: 1000 };
+    if (u === 'ml') return { dim: 'volume', f: 1 };
+    if (u === 'cl') return { dim: 'volume', f: 10 };
+    if (['l', 'lt', 'litri'].includes(u)) return { dim: 'volume', f: 1000 };
+    if (u === 'conf') return { dim: 'conf', f: 1 };
+    return { dim: 'pezzi', f: 1 };
+}
+function fmtQta(q, dim) {
+    if (dim === 'massa') return q >= 1000 ? `${fmt.num(Math.ceil(q / 100) / 10, 1)} kg` : `${fmt.num(Math.ceil(q / 10) * 10)} g`;
+    if (dim === 'volume') return q >= 1000 ? `${fmt.num(Math.ceil(q / 100) / 10, 1)} l` : `${fmt.num(Math.ceil(q / 10) * 10)} ml`;
+    if (dim === 'conf') return `${Math.ceil(q - 1e-9)} conf.`;
+    const n = Math.ceil(q - 1e-9);
+    return n === 1 ? '1 pezzo' : `${n} pezzi`;
+}
+const fmtUnita = (q, u) => `${fmt.num(q)} ${u === 'pz' ? (Number(q) === 1 ? 'pezzo' : 'pezzi') : u === 'conf' ? 'conf.' : esc(u || '')}`;
+const tre = n => Math.round(Number(n) * 1000) / 1000;
+function repartoDi(nome) {
+    const n = norm(nome);
+    if (state.reparti.has(n)) return state.reparti.get(n);
+    for (const [k, re] of INDOVINA) if (re.test(n)) return k;
+    return 'altro';
+}
+function giorniAllaScadenza(d) { return d ? Math.ceil((new Date(d + 'T23:59:59') - new Date()) / 86400000) : null; }
+function localeInput(d) { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); }
 
-// --- LOADER ---
-const loader = {
-    show() { document.getElementById('cambusa-loader').classList.remove('opacity-0', 'pointer-events-none'); },
-    hide() { setTimeout(() => document.getElementById('cambusa-loader').classList.add('opacity-0', 'pointer-events-none'), 1000); }
-};
+// =====================================================================
+// Dati
+// =====================================================================
+async function caricaDati() {
+    ui.carica(true);
+    const [d, r, m, rep] = await Promise.all([
+        sb.from('cambusa').select('*').order('nome'),
+        sb.from('ricette').select('*, ingredienti_ricetta(*)').order('nome'),
+        sb.from('menu_campi').select('*').order('inizio', { ascending: false }),
+        sb.from('ingredienti_reparto').select('*')
+    ]);
+    ui.carica(false);
+    if (d.error || r.error) ui.toast(errMsg(d.error || r.error), 'errore');
+    state.dispensa = d.data || [];
+    state.ricette = r.data || [];
+    state.menu = m.error ? [] : (m.data || []);
+    // Se sto ancora salvando il menu aperto, tengo la mia versione
+    if (menuInSospeso) state.menu = state.menu.map(x => String(x.id) === String(menuInSospeso.id) ? menuInSospeso : x);
+    state.reparti = new Map((rep.data || []).map(x => [x.nome, x.reparto]));
+    state.uso = state.uso.filter(u => state.dispensa.some(p => p.id === u.id));
+    salvaUso();
+    $('#nomi-ingredienti').innerHTML = [...new Set(state.ricette.flatMap(x => (x.ingredienti_ricetta || []).map(i => maiuscola(i.nome_ingrediente.trim()))))]
+        .sort((a, b) => a.localeCompare(b, 'it')).map(n => `<option value="${esc(n)}">`).join('');
+    renderTutto();
+}
+function renderTutto() {
+    renderMenuLista();
+    if (state.vista === 'menu-dettaglio') renderMenuDettaglio();
+    if (state.vista === 'spesa') renderSpesa();
+    renderRicette();
+    renderDispensa();
+    renderBarraUso();
+    aggiornaBollini();
+    if (state.vista === 'admin') renderAdmin();
+    if (ui.aperto('foglio-pasto')) renderPasto();
+}
+const menuCorrente = () => state.menu.find(m => String(m.id) === String(state.menuId));
 
-// --- APP ---
-// --- CODICE NUOVO ---
-const app = {
-    async init() {
-        loader.show();
-        await auth.check();
-        realtime.init(); 
-        await this.loadData();
-        
-        // Controllo scadenze (una volta al giorno)
-        this.checkExpirations();
-        
-        loader.hide();
-    },
+// =====================================================================
+// Navigazione
+// =====================================================================
+function nav(vista, id = null) {
+    if (vista === 'admin' && !auth.admin) vista = 'menu';
+    if ((vista === 'menu-dettaglio' || vista === 'spesa') && !id) vista = 'menu';
+    state.vista = vista;
+    if (id) state.menuId = id;
+    for (const v of ['menu', 'menu-dettaglio', 'spesa', 'ricette', 'dispensa', 'admin']) $('#vista-' + v).hidden = v !== vista;
+    const sezione = vista.startsWith('menu') || vista === 'spesa' ? 'menu' : vista;
+    $$('.nav-voce').forEach(b => b.dataset.vista === sezione ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
+    const hash = vista === 'menu' ? '' : vista === 'menu-dettaglio' ? `#menu/${id}` : vista === 'spesa' ? `#spesa/${id}` : '#' + vista;
+    try { history.replaceState(history.state, '', location.pathname + hash); } catch { /* ignora */ }
+    if (vista === 'menu-dettaglio') renderMenuDettaglio();
+    if (vista === 'spesa') renderSpesa();
+    if (vista === 'admin') renderAdmin();
+    renderBarraUso();
+    window.scrollTo({ top: 0 });
+}
 
-    async loadData() {
-        const { data: d } = await _sb.from('cambusa').select('*').order('nome');
-        state.pantry = d || [];
-        await recipes.load();
-        this.renderPantry();
-        if (state.user) admin.render();      
-        else this.nav('pantry'); 
-    },
-
-    async checkExpirations() {
-        // Recupera la lista degli ID per cui abbiamo GIÀ mandato una mail
-        let notifiedIds = JSON.parse(localStorage.getItem('azimut_notified_ids') || '[]');
-        
-        const warningDate = new Date();
-        warningDate.setDate(warningDate.getDate() + 10); // Finestra di 10 giorni
-
-        // Filtra prodotti: 
-        // 1. Devono essere in scadenza
-        // 2. NON devono essere già nella lista "notifiedIds"
-        const expiringNew = state.pantry.filter(p => {
-            if(!p.scadenza || p.quantita <= 0) return false;
-            const d = new Date(p.scadenza);
-            
-            // È nella finestra di scadenza?
-            const isExpiring = d <= warningDate && d >= new Date();
-            
-            // Se scade E non l'ho ancora detto all'admin -> includilo
-            return isExpiring && !notifiedIds.includes(p.id);
-        });
-
-        if (expiringNew.length > 0) {
-            const details = "<h3>⚠️ Nuovi Prodotti in Scadenza</h3><ul>" + 
-                            expiringNew.map(p => `<li><b>${p.nome}</b>: ${p.quantita} ${p.unita} (Scad: ${new Date(p.scadenza).toLocaleDateString()})</li>`).join('') + 
-                            "</ul>";
-            
-            try {
-                await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ details, admin_email: CONFIG.adminEmail, subject: "⚠️ CAMBUSA: Avviso Scadenze" })
-                });
-
-                // Aggiunge i nuovi ID alla lista "già notificati" e salva
-                expiringNew.forEach(p => notifiedIds.push(p.id));
-                localStorage.setItem('azimut_notified_ids', JSON.stringify(notifiedIds));
-                
-                console.log("Mail inviata per:", expiringNew.map(x=>x.nome));
-            } catch(e) { console.error("Err mail", e); }
-        }
-    },
-
-    nav(view) {
-        if (typeof MAINTENANCE_MODE !== 'undefined' && MAINTENANCE_MODE) {
-            if (!state.user || state.user.email !== CONFIG.adminEmail) {
-                document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-                document.getElementById('view-maintenance').classList.remove('hidden');
-                return;
-            }
-        }
-        document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
-        const target = document.getElementById(`view-${view}`);
-        if(target) target.classList.remove('hidden');
-        if(view === 'restock-public' && typeof restock !== 'undefined') restock.init();
-    },
-
-    setCategory(cat) {
-        state.currentCategory = cat;
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active', 'bg-opacity-100', 'text-white'));
-        const btn = document.getElementById(`btn-cat-${cat}`);
-        if(btn) btn.classList.add('active');
-        this.filterPantry();
-    },
-
-    filterPantry() {
-        const term = document.getElementById('search-bar').value.toLowerCase().trim();
-        const cards = document.querySelectorAll('#pantry-grid > div');
-        cards.forEach(card => {
-            const title = card.querySelector('h4').innerText.toLowerCase();
-            const cat = card.dataset.category;
-            const matchesText = title.includes(term);
-            const matchesCat = state.currentCategory === 'all' || cat === state.currentCategory;
-            card.classList.toggle('hidden', !(matchesText && matchesCat));
-        });
-    },
-
-    renderFilters() {
-        const cats = ['all', 'colazione', 'merenda', 'pasti', 'condimenti', 'extra'];
-        const labels = { all: 'Tutto', colazione: '☕ Colazione', merenda: '🍫 Merenda', pasti: '🍝 Pasti', condimenti: '🧂 Condimenti', extra: '🧻 Extra' };
-        document.getElementById('pantry-filters').innerHTML = cats.map(c => `
-            <button id="btn-cat-${c}" onclick="app.setCategory('${c}')" 
-                class="filter-btn px-4 py-2 rounded-full text-xs font-bold border transition whitespace-nowrap
-                ${state.currentCategory === c ? 'bg-orange-700 text-white border-orange-700 shadow-md' : 'bg-white text-gray-600 border-gray-200'}">
-                ${labels[c] || c}
-            </button>`).join('');
-    },
-
-    renderPantry() {
-        this.renderFilters();
-        const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
-        document.getElementById('pantry-grid').innerHTML = state.pantry.map(item => {
-            const isOut = item.quantita <= 0;
-            const isPending = item.stato === 'pending';
-            const isMine = myProds.includes(item.id);
-            let isExpiring = false;
-            let daysToExpiry = null;
-            if (item.scadenza) {
-                const diffTime = new Date(item.scadenza) - new Date();
-                daysToExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                isExpiring = daysToExpiry <= 12 && daysToExpiry >= 0;
-            }
-            let badge = '';
-            let borderClass = 'border-orange-100';
-            let overlayClass = '';
-            let actionButtons = '';
-            
-            if (isPending) {
-                if (isMine) {
-                    badge = '<span class="absolute top-0 right-0 bg-yellow-100 text-yellow-800 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10 border border-yellow-300">IN ATTESA (TUO) ✏️</span>';
-                    borderClass = 'border-yellow-400 bg-yellow-50/50';
-                    actionButtons = `<div class="flex gap-1 w-full"><button onclick="restock.openEditPending('${item.id}')" class="flex-grow bg-yellow-400 text-yellow-900 font-bold py-2 rounded text-xs hover:bg-yellow-500 shadow-sm">MODIFICA</button><button onclick="restock.deletePending('${item.id}')" class="bg-red-500 text-white font-bold px-3 py-2 rounded text-xs hover:bg-red-600 shadow-sm">🗑</button></div>`;
-                } else {
-                    badge = '<span class="absolute top-0 right-0 bg-gray-200 text-gray-600 text-[9px] px-2 py-1 rounded-bl-lg font-bold shadow z-10">IN APPROVAZIONE ⏳</span>';
-                    borderClass = 'border-gray-200 bg-gray-50';
-                    overlayClass = 'opacity-50 pointer-events-none grayscale-[0.8]';
-                }
-            } else if (isOut) {
-                badge = '<span class="absolute top-2 right-2 bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow">ESAURITO 🚫</span>';
-                borderClass = 'border-gray-300 bg-gray-50 opacity-75';
-                actionButtons = `<input type="number" disabled class="w-14 p-2 text-center border rounded bg-gray-100 text-sm"><button disabled class="flex-1 bg-gray-200 text-gray-400 font-bold py-2 rounded text-xs">USA</button>`;
-            } else {
-                if(isExpiring) {
-                    badge = `<span class="absolute top-2 right-2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow animate-pulse">SCADE TRA ${daysToExpiry} GG ⏳</span>`;
-                    borderClass = 'border-red-400 bg-red-50';
-                }
-                actionButtons = `<input type="number" step="0.5" min="0" max="${item.quantita}" id="qty-${item.id}" placeholder="0" class="w-14 p-2 text-center border rounded bg-gray-50 text-sm font-bold outline-none focus:border-orange-500"><button onclick="cart.add('${item.id}')" class="flex-1 bg-orange-100 text-orange-800 hover:bg-orange-200 font-bold py-2 rounded text-xs transition">USA</button>`;
-            }
-            return `<div class="rounded-xl shadow-sm border ${borderClass} overflow-hidden hover:shadow-md transition flex flex-col relative group bg-white min-h-[140px]" data-category="${item.categoria}">${badge}<div class="p-3 flex flex-col flex-grow ${overlayClass}"><div class="text-[9px] font-bold uppercase text-gray-400 mb-1 tracking-wider">${item.categoria}</div><h4 class="font-bold text-gray-800 leading-tight mb-2 text-md line-clamp-2">${item.nome}</h4><div class="mt-auto"><p class="text-xs text-gray-500 mb-1 font-mono flex justify-between items-center"><span>Disp:</span> <span class="font-bold ${isOut ? 'text-red-600' : 'text-orange-700'} text-lg">${item.quantita} <span class="text-xs">${item.unita}</span></span></p>${item.scadenza ? `<p class="text-[10px] text-gray-400 mb-2 italic">Scade il: ${new Date(item.scadenza).toLocaleDateString()}</p>` : ''}<div class="flex gap-1 mt-1">${actionButtons}</div></div></div></div>`;
-        }).join('');
-        this.filterPantry();
-    },
-
-    async checkout() {
-        const note = document.getElementById('checkout-note').value;
-        if(state.cart.length === 0) return ui.toast("Lista vuota!", "error");
-
-        loader.show();
-        const userLabel = state.user ? 'Admin' : (note || 'Utente');
-        let mailDetails = `<h3>Prelievo Cambusa (${userLabel})</h3><ul>`;
-
-        for (let c of state.cart) {
-            const item = state.pantry.find(x => x.id === c.id);
-            if(item) {
-                const newQ = item.quantita - c.qty;
-                await _sb.from('cambusa').update({ quantita: newQ }).eq('id', c.id);
-                
-                await _sb.from('movimenti_cambusa').insert([{
-                    prodotto: item.nome,
-                    quantita: -Math.abs(c.qty),
-                    unita: item.unita,
-                    azione: 'consumo',
-                    utente: userLabel
-                }]);
-                
-                mailDetails += `<li>${item.nome}: <b>${c.qty} ${item.unita}</b> (Rimasti: ${newQ})</li>`;
-            }
-        }
-        mailDetails += "</ul>";
-
-        // Invio Email Riepilogo Consumo
-        try {
-            await fetch(`${CONFIG.url}/functions/v1/notify-admin`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${CONFIG.key}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ details: mailDetails, admin_email: CONFIG.adminEmail, subject: "🥘 CAMBUSA: Riepilogo Prelievo" })
-            });
-        } catch(e) {}
-
-        cart.empty();
-        ui.toggleCart();
-        ui.toast("Registrato e inviata mail! 🥘", "success");
-        await this.loadData();
-        loader.hide();
-    }
-};
-// --- RIFORNIMENTO (LISTA RAPIDA) ---
-const restock = {
-    init() {
-        state.restockCart = {}; 
-        const searchInput = document.getElementById('restock-search');
-        if(searchInput) searchInput.value = '';
-        this.renderList();
-    },
-
-    renderList() {
-        const term = document.getElementById('restock-search') ? document.getElementById('restock-search').value.toLowerCase() : '';
-        const el = document.getElementById('restock-full-list');
-        if(!el) return;
-
-        // Filtra la dispensa (pantry), non le ricette!
-        const filtered = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
-
-        if(filtered.length === 0) {
-            el.innerHTML = `<div class="text-center py-10 text-gray-400 italic">Nessun prodotto trovato.</div>`;
-            return;
-        }
-
-        el.innerHTML = filtered.map(p => {
-            return `
-            <div class="bg-white rounded-xl p-3 border border-orange-100 shadow-sm flex flex-col gap-2">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="font-bold text-gray-800 text-lg leading-tight">${p.nome}</div>
-                        <div class="text-xs text-gray-400 font-mono">Attuali: ${p.quantita} ${p.unita} | Scad: ${p.scadenza ? new Date(p.scadenza).toLocaleDateString() : 'N/A'}</div>
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-2 bg-orange-50 p-2 rounded-lg">
-                    <div>
-                        <label class="text-[9px] font-bold text-orange-800 uppercase">Aggiungi Qtà</label>
-                        <input type="number" placeholder="0" class="w-full p-1 text-center border rounded text-sm font-bold outline-none focus:border-orange-500"
-                            onchange="restock.trackChange('${p.id}', 'addQty', this.value)">
-                    </div>
-                    <div>
-                        <label class="text-[9px] font-bold text-orange-800 uppercase">Nuova Scadenza</label>
-                        <input type="date" class="w-full p-1 border rounded text-xs outline-none focus:border-orange-500 bg-white"
-                            onchange="restock.trackChange('${p.id}', 'newExpiry', this.value)">
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-    },
-    
-    trackChange(id, field, value) {
-        if (!state.restockCart[id]) state.restockCart[id] = { addQty: '', newExpiry: '' };
-        state.restockCart[id][field] = value;
-    },
-
-    submitUpdates() {
-        const updatesIDs = Object.keys(state.restockCart).filter(id => {
-            const m = state.restockCart[id];
-            return (m.addQty !== '' && parseFloat(m.addQty) > 0) || (m.newExpiry !== '' && m.newExpiry !== state.pantry.find(x=>x.id==id)?.scadenza);
-        });
-
-        if (updatesIDs.length === 0) return ui.toast("Nessuna modifica inserita", "error");
-
-        const listHTML = updatesIDs.map(id => {
-            const item = state.pantry.find(p => p.id == id);
-            const mod = state.restockCart[id];
-            let details = '';
-            if (mod.addQty && parseFloat(mod.addQty) > 0) details += `<span class="text-green-600 font-bold">+${mod.addQty} ${item.unita}</span>`;
-            if (mod.newExpiry) details += `<div class="text-[10px] text-gray-500 mt-1">Scad: ${mod.newExpiry}</div>`;
-            return `<div class="flex justify-between items-center bg-white p-3 rounded border border-gray-100 shadow-sm"><span class="font-bold text-gray-700">${item.nome}</span><div class="text-right leading-tight">${details}</div></div>`;
-        }).join('');
-
-        document.getElementById('restock-confirm-list').innerHTML = listHTML;
-        ui.modal('modal-restock-summary');
-    },
-
-    async confirmUpload() {
-        loader.show();
-        let successCount = 0;
-        const updatesIDs = Object.keys(state.restockCart).filter(id => {
-            const m = state.restockCart[id];
-            return (m.addQty !== '' && parseFloat(m.addQty) > 0) || m.newExpiry !== '';
-        });
-
-        try {
-            for (const id of updatesIDs) {
-                const mod = state.restockCart[id];
-                const original = state.pantry.find(p => p.id == id);
-                const payload = {};
-                if (mod.addQty && parseFloat(mod.addQty) > 0) payload.quantita = original.quantita + parseFloat(mod.addQty);
-                if (mod.newExpiry) payload.scadenza = mod.newExpiry;
-
-                if (Object.keys(payload).length > 0) {
-                    const { error } = await _sb.from('cambusa').update(payload).eq('id', id);
-                    if (!error) successCount++;
-                }
-            }
-            ui.toast(`Salvato! ${successCount} prodotti aggiornati.`, "success");
-            state.restockCart = {}; 
-            ui.closeModals();
-            await app.loadData();
-            this.renderList();
-        } catch (e) {
-            ui.toast("Errore salvataggio", "error");
-        }
-        loader.hide();
-    },
-
-    // Funzioni per aggiungere nuovi prodotti (RIPRISTINATE PER TABELLA CAMBUSA)
-    async addNewProduct() {
-        const nome = document.getElementById('new-prod-name').value.trim();
-        const cat = document.getElementById('new-prod-cat').value;
-        const unita = document.getElementById('new-prod-unit').value;
-        const qta = parseFloat(document.getElementById('new-prod-qty').value);
-        const scadenza = document.getElementById('new-prod-expiry').value;
-
-        if (!nome || !qta || !scadenza) return ui.toast("Compila tutti i campi", "error");
-
-        loader.show();
-        
-        // SE è Admin -> Approvato subito (stato: null o 'approved'), ALTRIMENTI 'pending'
-        const initialStatus = state.user ? 'approved' : 'pending';
-
-        const { data, error } = await _sb.from('cambusa').insert([{
-            nome: nome, 
-            categoria: cat, 
-            quantita: qta, 
-            unita: unita, 
-            scadenza: scadenza, 
-            stato: initialStatus
-        }]).select();
-
-        if (error) {
-             console.error(error);
-             ui.toast("Errore inserimento", "error");
-        } else {
-             // Se è l'utente, salviamo nel local storage
-             if(!state.user) {
-                 const newId = data[0].id;
-                 const myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
-                 myProds.push(newId);
-                 localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
-             }
-
-             // LOG MOVIMENTO AGGIUNTA
-             await _sb.from('movimenti_cambusa').insert([{
-                prodotto: nome,
-                quantita: qta,
-                unita: unita,
-                azione: state.user ? 'rifornimento' : 'richiesta',
-                utente: state.user ? 'Admin' : 'Utente'
-            }]);
-
-             ui.toast(state.user ? "Prodotto aggiunto!" : "Richiesta inviata!", "success");
-             ui.closeModals();
-             // Reset campi...
-             document.getElementById('new-prod-name').value = '';
-             document.getElementById('new-prod-qty').value = '';
-             document.getElementById('new-prod-expiry').value = '';
-             await app.loadData();
-             this.renderList(); 
-        }
-    },
-
-    openEditPending(id) {
-        const item = state.pantry.find(x => x.id == id);
-        if(!item) return;
-        document.getElementById('pend-edit-id').value = id;
-        document.getElementById('pend-edit-name').value = item.nome;
-        document.getElementById('pend-edit-qty').value = item.quantita;
-        document.getElementById('pend-edit-date').value = item.scadenza;
-        ui.modal('modal-edit-pending');
-    },
-
-    async savePendingEdit() {
-        const id = document.getElementById('pend-edit-id').value;
-        const updates = {
-            nome: document.getElementById('pend-edit-name').value,
-            quantita: parseFloat(document.getElementById('pend-edit-qty').value),
-            scadenza: document.getElementById('pend-edit-date').value
+// =====================================================================
+// Menu dei campi
+// =====================================================================
+function generaGiorni(inizio, fine, vecchi = []) {
+    const a = new Date(inizio), b = new Date(fine);
+    const giorni = [];
+    const g0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+    const gN = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+    for (let d = new Date(g0), i = 0; d <= gN && i < 60; d.setDate(d.getDate() + 1), i++) {
+        const primo = i === 0, ultimo = d.getTime() === gN.getTime();
+        const hA = a.getHours() + a.getMinutes() / 60, hB = b.getHours() + b.getMinutes() / 60;
+        const serve = {
+            colazione: !(primo && hA > 9) && !(ultimo && hB < 8),
+            pranzo: !(primo && hA > 14) && !(ultimo && hB < 13),
+            merenda: !(primo && hA > 17) && !(ultimo && hB < 16),
+            cena: !(primo && hA > 20) && !(ultimo && hB < 20)
         };
-        
-        loader.show();
-        await _sb.from('cambusa').update(updates).eq('id', id);
-        ui.toast("Aggiornato!", "success");
-        ui.closeModals();
-        await app.loadData();
-        loader.hide();
-    },
-
-    async deletePending(id) {
-        if(!confirm("Eliminare questa richiesta in attesa?")) return;
-        loader.show();
-        
-        const { error } = await _sb.from('cambusa').delete().eq('id', id);
-        
-        if(!error) {
-            // Rimuovi anche dal local storage per non vederlo più come "mio"
-            let myProds = JSON.parse(localStorage.getItem('azimut_my_products') || '[]');
-            myProds = myProds.filter(x => x != id);
-            localStorage.setItem('azimut_my_products', JSON.stringify(myProds));
-            
-            ui.toast("Richiesta eliminata", "success");
-            await app.loadData();
-        } else {
-            ui.toast("Errore eliminazione", "error");
-        }
-        loader.hide();
+        const prima = vecchi[i]?.pasti || [];
+        giorni.push({ data: fmt.isoGiorno(d), pasti: ORDINE_PASTI.filter(t => serve[t]).map(t => prima.find(p => p.tipo === t) || { tipo: t, sacco: false, ricette: [] }) });
     }
-};
-// --- CARRELLO ---
-const cart = {
-    // --- DENTRO L'OGGETTO cart ---
-    add(id) {
-        const item = state.pantry.find(x => x.id == id);
-        const input = document.getElementById(`qty-${id}`);
-        const qty = parseFloat(input.value);
-        
-        if(!qty || qty <= 0) return ui.toast("Quantità non valida", "error");
-        
-        // CONTROLLO SCORTA
-        if(qty > item.quantita) {
-            return ui.toast(`Massimo disponibile: ${item.quantita} ${item.unita}`, "error");
-        }
-        
-        const exists = state.cart.find(x => x.id == id);
-        // Calcola totale nel carrello per questo item per evitare workaround
-        const currentInCart = exists ? exists.qty : 0;
-        
-        if (currentInCart + qty > item.quantita) {
-             return ui.toast(`Superi la disponibilità!`, "error");
-        }
+    return giorni;
+}
+function statoMenu(m) {
+    let pieni = 0, tot = 0;
+    for (const g of m.giorni || []) for (const p of g.pasti) { tot++; if (p.ricette.length) pieni++; }
+    return { pieni, tot };
+}
+function periodo(m) {
+    const a = new Date(m.inizio), b = new Date(m.fine);
+    const stessoMese = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+    return stessoMese ? `dal ${a.getDate()} al ${fmt.data(b)}` : `dal ${fmt.dataBreve(a)} al ${fmt.data(b)}`;
+}
 
-        if(exists) exists.qty += qty;
-        else state.cart.push({ id, name: item.nome, qty, unit: item.unita });
-        
-        input.value = '';
-        this.render();
-        ui.toast("Aggiunto al consumo", "success");
-    },
-    remove(idx) { state.cart.splice(idx, 1); this.render(); },
-    empty() { state.cart = []; this.render(); },
-    render() {
-        document.getElementById('cart-count-mobile').innerText = state.cart.length;
-        document.getElementById('cart-items').innerHTML = state.cart.map((c, i) => `
-            <div class="bg-white p-3 rounded shadow-sm border-l-4 border-orange-500 flex justify-between items-center">
-                <div><div class="font-bold text-gray-800">${c.name}</div><div class="text-xs text-orange-600 font-bold">${c.qty} ${c.unit}</div></div>
-                <button onclick="cart.remove(${i})" class="text-red-400 font-bold px-2">✕</button>
-            </div>`).join('');
+function renderMenuLista() {
+    const el = $('#menu-lista');
+    if (!state.menu.length) {
+        el.innerHTML = `<div class="vuoto"><h3>Ancora nessun menu</h3><p>Crea il menu del prossimo campo: scegli le ricette per ogni pasto e la spesa si calcola da sola.</p></div>`;
+        return;
     }
-};
-// SOSTITUISCI TUTTO L'OGGETTO recipes
-const recipes = {
-    currentIngredients: [], // Usiamo un unico array per gestire gli ingredienti
+    const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+    const prossimi = state.menu.filter(m => new Date(m.fine) >= oggi).sort((a, b) => new Date(a.inizio) - new Date(b.inizio));
+    const passati = state.menu.filter(m => new Date(m.fine) < oggi);
+    const card = m => {
+        const s = statoMenu(m), a = new Date(m.inizio);
+        return `<button class="menu-card" data-act="apri-menu" data-ref="${m.id}" type="button">
+            <span class="menu-data"><b>${a.getDate()}</b><span>${a.toLocaleDateString('it-IT', { month: 'short' }).replace('.', '')}</span></span>
+            <span class="riga-testo"><span class="riga-titolo" style="display:block;font-size:17px">${esc(m.nome)}</span>
+                <span class="riga-sotto" style="display:block">${periodo(m)}, ${m.persone} persone</span>
+                <span class="riga-sotto" style="display:block">${s.pieni === s.tot ? 'Tutti i pasti pronti' : `${s.pieni} pasti pronti su ${s.tot}`}</span></span>
+            ${icon('avanti')}</button>`;
+    };
+    el.innerHTML = (prossimi.length ? prossimi.map(card).join('') : `<p class="tenue">Nessun campo in programma.</p>`) +
+        (passati.length ? `<div class="sezione"><div class="sezione-testa"><h2>Campi passati</h2><span class="conta">${passati.length}</span></div>
+            <p class="tenue" style="margin-bottom:10px">Duplica un menu vecchio per non ripartire da zero.</p>${passati.map(card).join('')}</div>` : '');
+}
 
-    async load() {
-        const { data } = await _sb.from('ricette').select('*, ingredienti_ricetta(*)');
-        state.recipes = data || [];
-        this.renderList();
-        
-        const sel = document.getElementById('planner-recipe-select');
-        if(sel) sel.innerHTML = '<option value="">Seleziona Ricetta...</option>' + state.recipes.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
-    },
-    
-    renderList() {
-        const term = document.getElementById('recipe-search') ? document.getElementById('recipe-search').value.toLowerCase() : '';
-        const el = document.getElementById('recipes-list');
-        if(!el) return;
+function apriFormMenu(modo, id = null) {
+    state.formMenu = { modo, id };
+    const m = id ? state.menu.find(x => String(x.id) === String(id)) : null;
+    $('#menu-titolo').textContent = { nuovo: 'Nuovo menu', duplica: 'Duplica il menu', modifica: 'Dati del campo' }[modo];
+    $('#btn-salva-menu').textContent = { nuovo: 'Crea il menu', duplica: 'Crea la copia', modifica: 'Salva' }[modo];
+    $('#menu-errore').hidden = true;
+    if (modo === 'nuovo') {
+        const a = new Date(); a.setDate(a.getDate() + 7); a.setHours(10, 0, 0, 0);
+        const b = new Date(a); b.setDate(b.getDate() + 2); b.setHours(15, 0, 0, 0);
+        $('#menu-nome').value = ''; $('#menu-inizio').value = localeInput(a); $('#menu-fine').value = localeInput(b); $('#menu-persone').value = 30;
+    } else {
+        $('#menu-nome').value = modo === 'duplica' ? `${m.nome} (copia)` : m.nome;
+        $('#menu-persone').value = m.persone;
+        if (modo === 'duplica') {
+            const durata = new Date(m.fine) - new Date(m.inizio);
+            const a = new Date(m.inizio); const oggi = new Date();
+            while (a < oggi) a.setFullYear(a.getFullYear() + 1);
+            $('#menu-inizio').value = localeInput(a); $('#menu-fine').value = localeInput(new Date(a.getTime() + durata));
+        } else { $('#menu-inizio').value = localeInput(m.inizio); $('#menu-fine').value = localeInput(m.fine); }
+    }
+    ui.apri('foglio-menu');
+}
+async function salvaFormMenu(e) {
+    e.preventDefault();
+    const { modo, id } = state.formMenu, err = $('#menu-errore');
+    err.hidden = true;
+    const nome = $('#menu-nome').value.trim(), inizio = new Date($('#menu-inizio').value), fine = new Date($('#menu-fine').value);
+    const persone = parseInt($('#menu-persone').value, 10);
+    if (!nome || isNaN(inizio) || isNaN(fine)) { err.textContent = 'Compila nome e date.'; err.hidden = false; return; }
+    if (fine <= inizio) { err.textContent = 'La partenza deve essere dopo l\'arrivo.'; err.hidden = false; return; }
+    if ((fine - inizio) / 86400000 > 45) { err.textContent = 'Un menu può durare al massimo 45 giorni.'; err.hidden = false; return; }
+    if (!(persone >= 1)) { err.textContent = 'Scrivi quante persone mangiano.'; err.hidden = false; return; }
+    const vecchio = id ? state.menu.find(x => String(x.id) === String(id)) : null;
+    const dati = { nome, inizio: inizio.toISOString(), fine: fine.toISOString(), persone, giorni: generaGiorni(inizio, fine, vecchio?.giorni || []), aggiornato_il: new Date().toISOString() };
+    ui.carica(true);
+    const res = modo === 'modifica'
+        ? await sb.from('menu_campi').update(dati).eq('id', id).select()
+        : await sb.from('menu_campi').insert([{ ...dati, spesa_spuntati: [] }]).select();
+    ui.carica(false);
+    if (res.error) { err.textContent = errMsg(res.error); err.hidden = false; return; }
+    const nuovo = res.data?.[0];
+    ui.chiudi();
+    await caricaDati();
+    if (nuovo) nav('menu-dettaglio', nuovo.id);
+    ui.toast(modo === 'modifica' ? 'Menu aggiornato' : 'Menu creato');
+}
 
-        const myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
-        const isAdmin = state.user !== null;
+// Salvataggio automatico del menu aperto
+let timerSalva = null, menuInSospeso = null;
+function salvaMenuPresto() {
+    const m = menuCorrente();
+    if (!m) return;
+    menuInSospeso = m;
+    indicatore('In salvataggio…');
+    clearTimeout(timerSalva);
+    timerSalva = setTimeout(async () => {
+        const daSalvare = menuInSospeso;
+        const { error } = await sb.from('menu_campi').update({ giorni: daSalvare.giorni, persone: daSalvare.persone, aggiornato_il: new Date().toISOString() }).eq('id', daSalvare.id);
+        if (menuInSospeso === daSalvare) menuInSospeso = null;
+        indicatore(error ? 'Non salvato: riprova' : 'Salvato');
+        if (error) ui.toast(errMsg(error), 'errore');
+    }, 700);
+}
+function indicatore(t) { const el = $('#salvataggio'); if (el) el.innerHTML = (t === 'Salvato' ? icon('spunta', 'ico-s') : '') + esc(t); }
 
-        const filtered = state.recipes.filter(r => r.nome.toLowerCase().includes(term));
+function renderMenuDettaglio() {
+    const m = menuCorrente(), el = $('#vista-menu-dettaglio');
+    if (!m) { el.innerHTML = `<div class="vuoto"><h3>Menu non trovato</h3><button class="btn" data-act="vai" data-ref="menu" type="button">Torna ai menu</button></div>`; return; }
+    const s = statoMenu(m);
+    el.innerHTML = `
+        <button class="btn btn-testo no-stampa" style="margin:-8px 0 6px -10px" data-act="vai" data-ref="menu" type="button">${icon('indietro', 'ico-s')}Tutti i menu</button>
+        <h2 style="font-size:28px">${esc(m.nome)}</h2>
+        <p class="tenue" style="margin:4px 0 2px">${periodo(m)}, ${m.persone} persone</p>
+        <p class="salvataggio" id="salvataggio" aria-live="polite">${icon('spunta', 'ico-s')}Salvato</p>
+        <div class="fila-btn" style="margin:14px 0 6px">
+            <button class="btn btn-primario" data-act="vai-spesa" type="button">${icon('carrello', 'ico-s')}Lista della spesa</button>
+            <button class="btn" data-act="modifica-menu" type="button">${icon('matita', 'ico-s')}Date e persone</button>
+            <button class="btn" data-act="duplica-menu" type="button">${icon('copia', 'ico-s')}Duplica</button>
+            ${auth.admin ? `<button class="btn btn-pericolo" data-act="elimina-menu" type="button">${icon('cestino', 'ico-s')}Elimina</button>` : ''}
+        </div>
+        ${s.pieni < s.tot ? `<p class="tenue piccolo" style="margin:8px 0 12px">Tocca un pasto per scegliere le ricette. Ne mancano ${s.tot - s.pieni}.</p>` : '<div style="height:12px"></div>'}
+        ${m.giorni.map((g, gi) => `<div class="giorno"><div class="giorno-testa">${maiuscola(fmt.giorno(g.data + 'T12:00:00'))}</div>
+            ${g.pasti.map((p, pi) => `<button class="pasto" data-act="apri-pasto" data-g="${gi}" data-p="${pi}" type="button">
+                <span class="pasto-nome">${PASTI[p.tipo]}${p.sacco ? `<br><span class="etichetta" style="margin-top:4px">al sacco</span>` : ''}</span>
+                <span class="pasto-ricette">${p.ricette.length ? p.ricette.map(id => {
+                    const r = state.ricette.find(x => String(x.id) === String(id));
+                    return `<span class="piatto">${esc(r ? r.nome : 'Ricetta eliminata')}</span>`;
+                }).join('') : '<span class="vuoto-pasto">Scegli cosa si mangia</span>'}</span>
+            </button>`).join('')}</div>`).join('')}`;
+}
 
-        if(filtered.length === 0) {
-            el.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 italic">Nessuna ricetta trovata.</div>`;
-            return;
-        }
+// ---------- Pasto ----------
+function apriPasto(g, p) {
+    state.pasto = { g: Number(g), p: Number(p) };
+    const m = menuCorrente(), pasto = m.giorni[g].pasti[p];
+    $('#pasto-titolo').textContent = `${PASTI[pasto.tipo]}, ${fmt.giorno(m.giorni[g].data + 'T12:00:00')}`;
+    $('#pasto-sacco').checked = !!pasto.sacco;
+    $('#pasto-cerca').value = '';
+    renderPasto();
+    ui.apri('foglio-pasto');
+}
+function pastoAperto() { const m = menuCorrente(); return m && state.pasto ? m.giorni[state.pasto.g]?.pasti[state.pasto.p] : null; }
+function renderPasto() {
+    const pasto = pastoAperto();
+    if (!pasto) return;
+    const m = menuCorrente();
+    $('#pasto-scelti').innerHTML = pasto.ricette.length ? `<div class="lista">${pasto.ricette.map((id, i) => {
+        const r = state.ricette.find(x => String(x.id) === String(id));
+        return `<div class="riga"><div class="riga-testo"><div class="riga-titolo">${esc(r ? r.nome : 'Ricetta eliminata')}</div>
+            <div class="riga-sotto">${r ? `Dosi ×${fmt.num(m.persone / (Number(r.porzioni) || 1), 1)} per ${m.persone} persone` : ''}${r && inAttesa(r) ? ', da approvare' : ''}</div></div>
+            <button class="btn btn-icona" data-act="pasto-togli" data-ref="${i}" aria-label="Togli ${esc(r?.nome || '')}" type="button">${icon('chiudi')}</button></div>`;
+    }).join('')}</div>` : `<p class="tenue">Nessuna ricetta scelta.</p>`;
+    const q = parole($('#pasto-cerca').value);
+    const tipo = pasto.sacco ? 'sacco' : pasto.tipo;
+    let lista, titolo;
+    if (q.length) { lista = state.ricette.filter(r => corrisponde(r.nome, q)); titolo = 'Risultati'; }
+    else { lista = state.ricette.filter(r => pastiDi(r).includes(tipo)); titolo = `Adatte a ${pasto.sacco ? 'un pasto al sacco' : PASTI[pasto.tipo].toLowerCase()}`; }
+    $('#pasto-proposte').innerHTML = `<h3 style="margin-bottom:8px">${titolo}</h3>` + (lista.length ? `<div class="lista">${lista.map(r => `
+        <button class="riga" data-act="pasto-aggiungi" data-ref="${r.id}" type="button">${icon('piu')}
+            <span class="riga-testo"><span class="riga-titolo" style="display:block">${esc(r.nome)}</span>
+            <span class="riga-sotto" style="display:block">${pastiDi(r).map(x => PASTI[x]).join(', ')}${inAttesa(r) ? ', da approvare' : ''}</span></span></button>`).join('')}</div>`
+        : `<p class="tenue">${q.length ? 'Nessuna ricetta con questo nome.' : 'Nessuna ricetta segnata per questo pasto: cerca tra tutte qui sopra.'}</p>`);
+}
+function pastoCambiato() { salvaMenuPresto(); renderPasto(); renderMenuDettaglio(); }
 
-        el.innerHTML = filtered.map(r => {
-            const portions = r.porzioni || 4; 
-            const isMyRecipe = myRecipes.includes(r.id);
-            const isPending = !r.status || r.status !== 'approved'; 
-
-            const canEdit = true; // Tutti possono modificare
-            const canDelete = isAdmin || (isMyRecipe && isPending);
-            
-            const statusBadge = isPending 
-                ? `<span class="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-2 py-1 rounded ml-2 border border-yellow-200 uppercase">⏳ In Approvazione</span>` 
-                : ``; 
-
-            return `
-            <div class="bg-white rounded-xl border ${isPending ? 'border-yellow-300' : 'border-gray-200'} shadow-sm hover:shadow-lg transition flex flex-col overflow-hidden relative group">
-                <div class="h-2 ${isPending ? 'bg-yellow-400' : 'bg-red-500'} w-full"></div>
-                
-                <div class="absolute top-2 right-2 z-10 flex gap-1">
-                    ${canDelete ? `<button onclick="recipes.delete('${r.id}')" class="bg-white text-gray-400 hover:text-red-600 border border-gray-200 p-1.5 rounded-full shadow-sm transition">🗑</button>` : ''}
-                    <button onclick="recipes.openModal('${r.id}')" class="bg-white text-red-600 hover:text-white hover:bg-red-600 border border-red-200 p-1.5 rounded-full shadow-sm transition">✏️</button>
-                </div>
-
-                <div class="p-4 flex-grow">
-                    <div class="flex flex-wrap items-center mb-2 pr-14"> 
-                        <h3 class="font-extrabold text-gray-800 text-lg leading-tight">${r.nome}</h3>
-                        ${statusBadge}
-                    </div>
-                    
-                    <span class="inline-block bg-red-50 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded border border-red-100 mb-3">
-                        👥 Per ${portions} persone
-                    </span>
-                    
-                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        <div class="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Ingredienti</div>
-                        <ul class="text-sm text-gray-600 space-y-1">
-                            ${r.ingredienti_ricetta && r.ingredienti_ricetta.length > 0 ? r.ingredienti_ricetta.map(i => `
-                                <li class="flex justify-between border-b border-gray-100 last:border-0 pb-1 last:pb-0">
-                                    <span>${i.nome_ingrediente}</span>
-                                    <span class="font-bold text-gray-800">${i.quantita_necessaria} <small>${i.unita}</small></span>
-                                </li>
-                            `).join('') : '<li class="italic text-gray-400 text-xs">Nessun ingrediente</li>'}
-                        </ul>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-    },
-
-    openModal(id = null) {
-        // Reset campi
-        document.getElementById('rec-name').value = '';
-        document.getElementById('rec-portions').value = 4;
-        document.getElementById('rec-cat').value = 'pasti'; 
-        
-        // Pulizia input ingredienti
-        document.getElementById('new-ing-name').value = '';
-        document.getElementById('new-ing-qty').value = '';
-        
-        this.currentIngredients = [];
-        this.editingId = id; 
-
-        if (id && id !== 'undefined' && id !== 'null') {
-            const r = state.recipes.find(x => String(x.id) === String(id));
-            if (r) {
-                document.getElementById('rec-name').value = r.nome;
-                document.getElementById('rec-portions').value = r.porzioni || 4;
-                document.getElementById('rec-cat').value = r.categoria || 'pasti'; 
-                // Clona l'array per evitare modifiche dirette prima del salvataggio
-                this.currentIngredients = r.ingredienti_ricetta ? [...r.ingredienti_ricetta] : [];
+// ---------- Lista della spesa ----------
+function calcolaSpesa(m) {
+    const righe = new Map();
+    let vuoti = 0;
+    for (const g of m.giorni || []) for (const p of g.pasti) {
+        if (!p.ricette.length) { vuoti++; continue; }
+        for (const id of p.ricette) {
+            const r = state.ricette.find(x => String(x.id) === String(id));
+            if (!r) continue;
+            const ratio = m.persone / (Number(r.porzioni) || 1);
+            for (const ing of r.ingredienti_ricetta || []) {
+                const { dim, f } = base(ing.unita);
+                const nome = norm(ing.nome_ingrediente);
+                if (!nome) continue;
+                const k = `${nome}|${dim}`;
+                if (!righe.has(k)) righe.set(k, { chiave: k, nome: maiuscola(ing.nome_ingrediente.trim()), nomeNorm: nome, dim, qta: 0, usi: new Set() });
+                const x = righe.get(k);
+                x.qta += (Number(ing.quantita_necessaria) || 0) * f * ratio;
+                x.usi.add(r.nome);
             }
         }
-        this.renderIngredientsList();
-        ui.modal('modal-recipe');
-    },
+    }
+    const inizio = new Date(m.inizio);
+    for (const x of righe.values()) {
+        const trovati = state.dispensa.filter(p => p.stato !== 'pending' && Number(p.quantita) > 0 && base(p.unita).dim === x.dim &&
+            (!p.scadenza || new Date(p.scadenza) >= inizio) && (norm(p.nome).includes(x.nomeNorm) || x.nomeNorm.includes(norm(p.nome))));
+        x.inDispensa = trovati.reduce((a, p) => a + Number(p.quantita) * base(p.unita).f, 0);
+        x.daComprare = Math.max(0, x.qta - x.inDispensa);
+        x.reparto = repartoDi(x.nomeNorm);
+    }
+    return { righe: [...righe.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'it')), vuoti };
+}
 
-    // FUNZIONE CORRETTA CHE CORRISPONDE ALL'HTML (addIngredient)
-    addIngredient() {
-        const name = document.getElementById('new-ing-name').value.trim(); // ID corretto
-        const qty = parseFloat(document.getElementById('new-ing-qty').value); // ID corretto
-        const unit = document.getElementById('new-ing-unit').value; // ID corretto
-        
-        if (!name) return ui.toast("Nome ingrediente mancante", "error");
-        if (!qty || qty <= 0) return ui.toast("Quantità errata", "error");
-        
-        // Aggiunge all'array corrente
-        this.currentIngredients.push({ 
-            nome_ingrediente: name, 
-            quantita_necessaria: qty, 
-            unita: unit 
-        });
-        
-        // Pulisce input e rimette focus
-        document.getElementById('new-ing-name').value = '';
-        document.getElementById('new-ing-qty').value = '';
-        document.getElementById('new-ing-name').focus();
-        
-        this.renderIngredientsList();
-    },
+function renderSpesa() {
+    const m = menuCorrente(), el = $('#vista-spesa');
+    if (!m) { el.innerHTML = `<div class="vuoto"><h3>Menu non trovato</h3></div>`; return; }
+    const { righe, vuoti } = calcolaSpesa(m);
+    const presi = new Set(m.spesa_spuntati || []);
+    const daComprare = righe.filter(r => r.daComprare > 0);
+    const coperti = righe.filter(r => r.daComprare <= 0);
+    const fatti = daComprare.filter(r => presi.has(r.chiave)).length;
+    const gruppi = REPARTI.map(([k, nome]) => [k, nome, daComprare.filter(r => r.reparto === k)]).filter(([, , l]) => l.length);
+    const riga = r => `<div class="spesa-riga ${presi.has(r.chiave) ? 'presa' : ''}">
+        <button class="spunta" data-act="spesa-spunta" data-ref="${esc(r.chiave)}" type="button" aria-pressed="${presi.has(r.chiave)}" aria-label="${esc(r.nome)}: preso">${icon('spunta', 'ico-s')}</button>
+        <div class="riga-testo"><div class="riga-titolo">${esc(r.nome)}</div>
+            <details><summary>Per ${r.usi.size === 1 ? '1 ricetta' : `${r.usi.size} ricette`}${r.inDispensa > 0 ? `, in dispensa ${fmtQta(r.inDispensa, r.dim)}` : ''}</summary>
+            <span class="piccolo tenue">${esc([...r.usi].join(', '))}</span></details></div>
+        <div class="riga-num" style="font-size:19px">${fmtQta(r.daComprare, r.dim)}</div>
+        <button class="btn btn-icona btn-testo no-stampa" data-act="cambia-reparto" data-ref="${esc(r.nomeNorm)}" data-nome="${esc(r.nome)}" aria-label="Cambia reparto di ${esc(r.nome)}" type="button">${icon('lista', 'ico-s')}</button>
+    </div>`;
+    el.innerHTML = `
+        <button class="btn btn-testo no-stampa" style="margin:-8px 0 6px -10px" data-act="apri-menu" data-ref="${m.id}" type="button">${icon('indietro', 'ico-s')}${esc(m.nome)}</button>
+        <h2 style="font-size:28px">Lista della spesa</h2>
+        <p class="tenue" style="margin:4px 0 12px">${esc(m.nome)}: ${periodo(m)}, ${m.persone} persone</p>
+        ${vuoti ? `<div class="avviso no-stampa" style="margin-bottom:12px">${icon('attenzione')}<div>${vuoti === 1 ? 'Un pasto non ha' : `${vuoti} pasti non hanno`} ancora ricette: la lista non è completa.</div></div>` : ''}
+        ${daComprare.length ? `
+        <div class="riquadro no-stampa" style="margin-bottom:14px;padding:12px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><b>${fatti} di ${daComprare.length} presi</b>
+                ${fatti ? `<button class="btn btn-testo btn-piccolo" data-act="spesa-azzera" type="button">Togli le spunte</button>` : ''}</div>
+            <div class="barra-traccia" style="height:8px;border-radius:4px;background:var(--superficie-2);overflow:hidden"><i style="display:block;height:100%;width:${(fatti / daComprare.length * 100).toFixed(1)}%;background:var(--ok)"></i></div>
+        </div>
+        <div class="fila-btn no-stampa" style="margin-bottom:14px">
+            <button class="btn" data-act="spesa-condividi" type="button">${icon('condividi', 'ico-s')}Condividi</button>
+            <button class="btn" data-act="spesa-copia" type="button">${icon('copia', 'ico-s')}Copia</button>
+            <button class="btn" data-act="spesa-stampa" type="button">${icon('stampa', 'ico-s')}Stampa</button>
+        </div>
+        <div class="lista">${gruppi.map(([, nome, l]) => `<div class="lista-titolo">${nome}</div>${l.map(riga).join('')}`).join('')}</div>`
+        : `<div class="vuoto"><h3>Niente da comprare</h3><p>${righe.length ? 'Hai già tutto in dispensa.' : 'Scegli le ricette dei pasti e qui compare cosa comprare.'}</p></div>`}
+        ${coperti.length ? `<div class="sezione"><div class="sezione-testa"><h2>Già in dispensa</h2></div>
+            <div class="lista">${coperti.map(r => `<div class="riga"><div class="riga-testo"><div class="riga-titolo">${esc(r.nome)}</div><div class="riga-sotto">Servono ${fmtQta(r.qta, r.dim)}, ce ne sono ${fmtQta(r.inDispensa, r.dim)}</div></div></div>`).join('')}</div></div>` : ''}`;
+}
 
-    // FUNZIONE CORRETTA (removeIngredient)
-    removeIngredient(idx) {
-        this.currentIngredients.splice(idx, 1);
-        this.renderIngredientsList();
-    },
+function testoSpesa(m) {
+    const { righe } = calcolaSpesa(m);
+    const presi = new Set(m.spesa_spuntati || []);
+    const resto = righe.filter(r => r.daComprare > 0 && !presi.has(r.chiave));
+    let t = `Spesa: ${m.nome}\n${m.persone} persone, ${periodo(m)}\n`;
+    for (const [k, nome] of REPARTI) {
+        const l = resto.filter(r => r.reparto === k);
+        if (l.length) t += `\n*${nome}*\n` + l.map(r => `- ${r.nome}: ${fmtQta(r.daComprare, r.dim)}`).join('\n') + '\n';
+    }
+    return t.trim();
+}
 
-    renderIngredientsList() {
-        const list = document.getElementById('recipe-ing-list');
-        if (!list) return;
+async function spunta(chiave) {
+    const m = menuCorrente();
+    const s = new Set(m.spesa_spuntati || []);
+    const presa = !s.has(chiave);
+    presa ? s.add(chiave) : s.delete(chiave);
+    m.spesa_spuntati = [...s];
+    renderSpesa();
+    try { navigator.vibrate?.(8); } catch { /* niente */ }
+    // Unisco con le spunte di chi sta facendo la spesa insieme a me
+    const { data } = await sb.from('menu_campi').select('spesa_spuntati').eq('id', m.id).maybeSingle();
+    const unite = new Set(data?.spesa_spuntati || []);
+    presa ? unite.add(chiave) : unite.delete(chiave);
+    m.spesa_spuntati = [...unite];
+    const { error } = await sb.from('menu_campi').update({ spesa_spuntati: m.spesa_spuntati }).eq('id', m.id);
+    if (error) ui.toast(errMsg(error), 'errore');
+    if (state.vista === 'spesa') renderSpesa();
+}
 
-        if (this.currentIngredients.length === 0) {
-            list.innerHTML = '<div class="text-center text-gray-400 italic text-xs mt-4">Nessun ingrediente inserito.</div>';
-            return;
-        }
-        
-        list.innerHTML = this.currentIngredients.map((ing, idx) => `
-            <div class="flex justify-between items-center bg-white border border-gray-200 p-2 rounded shadow-sm">
-                <div class="font-bold text-gray-700 text-sm">${ing.nome_ingrediente}</div>
-                <div class="flex items-center gap-3">
-                    <span class="text-xs bg-gray-100 px-2 py-1 rounded font-mono font-bold">${ing.quantita_necessaria} ${ing.unita}</span>
-                    <button onclick="recipes.removeIngredient(${idx})" class="text-red-400 hover:text-red-600 font-bold px-1 text-lg">×</button>
-                </div>
+function apriReparto(nomeNorm, nome) {
+    state.reparto = nomeNorm;
+    $('#reparto-ingrediente').textContent = nome;
+    const att = repartoDi(nomeNorm);
+    $('#reparto-scelte').innerHTML = REPARTI.map(([k, n]) => `<button class="riga" data-act="scegli-reparto" data-ref="${k}" type="button">
+        <span class="riga-testo">${n}</span>${k === att ? icon('spunta') : ''}</button>`).join('');
+    ui.apri('foglio-reparto');
+}
+async function scegliReparto(k) {
+    const nome = state.reparto;
+    state.reparti.set(nome, k);
+    ui.chiudi();
+    renderSpesa();
+    const { error } = await sb.from('ingredienti_reparto').upsert([{ nome, reparto: k }], { onConflict: 'nome' });
+    if (error) ui.toast(errMsg(error), 'errore');
+}
+
+// =====================================================================
+// Ricette
+// =====================================================================
+function renderRicette() {
+    const f = state.filtroRic, q = parole(f.testo);
+    const conta = t => state.ricette.filter(r => pastiDi(r).includes(t)).length;
+    $('#ricette-chips').innerHTML = `<button class="chip" data-act="ric-filtro" data-ref="tutti" aria-pressed="${f.pasto === 'tutti'}">Tutte <span class="conta">${state.ricette.length}</span></button>` +
+        Object.keys(PASTI).map(t => `<button class="chip" data-act="ric-filtro" data-ref="${t}" aria-pressed="${f.pasto === t}">${PASTI[t]} <span class="conta">${conta(t)}</span></button>`).join('');
+    const mieR = mie('mie_ricette');
+    const lista = state.ricette.filter(r => (f.pasto === 'tutti' || pastiDi(r).includes(f.pasto)) &&
+        (!q.length || corrisponde(r.nome + ' ' + (r.ingredienti_ricetta || []).map(i => i.nome_ingrediente).join(' '), q)))
+        .sort((a, b) => inAttesa(b) - inAttesa(a) || a.nome.localeCompare(b.nome, 'it'));
+    $('#ricette-lista').innerHTML = lista.length ? lista.map(r => {
+        const puoModificare = auth.admin || inAttesa(r);
+        const puoEliminare = auth.admin || (inAttesa(r) && mieR.includes(r.id));
+        return `<article class="ricetta-card ${inAttesa(r) ? 'attesa' : ''}">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+                <h3 style="font-size:21px">${esc(r.nome)}</h3>${inAttesa(r) ? '<span class="etichetta attenzione">Da approvare</span>' : ''}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">${pastiDi(r).map(t => `<span class="etichetta accento">${PASTI[t]}</span>`).join('')}</div>
+            <p class="tenue piccolo">Dosi per ${r.porzioni} ${Number(r.porzioni) === 1 ? 'persona' : 'persone'}</p>
+            <ul>${(r.ingredienti_ricetta || []).map(i => `<li><span>${esc(i.nome_ingrediente)}</span><b class="num">${fmtUnita(i.quantita_necessaria, i.unita)}</b></li>`).join('') || '<li class="tenue">Nessun ingrediente</li>'}</ul>
+            <div class="fila-btn" style="margin-top:4px">
+                ${puoModificare ? `<button class="btn btn-piccolo" data-act="modifica-ricetta" data-ref="${r.id}" type="button">${icon('matita', 'ico-s')}Modifica</button>`
+                    : `<button class="btn btn-piccolo" data-act="variante-ricetta" data-ref="${r.id}" type="button">${icon('copia', 'ico-s')}Proponi una variante</button>`}
+                ${puoEliminare ? `<button class="btn btn-piccolo btn-pericolo" data-act="elimina-ricetta" data-ref="${r.id}" type="button">${icon('cestino', 'ico-s')}Elimina</button>` : ''}
             </div>
-        `).join('');
-    },
+        </article>`;
+    }).join('') : `<div class="vuoto" style="grid-column:1/-1"><h3>Nessuna ricetta</h3><p>Scrivine una nuova con il tasto +.</p></div>`;
+}
 
-   async save() {
-        const nome = document.getElementById('rec-name').value;
-        const porz = parseInt(document.getElementById('rec-portions').value);
-        const cat = document.getElementById('rec-cat').value;
+function apriRicetta(id = null, variante = false, daPasto = false) {
+    const r = id ? state.ricette.find(x => String(x.id) === String(id)) : null;
+    const pa = daPasto ? pastoAperto() : null;
+    state.ricMod = {
+        id: variante ? null : r?.id || null,
+        pasti: new Set(r ? pastiDi(r) : pa ? [pa.sacco ? 'sacco' : pa.tipo] : ['pranzo', 'cena']),
+        ingredienti: r ? (r.ingredienti_ricetta || []).map(i => ({ nome: i.nome_ingrediente, qty: i.quantita_necessaria, unita: UNITA.includes(i.unita) ? i.unita : (i.unita === 'g' ? 'gr' : 'pz') })) : [{ nome: '', qty: '', unita: 'gr' }]
+    };
+    $('#ricetta-titolo').textContent = variante ? 'Variante della ricetta' : r ? 'Modifica ricetta' : 'Nuova ricetta';
+    $('#ric-nome').value = r ? (variante ? `${r.nome} (variante)` : r.nome) : '';
+    $('#ric-porzioni').value = r?.porzioni || 1;
+    $('#ric-errore').hidden = true;
+    const nota = $('#ric-nota');
+    nota.hidden = auth.admin;
+    nota.textContent = 'La ricetta la approva l\'admin. Intanto puoi già usarla nei menu.';
+    $('#btn-elimina-ricetta').hidden = !(state.ricMod.id && (auth.admin || (inAttesa(r) && mie('mie_ricette').includes(r.id))));
+    renderRicettaForm();
+    ui.apri('foglio-ricetta');
+}
+function renderRicettaForm() {
+    const rm = state.ricMod;
+    $('#ric-pasti').innerHTML = Object.keys(PASTI).map(t => `<button class="chip chip-pasto" type="button" data-act="ric-pasto" data-ref="${t}" aria-pressed="${rm.pasti.has(t)}">${PASTI[t]}</button>`).join('');
+    $('#ric-ingredienti').innerHTML = rm.ingredienti.map((i, n) => `<div class="ing-riga" data-n="${n}">
+        <input list="nomi-ingredienti" data-campo="nome" value="${esc(i.nome)}" placeholder="Ingrediente" aria-label="Ingrediente" maxlength="80">
+        <input type="number" inputmode="decimal" step="any" min="0" data-campo="qty" value="${esc(i.qty)}" placeholder="Qtà" aria-label="Quantità">
+        <select data-campo="unita" aria-label="Unità">${UNITA.map(u => `<option value="${u}" ${u === i.unita ? 'selected' : ''}>${u}</option>`).join('')}</select>
+        <button class="btn btn-icona btn-testo" type="button" data-act="ing-togli" data-ref="${n}" aria-label="Togli ingrediente">${icon('chiudi', 'ico-s')}</button></div>`).join('');
+}
+function leggiIngredienti() {
+    $$('#ric-ingredienti .ing-riga').forEach(el => {
+        const i = state.ricMod.ingredienti[Number(el.dataset.n)];
+        i.nome = $('[data-campo=nome]', el).value; i.qty = $('[data-campo=qty]', el).value; i.unita = $('[data-campo=unita]', el).value;
+    });
+}
+async function salvaRicetta(e) {
+    e.preventDefault();
+    leggiIngredienti();
+    const rm = state.ricMod, err = $('#ric-errore');
+    err.hidden = true;
+    const nome = $('#ric-nome').value.trim(), porzioni = Number($('#ric-porzioni').value);
+    const ingredienti = rm.ingredienti.filter(i => i.nome.trim() && Number(i.qty) > 0);
+    if (!nome) { err.textContent = 'Scrivi il nome della ricetta.'; err.hidden = false; return; }
+    if (!rm.pasti.size) { err.textContent = 'Scegli almeno un pasto.'; err.hidden = false; return; }
+    if (!ingredienti.length) { err.textContent = 'Aggiungi almeno un ingrediente con la quantità.'; err.hidden = false; return; }
+    if (!(porzioni >= 1)) { err.textContent = 'Scrivi per quante persone sono le dosi.'; err.hidden = false; return; }
+    const pasti = Object.keys(PASTI).filter(t => rm.pasti.has(t));
+    const categoria = pasti.every(t => ['colazione', 'merenda'].includes(t)) ? 'snack' : pasti.length === 1 && pasti[0] === 'sacco' ? 'packed' : 'pasti';
+    const esistente = rm.id ? state.ricette.find(x => String(x.id) === String(rm.id)) : null;
+    const dati = { nome, porzioni, pasti, categoria, status: auth.admin ? (esistente?.status || 'approved') : 'pending' };
+    ui.carica(true);
+    let id = rm.id, res;
+    if (id) { res = await sb.from('ricette').update(dati).eq('id', id).select(); if (!res.error && !res.data?.length) id = null; }
+    else { res = await sb.from('ricette').insert([dati]).select(); id = res.data?.[0]?.id; }
+    if (!res.error && id) {
+        if (!rm.id && !auth.admin) aggiungiMio('mie_ricette', id);
+        res = await sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
+        if (!res.error) res = await sb.from('ingredienti_ricetta').insert(ingredienti.map(i => ({ ricetta_id: id, nome_ingrediente: i.nome.trim(), quantita_necessaria: Number(i.qty), unita: i.unita })));
+    } else if (!res.error && !id) res = { error: { message: 'Non hai il permesso di modificare questa ricetta.' } };
+    ui.carica(false);
+    if (res.error) { err.textContent = errMsg(res.error); err.hidden = false; return; }
+    ui.chiudi();
+    ui.toast(auth.admin ? 'Ricetta salvata' : 'Ricetta salvata: la vede l\'admin per approvarla');
+    if (!auth.admin) notifica('Cambusa: ricetta da approvare', `<p>Nuova ricetta o modifica in attesa: <b>${esc(nome)}</b></p>`);
+    await caricaDati();
+    if (state.dopoRicetta) { const cb = state.dopoRicetta; state.dopoRicetta = null; cb(id); }
+}
+async function eliminaRicetta(id) {
+    const r = state.ricette.find(x => String(x.id) === String(id));
+    if (!r) return;
+    const usata = state.menu.filter(m => (m.giorni || []).some(g => g.pasti.some(p => p.ricette.map(String).includes(String(r.id))))).map(m => m.nome);
+    if (!await ui.chiedi({ titolo: `Eliminare ${r.nome}?`, ok: 'Elimina', pericolo: true,
+        testo: usata.length ? `È usata nei menu: ${esc(usata.join(', '))}. Lì comparirà come ricetta eliminata.` : 'Non si può tornare indietro.' })) return;
+    ui.carica(true);
+    const { error } = await sb.from('ricette').delete().eq('id', r.id);
+    ui.carica(false);
+    if (error) return ui.toast(errMsg(error), 'errore');
+    if (ui.aperto('foglio-ricetta')) ui.chiudi();
+    ui.toast('Ricetta eliminata');
+    await caricaDati();
+}
 
-        if (!nome || this.currentIngredients.length === 0) return ui.toast("Nome e ingredienti obbligatori", "error");
+// =====================================================================
+// Dispensa
+// =====================================================================
+function renderDispensa() {
+    const f = state.filtroDisp, q = parole(f.testo);
+    const visibili = state.dispensa;
+    $('#dispensa-chips').innerHTML = `<button class="chip" data-act="disp-filtro" data-ref="tutte" aria-pressed="${f.cat === 'tutte'}">Tutto</button>` +
+        Object.entries(CAT_DISPENSA).map(([k, n]) => `<button class="chip" data-act="disp-filtro" data-ref="${k}" aria-pressed="${f.cat === k}">${n} <span class="conta">${visibili.filter(p => p.categoria === k).length}</span></button>`).join('');
+    const lista = visibili.filter(p => (f.cat === 'tutte' || p.categoria === f.cat) && corrisponde(p.nome, q));
+    const inUso = new Map(state.uso.map(u => [u.id, u.qty]));
+    const mieP = mie('mie_prodotti');
+    $('#dispensa-griglia').innerHTML = lista.length ? lista.map(p => {
+        const attesa = p.stato === 'pending', qta = Number(p.quantita) || 0, usato = inUso.get(p.id) || 0, resto = qta - usato;
+        const gg = giorniAllaScadenza(p.scadenza);
+        const scad = p.scadenza ? (gg < 0 ? `<span class="etichetta errore">Scaduto</span>` : gg <= 12 ? `<span class="etichetta attenzione">Scade tra ${gg} ${gg === 1 ? 'giorno' : 'giorni'}</span>` : `<span class="tenue piccolo">Scade il ${fmt.data(p.scadenza)}</span>`) : '';
+        let azione;
+        if (attesa) azione = (auth.admin || mieP.includes(p.id)) ? `<button class="btn btn-piccolo" data-act="modifica-prodotto" data-ref="${p.id}" type="button">${icon('matita', 'ico-s')}Modifica</button>` : '';
+        else if (resto <= 0 && !usato) azione = `<span class="etichetta errore">Finito</span>`;
+        else azione = `<button class="btn btn-tenue btn-aggiungi" data-act="usa" data-ref="${p.id}" type="button" ${resto > 0 ? '' : 'disabled'}>${usato ? `${icon('spunta', 'ico-s')}Usi ${fmtUnita(usato, p.unita)}` : `${icon('meno', 'ico-s')}Usa`}</button>`;
+        return `<article class="scheda scheda-dispensa ${usato ? 'in-zaino' : ''}">
+            <div class="scheda-corpo">
+                <div class="scheda-gruppo">${esc(CAT_DISPENSA[p.categoria] || 'Extra')}${attesa ? ' <span class="etichetta attenzione">Da approvare</span>' : ''}</div>
+                <h3 class="scheda-nome">${esc(p.nome)}</h3>
+                <div class="disp ${resto <= 0 ? 'zero' : resto <= Number(p.soglia || 0) ? 'basso' : ''}"><b>${fmt.num(resto)}</b>${esc(p.unita === 'pz' ? (resto === 1 ? 'pezzo' : 'pezzi') : p.unita)}</div>
+                ${scad}
+                <div class="scheda-piede">${azione}</div>
+            </div></article>`;
+    }).join('') : `<div class="vuoto" style="grid-column:1/-1">${state.dispensa.length ? '<h3>Niente con questo nome</h3>'
+        : `<h3>La dispensa è vuota</h3><p>Aggiungi quello che c'è in cambusa: così la lista della spesa toglie quello che avete già.</p>
+           <button class="btn btn-tenue" data-act="nuovo-prodotto" type="button">${icon('piu', 'ico-s')}Aggiungi prodotto</button>`}</div>`;
+}
 
-        loader.show();
-        
-        const isNew = !this.editingId;
-        
-        // 1. Prepariamo il payload SOLO per la tabella 'ricette' (senza ingredienti)
-        const recipePayload = {
-            nome: nome,
-            porzioni: porz,
-            categoria: cat,
-            status: state.user ? 'approved' : 'pending' 
-        };
+function salvaUso() { store.set('uso_cambusa', state.uso); }
+function renderBarraUso() {
+    const n = state.uso.length;
+    $('#barra-uso').classList.toggle('nascosta', n === 0 || state.vista !== 'dispensa');
+    $('#barra-conta').textContent = n;
+    $('#barra-dettaglio').textContent = n === 1 ? '1 prodotto' : `${n} prodotti`;
+}
+function apriUsa(id) {
+    const p = state.dispensa.find(x => x.id === id);
+    state.usaId = id;
+    const gia = state.uso.find(u => u.id === id)?.qty || 0;
+    const resto = Number(p.quantita) - gia;
+    $('#usa-prodotto').textContent = p.nome;
+    $('#usa-disponibile').textContent = `Ce ne sono ${fmtUnita(resto, p.unita)}${gia ? ` (più ${fmtUnita(gia, p.unita)} già in lista)` : ''}.`;
+    $('#usa-qta').value = '';
+    $('#usa-qta').max = resto;
+    $('#usa-errore').hidden = true;
+    const rapidi = { pz: [1, 2, 5], conf: [1, 2], kg: [0.5, 1, 2], lt: [0.5, 1, 2], gr: [100, 250, 500], ml: [100, 250, 500] }[p.unita] || [1];
+    $('#usa-rapidi').innerHTML = rapidi.filter(v => v <= resto).map(v => `<button class="chip" type="button" data-act="usa-rapido" data-ref="${v}">${fmtUnita(v, p.unita)}</button>`).join('') +
+        `<button class="chip" type="button" data-act="usa-rapido" data-ref="${resto}">Tutto</button>`;
+    ui.apri('foglio-usa');
+}
+function confermaUsa(e) {
+    e.preventDefault();
+    const p = state.dispensa.find(x => x.id === state.usaId);
+    const q = tre(String($('#usa-qta').value).replace(',', '.'));
+    const gia = state.uso.find(u => u.id === p.id);
+    const resto = Number(p.quantita) - (gia?.qty || 0);
+    if (!(q > 0)) { $('#usa-errore').textContent = 'Scrivi quanto ne usi.'; $('#usa-errore').hidden = false; return; }
+    if (q > resto + 1e-9) { $('#usa-errore').textContent = `Ce ne sono solo ${fmtUnita(resto, p.unita)}.`; $('#usa-errore').hidden = false; return; }
+    if (gia) gia.qty = tre(gia.qty + q); else state.uso.push({ id: p.id, qty: q });
+    salvaUso();
+    ui.chiudi();
+    renderDispensa(); renderBarraUso();
+}
+function renderUso() {
+    $('#uso-righe').innerHTML = state.uso.length ? `<div class="lista">${state.uso.map((u, i) => {
+        const p = state.dispensa.find(x => x.id === u.id);
+        return `<div class="riga"><div class="riga-testo"><div class="riga-titolo">${esc(p?.nome)}</div><div class="riga-sotto">Ce ne sono ${fmtUnita(p?.quantita, p?.unita)}</div></div>
+            <div class="riga-num" style="font-size:19px">${fmtUnita(u.qty, p?.unita)}</div>
+            <button class="btn btn-icona btn-testo" data-act="uso-togli" data-ref="${i}" aria-label="Togli" type="button">${icon('chiudi')}</button></div>`;
+    }).join('')}</div>` : `<div class="vuoto"><p>Niente in lista.</p></div>`;
+    $('#btn-uso').disabled = !state.uso.length;
+}
+async function confermaUso(e) {
+    e.preventDefault();
+    const nome = $('#uso-nome').value.trim();
+    if (nome) store.set('nome', nome);
+    const err = $('#uso-errore'); err.hidden = true;
+    ui.carica(true);
+    const { data, error } = await sb.rpc('usa_cambusa', { p_utente: nome || 'Utente', p_righe: state.uso.map(u => ({ id: u.id, qty: u.qty })) });
+    ui.carica(false);
+    if (error) { err.textContent = errMsg(error); err.hidden = false; await caricaDati(); renderUso(); return; }
+    const voci = data?.voci || [], avvisi = data?.avvisi || [];
+    notifica('Cambusa: prodotti usati',
+        `<h3>Usati dalla dispensa${nome ? ` (${esc(nome)})` : ''}</h3><ul>${voci.map(v => `<li>${esc(v.nome)}: ${fmt.num(v.qty)} ${esc(v.unita || '')}, restano ${fmt.num(v.rimasti)}</li>`).join('')}</ul>` +
+        (avvisi.length ? `<p><b>Stanno finendo:</b> ${esc(avvisi.map(a => a.nome).join(', '))}</p>` : ''));
+    state.uso = []; salvaUso();
+    ui.chiudi();
+    ui.toast('Segnati come usati');
+    await caricaDati();
+}
 
-        let recipeId = this.editingId;
-        let error = null;
-        let data = null;
-        
-        // 2. Salviamo la Ricetta
-        if (recipeId) {
-            // Update
-            const res = await _sb.from('ricette').update(recipePayload).eq('id', recipeId).select();
-            error = res.error;
-            data = res.data;
-        } else {
-            // Insert
-            const res = await _sb.from('ricette').insert([recipePayload]).select();
-            error = res.error;
-            data = res.data;
-            if (data && data.length > 0) recipeId = data[0].id;
-        }
+// ---------- Rifornimento ----------
+function renderRifornisci() {
+    const q = parole(state.rifTesto);
+    const lista = state.dispensa.filter(p => corrisponde(p.nome, q));
+    $('#rif-righe').innerHTML = lista.length ? lista.map(p => {
+        const r = state.rifornisci[p.id] || {};
+        return `<div class="riga" style="flex-wrap:wrap">
+            <div class="riga-testo" style="flex-basis:100%"><div class="riga-titolo">${esc(p.nome)}</div>
+                <div class="riga-sotto">Ora ${fmtUnita(p.quantita, p.unita)}${p.scadenza ? `, scade il ${fmt.data(p.scadenza)}` : ''}</div></div>
+            <div class="campi-2" style="flex:1">
+                <label class="campo" style="margin:0"><span class="piccolo">Aggiungi (${esc(p.unita)})</span><input type="number" inputmode="decimal" min="0" step="any" data-rif="qty" data-ref="${p.id}" value="${esc(r.qty || '')}"></label>
+                <label class="campo" style="margin:0"><span class="piccolo">Nuova scadenza</span><input type="date" data-rif="scad" data-ref="${p.id}" value="${esc(r.scad || '')}"></label>
+            </div></div>`;
+    }).join('') : `<div class="vuoto"><p>${state.dispensa.length ? 'Niente con questo nome.' : 'La dispensa è vuota: aggiungi prima i prodotti.'}</p></div>`;
+}
+async function confermaRifornisci(e) {
+    e.preventDefault();
+    const righe = Object.entries(state.rifornisci).map(([id, r]) => ({ id, qty: Number(String(r.qty || '').replace(',', '.')) > 0 ? tre(String(r.qty).replace(',', '.')) : null, scadenza: r.scad || null }))
+        .filter(r => r.qty || r.scadenza);
+    if (!righe.length) return ui.toast('Scrivi almeno una quantità o una scadenza', 'errore');
+    const nome = $('#rif-nome').value.trim();
+    if (nome) store.set('nome', nome);
+    ui.carica(true);
+    const { error } = await sb.rpc('rifornisci_cambusa', { p_utente: nome || 'Utente', p_righe: righe });
+    ui.carica(false);
+    if (error) return ui.toast(errMsg(error), 'errore');
+    state.rifornisci = {};
+    ui.chiudi();
+    ui.toast(`Aggiornati ${righe.length === 1 ? '1 prodotto' : `${righe.length} prodotti`}`);
+    await caricaDati();
+}
 
-        if (error) {
-            console.error(error);
-            ui.toast("Errore salvataggio ricetta", "error");
-            loader.hide();
-            return;
-        }
-
-        // 3. Salviamo gli Ingredienti (Tabella separata)
-        if (recipeId) {
-            // A) Cancelliamo i vecchi ingredienti di questa ricetta (per evitare duplicati o mix)
-            await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', recipeId);
-
-            // B) Prepariamo i nuovi ingredienti con l'ID della ricetta corretto
-            const ingredientsPayload = this.currentIngredients.map(ing => ({
-                ricetta_id: recipeId,
-                nome_ingrediente: ing.nome_ingrediente,
-                quantita_necessaria: ing.quantita_necessaria,
-                unita: ing.unita
-            }));
-
-            // C) Inseriamo i nuovi ingredienti
-            const ingRes = await _sb.from('ingredienti_ricetta').insert(ingredientsPayload);
-            
-            if (ingRes.error) {
-                console.error(ingRes.error);
-                ui.toast("Ricetta salvata ma errore ingredienti", "warning");
-            } else {
-                // TUTTO OK
-                // Se nuovo e utente pubblico, salva ownership nel localStorage
-                if (isNew && !state.user) {
-                    let myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
-                    myRecipes.push(recipeId);
-                    localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
-                }
-
-                ui.toast("Ricetta salvata!", "success");
-                ui.closeModals();
-                await this.load(); 
-                
-                // Se eravamo nel planner, aggiorna griglia
-                if(!document.getElementById('planner-step-grid').classList.contains('hidden')) {
-                    planner.renderGrid();
-                }
-            }
-        }
-        
-        loader.hide();
-    },
-
-    async delete(idIn = null) {
-        const id = idIn || this.editingId;
-        if(!id || !confirm("Eliminare questa ricetta?")) return;
-
-        loader.show();
-        await _sb.from('ingredienti_ricetta').delete().eq('ricetta_id', id);
-        await _sb.from('ricette').delete().eq('id', id);
-
-        let myRecipes = JSON.parse(localStorage.getItem('azimut_my_recipes') || '[]');
-        myRecipes = myRecipes.filter(x => x !== id);
-        localStorage.setItem('azimut_my_recipes', JSON.stringify(myRecipes));
-
-        await this.load();
-        if(state.user) admin.renderRecipes();
-        loader.hide();
-        ui.toast("Eliminata", "success");
-        ui.closeModals();
+// ---------- Prodotto (nuovo o in modifica) ----------
+function apriProdotto(id = null) {
+    const p = id ? state.dispensa.find(x => x.id === id) : null;
+    $('#prod-titolo').textContent = p ? 'Modifica prodotto' : 'Nuovo prodotto';
+    $('#prod-id').value = p?.id || '';
+    $('#prod-nome').value = p?.nome || '';
+    $('#prod-cat').value = p?.categoria || 'pasti';
+    $('#prod-qta').value = p ? p.quantita : '';
+    $('#prod-unita').value = p?.unita && ['pz', 'conf', 'kg', 'gr', 'lt', 'ml'].includes(p.unita) ? p.unita : 'pz';
+    $('#prod-scad').value = p?.scadenza || '';
+    $('#prod-soglia').value = p?.soglia ?? 1;
+    $('#campo-soglia').hidden = !auth.admin;
+    $('#prod-nota').hidden = auth.admin;
+    $('#prod-errore').hidden = true;
+    $('#btn-elimina-prodotto').hidden = !p;
+    ui.apri('foglio-prodotto');
+}
+async function salvaProdotto(e) {
+    e.preventDefault();
+    const id = $('#prod-id').value, err = $('#prod-errore');
+    err.hidden = true;
+    const dati = {
+        nome: $('#prod-nome').value.trim(), categoria: $('#prod-cat').value,
+        quantita: tre(String($('#prod-qta').value).replace(',', '.')) || 0,
+        unita: $('#prod-unita').value, scadenza: $('#prod-scad').value || null
+    };
+    if (!dati.nome) { err.textContent = 'Scrivi il nome.'; err.hidden = false; return; }
+    if (auth.admin) dati.soglia = Number($('#prod-soglia').value) || 0;
+    const vecchio = id ? state.dispensa.find(x => x.id === id) : null;
+    if (!vecchio) dati.stato = auth.admin ? 'approved' : 'pending';
+    ui.carica(true);
+    const res = id ? await sb.from('cambusa').update(dati).eq('id', id).select() : await sb.from('cambusa').insert([dati]).select();
+    ui.carica(false);
+    if (res.error) { err.textContent = errMsg(res.error); err.hidden = false; return; }
+    if (!res.data?.length) { err.textContent = 'Non hai il permesso di modificare questo prodotto.'; err.hidden = false; return; }
+    if (!id && !auth.admin) {
+        aggiungiMio('mie_prodotti', res.data[0].id);
+        notifica('Cambusa: prodotto da approvare', `<p>Nuovo prodotto in attesa: <b>${esc(dati.nome)}</b>, ${fmt.num(dati.quantita)} ${esc(dati.unita)}</p>`);
     }
-};
-// --- PLANNER (CALCOLO SPESA) ---
-const planner = {
-    eventData: { days: [], pax: 0 },
-    tempSlotRecipes: [], // Array temporaneo per l'editing del modale
+    ui.chiudi();
+    ui.toast(id ? 'Prodotto salvato' : auth.admin ? 'Prodotto aggiunto' : 'Prodotto proposto: lo approva l\'admin');
+    await caricaDati();
+}
+async function eliminaProdotto() {
+    const id = $('#prod-id').value, p = state.dispensa.find(x => x.id === id);
+    if (!p || !await ui.chiedi({ titolo: `Eliminare ${p.nome}?`, ok: 'Elimina', pericolo: true })) return;
+    ui.carica(true);
+    const { error } = await sb.from('cambusa').delete().eq('id', id);
+    ui.carica(false);
+    if (error) return ui.toast(errMsg(error), 'errore');
+    state.uso = state.uso.filter(u => u.id !== id); salvaUso();
+    ui.chiudi();
+    ui.toast('Prodotto eliminato');
+    await caricaDati();
+}
 
-    async generateMenu() {
-        const startStr = document.getElementById('evt-start').value;
-        const endStr = document.getElementById('evt-end').value;
-        const pax = parseInt(document.getElementById('evt-pax').value) || 30;
-
-        if(!startStr || !endStr) return ui.toast("Inserisci date inizio e fine", "error");
-        const start = new Date(startStr);
-        const end = new Date(endStr);
-        if(end <= start) return ui.toast("La fine deve essere dopo l'inizio", "error");
-
-        this.eventData.pax = pax;
-        this.eventData.days = [];
-        let current = new Date(start);
-        
-        while (current <= end || current.toDateString() === end.toDateString()) {
-             let meals = [];
-             const h = current.getHours();
-             const isFirstDay = current.toDateString() === start.toDateString();
-             const isLastDay = current.toDateString() === end.toDateString();
-             
-             let includeBreakfast=true, includeLunch=true, includeMerenda=true, includeDinner=true;
-             if (isFirstDay) {
-                if (h > 9) includeBreakfast = false;
-                if (h > 14) includeLunch = false;
-                if (h > 17) includeMerenda = false;
-                if (h > 20) includeDinner = false;
-             }
-             if (isLastDay) {
-                const endH = end.getHours();
-                if (endH < 8) includeBreakfast = false;
-                if (endH < 13) includeLunch = false;
-                if (endH < 16) includeMerenda = false;
-                if (endH < 20) includeDinner = false;
-             }
-             
-             if(includeBreakfast) meals.push({ type: 'colazione', name: 'Colazione', recipeIds: [] });
-             if(includeLunch) meals.push({ type: 'pranzo', name: 'Pranzo', recipeIds: [] });
-             if(includeMerenda) meals.push({ type: 'merenda', name: 'Merenda', recipeIds: [] });
-             if(includeDinner) meals.push({ type: 'cena', name: 'Cena', recipeIds: [] });
-
-             this.eventData.days.push({ date: new Date(current), meals: meals });
-             current.setDate(current.getDate() + 1);
-             current.setHours(0,0,0,0);
+// =====================================================================
+// Gestione (admin)
+// =====================================================================
+function aggiornaBollini() {
+    const n = state.dispensa.filter(p => p.stato === 'pending').length + state.ricette.filter(inAttesa).length;
+    for (const id of ['#bollino-approvazioni', '#bollino-admin']) { const b = $(id); b.hidden = !n || !auth.admin; b.textContent = n; }
+}
+async function renderAdmin() {
+    $$('#tabs-admin .tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === state.tab));
+    const corpo = $('#admin-corpo');
+    if (state.tab === 'approvazioni') {
+        const prodotti = state.dispensa.filter(p => p.stato === 'pending'), ricette = state.ricette.filter(inAttesa);
+        corpo.innerHTML = (!prodotti.length && !ricette.length) ? `<div class="vuoto"><h3>Niente da approvare</h3><p>Quando qualcuno propone un prodotto o una ricetta, compare qui.</p></div>` : `
+            ${prodotti.length ? `<div class="sezione-testa"><h2>Prodotti</h2><span class="conta">${prodotti.length}</span></div><div class="lista" style="margin-bottom:20px">${prodotti.map(p => `
+                <div class="riga" style="flex-wrap:wrap"><div class="riga-testo"><div class="riga-titolo">${esc(p.nome)}</div>
+                    <div class="riga-sotto">${fmtUnita(p.quantita, p.unita)}, ${esc(CAT_DISPENSA[p.categoria] || p.categoria)}${p.scadenza ? `, scade il ${fmt.data(p.scadenza)}` : ''}</div></div>
+                    <div class="riga-azioni"><button class="btn btn-piccolo" data-act="modifica-prodotto" data-ref="${p.id}" type="button">Modifica</button>
+                    <button class="btn btn-piccolo btn-pericolo" data-act="rifiuta-prodotto" data-ref="${p.id}" type="button">Rifiuta</button>
+                    <button class="btn btn-piccolo btn-primario" data-act="approva-prodotto" data-ref="${p.id}" type="button">Approva</button></div></div>`).join('')}</div>` : ''}
+            ${ricette.length ? `<div class="sezione-testa"><h2>Ricette</h2><span class="conta">${ricette.length}</span></div><div class="lista">${ricette.map(r => `
+                <div class="riga" style="flex-wrap:wrap"><div class="riga-testo"><div class="riga-titolo">${esc(r.nome)}</div>
+                    <div class="riga-sotto">${pastiDi(r).map(t => PASTI[t]).join(', ')}, ${(r.ingredienti_ricetta || []).length} ingredienti</div></div>
+                    <div class="riga-azioni"><button class="btn btn-piccolo" data-act="modifica-ricetta" data-ref="${r.id}" type="button">Modifica</button>
+                    <button class="btn btn-piccolo btn-pericolo" data-act="elimina-ricetta" data-ref="${r.id}" type="button">Elimina</button>
+                    <button class="btn btn-piccolo btn-primario" data-act="approva-ricetta" data-ref="${r.id}" type="button">Approva</button></div></div>`).join('')}</div>` : ''}`;
+    } else if (state.tab === 'scorte') {
+        const lista = state.dispensa.filter(p => p.stato !== 'pending');
+        corpo.innerHTML = `<div class="sezione-testa"><h2>Dispensa</h2><button class="btn btn-primario" data-act="nuovo-prodotto" type="button">${icon('piu', 'ico-s')}Nuovo</button></div>
+            ${lista.length ? `<div class="lista">${lista.map(p => {
+                const gg = giorniAllaScadenza(p.scadenza);
+                return `<button class="riga" data-act="modifica-prodotto" data-ref="${p.id}" type="button"><span class="riga-testo">
+                    <span class="riga-titolo" style="display:block">${esc(p.nome)}</span>
+                    <span class="riga-sotto" style="display:block;${gg !== null && gg < 0 ? 'color:var(--errore)' : ''}">${p.scadenza ? `Scade il ${fmt.data(p.scadenza)}` : 'Senza scadenza'}, avviso sotto ${fmt.num(p.soglia)}</span></span>
+                    <span class="riga-num" style="font-size:19px">${fmtUnita(p.quantita, p.unita)}</span></button>`;
+            }).join('')}</div>` : `<div class="vuoto"><h3>Dispensa vuota</h3></div>`}`;
+    } else {
+        if (!state.movimenti) {
+            corpo.innerHTML = `<div class="scheletro" style="height:240px"></div>`;
+            const { data, error } = await sb.from('movimenti_cambusa').select('*').order('created_at', { ascending: false }).limit(300);
+            if (error) ui.toast(errMsg(error), 'errore');
+            state.movimenti = data || [];
         }
-
-        this.autoFillRecipes();
-        this.renderGrid();
-        
-        await _sb.from('movimenti_cambusa').insert([{
-            prodotto: 'MENU GENERATO',
-            quantita: 0,
-            unita: '-',
-            azione: 'planning',
-            utente: state.user ? 'Admin' : 'Utente'
-        }]);
-
-        document.getElementById('planner-step-setup').classList.add('hidden');
-        document.getElementById('planner-step-grid').classList.remove('hidden');
-    },
-
-    autoFillRecipes() {
-        
-    },
-
-    renderGrid() {
-        const container = document.getElementById('planner-grid-container');
-        if(!container) return;
-
-        container.innerHTML = this.eventData.days.map((day, dIdx) => {
-            const dateStr = day.date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-            
-            const mealsHtml = day.meals.map((meal, mIdx) => {
-                let recipeNamesHtml = '<span class="text-gray-400 italic">Nessuna pietanza...</span>';
-                
-                if (meal.recipeIds && meal.recipeIds.length > 0) {
-                    recipeNamesHtml = meal.recipeIds.map(rid => {
-                        const r = state.recipes.find(x => String(x.id) === String(rid));
-                        const isPending = r && (!r.status || r.status !== 'approved');
-                        return `<div class="truncate">• ${r ? r.nome : '???'} ${isPending ? '⏳' : ''}</div>`;
-                    }).join('');
-                }
-                
-                const isPacked = meal.isPacked ? '🎒 SACCO' : '';
-                
-                let styleClass = 'border-l-4 ';
-                if (meal.type === 'pranzo') styleClass += 'border-orange-400';
-                else if (meal.type === 'cena') styleClass += 'border-blue-400';
-                else if (meal.type === 'merenda') styleClass += 'border-purple-400';
-                else styleClass += 'border-yellow-300';
-
-                return `
-                <div onclick="planner.openSlotEditor(${dIdx}, ${mIdx})" 
-                     class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 flex justify-between items-start ${styleClass} mb-2 min-h-[60px]">
-                    <div class="overflow-hidden w-full">
-                        <div class="flex justify-between items-center mb-1">
-                             <span class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">${meal.name}</span>
-                             <span class="text-[10px] font-bold text-green-700 bg-green-50 px-1 rounded">${isPacked}</span>
-                        </div>
-                        <div class="font-bold text-gray-800 text-sm leading-tight flex flex-col gap-0.5">
-                            ${recipeNamesHtml}
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
-
-            return `
-            <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 shadow-sm">
-                <h4 class="font-extrabold text-gray-700 mb-2 capitalize text-sm border-b border-gray-200 pb-1">${dateStr}</h4>
-                <div class="flex flex-col gap-1">${mealsHtml}</div>
-            </div>`;
-        }).join('');
-    },
-
-    openSlotEditor(dIdx, mIdx) {
-        const meal = this.eventData.days[dIdx].meals[mIdx];
-        document.getElementById('slot-day-index').value = dIdx;
-        document.getElementById('slot-type').value = mIdx;
-        document.getElementById('slot-packed').checked = meal.isPacked || false;
-        
-        // Reset Search Input
-        const searchInput = document.getElementById('slot-recipe-search');
-        if(searchInput) searchInput.value = '';
-
-        // Clona le ricette attuali nell'array temporaneo
-        this.tempSlotRecipes = meal.recipeIds ? [...meal.recipeIds] : [];
-
-        this.refreshRecipeSelect();
-        this.renderTempList();
-        ui.modal('modal-slot-edit');
-    },
-
-    // Funzione collegata all'onkeyup dell'input di ricerca
-    filterSlotRecipes() {
-        const term = document.getElementById('slot-recipe-search').value.toLowerCase();
-        this.refreshRecipeSelect(term);
-    },
-
-    refreshRecipeSelect(searchTerm = '') {
-        const isPacked = document.getElementById('slot-packed').checked;
-        const dIdx = parseInt(document.getElementById('slot-day-index').value);
-        const mIdx = parseInt(document.getElementById('slot-type').value);
-        const mealType = this.eventData.days[dIdx].meals[mIdx].type;
-
-        let targetCat = 'pasti';
-        if (mealType === 'colazione' || mealType === 'merenda') targetCat = 'snack';
-
-        const filteredRecipes = state.recipes.filter(r => {
-            // Filtro ricerca nome
-            if (searchTerm && !r.nome.toLowerCase().includes(searchTerm)) return false;
-
-            // Filtro Categorie
-            if (isPacked) return r.categoria === 'packed';
-            const rCat = r.categoria || 'pasti';
-            return rCat === targetCat;
-        });
-
-        const sel = document.getElementById('slot-recipe-select');
-        sel.innerHTML = filteredRecipes.map(r => {
-             const isPending = !r.status || r.status !== 'approved';
-             return `<option value="${r.id}">${r.nome} ${isPending ? '(In Appr.)' : ''}</option>`;
-        }).join('');
-        
-        if(filteredRecipes.length === 0) sel.innerHTML = '<option value="">-- Nessuna ricetta trovata --</option>';
-    },
-
-    addRecipeToSlot() {
-        const sel = document.getElementById('slot-recipe-select');
-        const id = sel.value;
-        if(!id) return;
-        
-        // MODIFICA: Rimosso il controllo duplicati. Ora puoi aggiungere lo stesso piatto N volte.
-        this.tempSlotRecipes.push(id);
-        this.renderTempList();
-    },
-
-    removeRecipeFromSlot(idx) {
-        this.tempSlotRecipes.splice(idx, 1);
-        this.renderTempList();
-    },
-
-    renderTempList() {
-        const el = document.getElementById('slot-selected-list');
-        if(this.tempSlotRecipes.length === 0) {
-            el.innerHTML = '<div class="text-center text-gray-400 text-xs italic py-2">Nessuna pietanza aggiunta</div>';
-            return;
-        }
-
-        el.innerHTML = this.tempSlotRecipes.map((rid, idx) => {
-            const r = state.recipes.find(x => String(x.id) === String(rid));
-            return `
-            <div class="flex justify-between items-center bg-white border p-2 rounded-lg shadow-sm">
-                <span class="font-bold text-sm text-gray-700">${r ? r.nome : '???'}</span>
-                <button onclick="planner.removeRecipeFromSlot(${idx})" class="text-red-500 hover:bg-red-50 p-1 rounded font-bold text-xs">✕</button>
-            </div>`;
-        }).join('');
-    },
-
-    saveSlot() {
-        const dIdx = parseInt(document.getElementById('slot-day-index').value);
-        const mIdx = parseInt(document.getElementById('slot-type').value);
-        const isPacked = document.getElementById('slot-packed').checked;
-
-        this.eventData.days[dIdx].meals[mIdx].recipeIds = [...this.tempSlotRecipes];
-        this.eventData.days[dIdx].meals[mIdx].isPacked = isPacked;
-
-        ui.closeModals();
-        this.renderGrid();
-    },
-
-    calculateShopping() {
-        if (!this.eventData.days || this.eventData.days.length === 0) return;
-        let needs = {}; 
-        
-        const evtStart = new Date(document.getElementById('evt-start').value);
-        const evtEnd = new Date(document.getElementById('evt-end').value);
-
-        this.eventData.days.forEach(day => {
-            if(!day.meals) return;
-            day.meals.forEach(meal => {
-                if(meal.recipeIds && meal.recipeIds.length > 0) {
-                    meal.recipeIds.forEach(rid => {
-                        const r = state.recipes.find(x => String(x.id) === String(rid));
-                        if(r && r.ingredienti_ricetta) {
-                            const ratio = (parseFloat(this.eventData.pax) || 1) / (parseFloat(r.porzioni) || 4);
-                            r.ingredienti_ricetta.forEach(ing => {
-                                const name = ing.nome_ingrediente.toLowerCase().trim();
-                                const qty = parseFloat(ing.quantita_necessaria) * ratio;
-                                if(!needs[name]) needs[name] = { qty: 0, unit: ing.unita, usage: [] };
-                                needs[name].qty += qty;
-                                const mealName = `${r.nome} (${day.date.toLocaleDateString('it-IT', {weekday:'short'})} ${meal.name})`;
-                                if(!needs[name].usage.includes(mealName)) needs[name].usage.push(mealName);
-                            });
-                        }
-                    });
-                }
-            });
-        });
-
-        const el = document.getElementById('shopping-result-list');
-        if(!el) return;
-        const ingredientKeys = Object.keys(needs).sort();
-        let resultHtml = '';
-        const getBaseFactor = (unit) => {
-            const u = unit.toLowerCase().trim();
-            if (['kg', 'lt'].includes(u)) return 1000;
-            if (['hg'].includes(u)) return 100;
-            if (['cl'].includes(u)) return 10;
-            return 1;
-        };
-
-        ingredientKeys.forEach(ingName => {
-            const need = needs[ingName];
-            const needFactor = getBaseFactor(need.unit);
-            const needInBase = need.qty * needFactor;
-            
-            const inPantryItems = state.pantry.filter(p => {
-                const nameMatch = p.nome.toLowerCase().includes(ingName);
-                if(!nameMatch || p.quantita <= 0 || p.stato === 'pending') return false;
-                if(p.scadenza) {
-                    const exp = new Date(p.scadenza);
-                    if (exp < evtStart) return false; 
-                }
-                return true;
-            });
-
-            let warningExpiry = false; 
-            const totalInPantryBase = inPantryItems.reduce((acc, curr) => {
-                if(curr.scadenza) {
-                    const exp = new Date(curr.scadenza);
-                    if (exp >= evtStart && exp <= evtEnd) warningExpiry = true;
-                }
-                const pantryFactor = getBaseFactor(curr.unita);
-                return acc + (curr.quantita * pantryFactor);
-            }, 0);
-
-            const missingBase = needInBase - totalInPantryBase;
-            const missingDisplay = missingBase / needFactor;
-
-            let statusColor = 'text-red-600 bg-red-50';
-            let statusText = `MANCANO: <strong>${Math.max(0, missingDisplay).toFixed(1)} ${need.unit}</strong>`;
-            
-            if (missingBase <= 0) {
-                statusColor = 'text-green-700 bg-green-50';
-                statusText = '✅ Coperto!';
-            }
-            if(warningExpiry) {
-                statusText += `<br><span class="text-[9px] bg-yellow-200 text-yellow-800 px-1 rounded">⚠️ Scadenze durante il campo!</span>`;
-            }
-
-            const pantryDetail = inPantryItems.map(p => `${p.nome}: ${p.quantita} ${p.unita}`).join('<br>') || '0 validi';
-            const usageList = need.usage.map(u => `<li class="truncate">• ${u}</li>`).join('');
-
-            resultHtml += `
-            <div class="py-4 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-gray-100 last:border-0 break-inside-avoid">
-                <div class="md:col-span-1">
-                    <div class="font-extrabold text-lg capitalize text-gray-800">${ingName}</div>
-                    <details class="mt-1 group"><summary class="text-[10px] text-blue-500 font-bold cursor-pointer hover:underline list-none print:hidden">👉 Vedi ${need.usage.length} ricette</summary><ul class="text-[10px] text-gray-500 mt-1 pl-1 border-l-2 border-gray-200 print:block">${usageList}</ul></details>
-                </div>
-                <div class="md:col-span-1">
-                    <div class="text-xs uppercase font-bold text-gray-400">Totale Necessario</div>
-                    <div class="font-mono text-xl font-bold">${need.qty.toFixed(1)} <span class="text-sm">${need.unit}</span></div>
-                </div>
-                <div class="md:col-span-1">
-                    <div class="text-xs uppercase font-bold text-gray-400">In Dispensa</div>
-                    <div class="text-[10px] font-bold text-gray-700 leading-tight">${pantryDetail}</div>
-                </div>
-                <div class="md:col-span-1 p-2 rounded-lg text-center flex flex-col justify-center ${statusColor}">
-                    <div class="text-xs">${statusText}</div>
-                </div>
-            </div>`;
-        });
-        
-        el.innerHTML = resultHtml;
-        document.getElementById('planner-step-grid').classList.add('hidden');
-        document.getElementById('planner-step-list').classList.remove('hidden');
-    },
-
-    backToGrid() {
-        document.getElementById('planner-step-list').classList.add('hidden');
-        document.getElementById('planner-step-grid').classList.remove('hidden');
-    },
-
-    createNewRecipeFromPlanner() {
-        ui.closeModals(); 
-        recipes.openModal(); 
+        const ico = { consumo: 'pentola', rifornimento: 'camion' };
+        corpo.innerHTML = state.movimenti.length ? `<div class="lista">${state.movimenti.map(m => `<div class="riga">${icon(ico[m.azione] || 'lista')}
+            <div class="riga-testo"><div class="riga-titolo">${esc(m.prodotto)}</div><div class="riga-sotto">${esc(m.utente || '')}, ${fmt.quando(m.created_at)}</div></div>
+            <div class="riga-num" style="font-size:19px;color:${Number(m.quantita) < 0 ? 'var(--errore)' : 'var(--ok)'}">${Number(m.quantita) > 0 ? '+' : ''}${fmt.num(m.quantita)} <small class="tenue">${esc(m.unita || '')}</small></div></div>`).join('')}</div>`
+            : `<div class="vuoto"><h3>Nessun movimento</h3></div>`;
     }
-};
-// --- NUOVO OGGETTO PER LA SINCRONIZZAZIONE ---
-const realtime = {
-    init() {
-        // Ascolta i cambiamenti su tutte le tabelle importanti
-        _sb.channel('db-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'cambusa' }, () => {
-                app.loadData(); // Ricarica dispensa e liste
-                if(typeof restock !== 'undefined') restock.renderList();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'ricette' }, () => {
-                recipes.load(); // Ricarica ricette
-                if(state.user) admin.renderRecipes(); // Aggiorna tabella admin se aperta
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'richieste_cambusa' }, () => {
-                if(state.user) admin.renderRequests(); // Aggiorna richieste admin
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredienti_ricetta' }, () => {
-                recipes.load(); // Se cambiano gli ingredienti, ricarica le ricette
-            })
+}
+
+// =====================================================================
+// Eventi
+// =====================================================================
+function collegaEventi() {
+    azioni(document.body, {
+        vai: el => nav(el.dataset.ref),
+        'nuovo-menu': () => apriFormMenu('nuovo'),
+        'apri-menu': el => nav('menu-dettaglio', el.dataset.ref),
+        'modifica-menu': () => apriFormMenu('modifica', state.menuId),
+        'duplica-menu': () => apriFormMenu('duplica', state.menuId),
+        'elimina-menu': async () => {
+            const m = menuCorrente();
+            if (!await ui.chiedi({ titolo: `Eliminare ${m.nome}?`, testo: 'Le ricette restano, sparisce solo questo menu.', ok: 'Elimina', pericolo: true })) return;
+            const { error } = await sb.from('menu_campi').delete().eq('id', m.id);
+            if (error) return ui.toast(errMsg(error), 'errore');
+            ui.toast('Menu eliminato');
+            await caricaDati(); nav('menu');
+        },
+        'vai-spesa': () => nav('spesa', state.menuId),
+        'apri-pasto': el => apriPasto(el.dataset.g, el.dataset.p),
+        'pasto-aggiungi': el => { pastoAperto().ricette.push(Number(el.dataset.ref) || el.dataset.ref); pastoCambiato(); },
+        'pasto-togli': el => { pastoAperto().ricette.splice(Number(el.dataset.ref), 1); pastoCambiato(); },
+        'ricetta-da-pasto': () => { state.dopoRicetta = (id) => { if (id && pastoAperto()) { pastoAperto().ricette.push(id); pastoCambiato(); } }; apriRicetta(null, false, true); },
+        'spesa-spunta': el => spunta(el.dataset.ref),
+        'spesa-azzera': async () => {
+            const m = menuCorrente(); m.spesa_spuntati = []; renderSpesa();
+            const { error } = await sb.from('menu_campi').update({ spesa_spuntati: [] }).eq('id', m.id);
+            if (error) ui.toast(errMsg(error), 'errore');
+        },
+        'spesa-condividi': () => condividiTesto('Lista della spesa', testoSpesa(menuCorrente())),
+        'spesa-copia': () => copiaTesto(testoSpesa(menuCorrente())),
+        'spesa-stampa': () => window.print(),
+        'cambia-reparto': el => apriReparto(el.dataset.ref, el.dataset.nome),
+        'scegli-reparto': el => scegliReparto(el.dataset.ref),
+        'ric-filtro': el => { state.filtroRic.pasto = el.dataset.ref; renderRicette(); },
+        'nuova-ricetta': () => { state.dopoRicetta = null; apriRicetta(); },
+        'modifica-ricetta': el => { state.dopoRicetta = null; apriRicetta(el.dataset.ref); },
+        'variante-ricetta': el => { state.dopoRicetta = null; apriRicetta(el.dataset.ref, true); },
+        'elimina-ricetta': el => eliminaRicetta(el.dataset.ref || state.ricMod?.id),
+        'ric-pasto': el => { leggiIngredienti(); const s = state.ricMod.pasti; s.has(el.dataset.ref) ? s.delete(el.dataset.ref) : s.add(el.dataset.ref); renderRicettaForm(); },
+        'ing-aggiungi': () => { leggiIngredienti(); state.ricMod.ingredienti.push({ nome: '', qty: '', unita: 'gr' }); renderRicettaForm(); $$('#ric-ingredienti [data-campo=nome]').pop()?.focus(); },
+        'ing-togli': el => { leggiIngredienti(); state.ricMod.ingredienti.splice(Number(el.dataset.ref), 1); renderRicettaForm(); },
+        'approva-ricetta': async el => {
+            const { error } = await sb.from('ricette').update({ status: 'approved' }).eq('id', el.dataset.ref);
+            if (error) return ui.toast(errMsg(error), 'errore');
+            ui.toast('Ricetta approvata'); await caricaDati();
+        },
+        'disp-filtro': el => { state.filtroDisp.cat = el.dataset.ref; renderDispensa(); },
+        usa: el => apriUsa(el.dataset.ref),
+        'usa-rapido': el => { $('#usa-qta').value = el.dataset.ref; },
+        'apri-uso': () => { renderUso(); $('#uso-nome').value = store.get('nome', ''); $('#uso-errore').hidden = true; ui.apri('foglio-uso'); },
+        'uso-togli': el => { state.uso.splice(Number(el.dataset.ref), 1); salvaUso(); renderUso(); renderDispensa(); renderBarraUso(); if (!state.uso.length) ui.chiudi(); },
+        'svuota-uso': () => { state.uso = []; salvaUso(); renderDispensa(); renderBarraUso(); ui.chiudi(); },
+        'apri-rifornisci': () => { state.rifornisci = {}; state.rifTesto = ''; $('#rif-cerca').value = ''; $('#rif-nome').value = store.get('nome', ''); renderRifornisci(); ui.apri('foglio-rifornisci'); },
+        'nuovo-prodotto': () => apriProdotto(),
+        'modifica-prodotto': el => apriProdotto(el.dataset.ref),
+        'elimina-prodotto': () => eliminaProdotto(),
+        'approva-prodotto': async el => {
+            const { error } = await sb.from('cambusa').update({ stato: 'approved' }).eq('id', el.dataset.ref);
+            if (error) return ui.toast(errMsg(error), 'errore');
+            ui.toast('Prodotto approvato'); await caricaDati();
+        },
+        'rifiuta-prodotto': async el => {
+            if (!await ui.chiedi({ titolo: 'Rifiutare la proposta?', testo: 'Il prodotto viene eliminato.', ok: 'Rifiuta', pericolo: true })) return;
+            const { error } = await sb.from('cambusa').delete().eq('id', el.dataset.ref);
+            if (error) return ui.toast(errMsg(error), 'errore');
+            await caricaDati();
+        }
+    });
+
+    $$('.nav-voce').forEach(b => b.addEventListener('click', () => nav(b.dataset.vista)));
+    $$('#tabs-admin .tab').forEach(t => t.addEventListener('click', () => { state.tab = t.dataset.tab; store.set('tab_cambusa', state.tab); renderAdmin(); }));
+    $('#ricette-cerca').addEventListener('input', debounce(e => { state.filtroRic.testo = e.target.value; renderRicette(); }, 150));
+    $('#dispensa-cerca').addEventListener('input', debounce(e => { state.filtroDisp.testo = e.target.value; renderDispensa(); }, 150));
+    $('#pasto-cerca').addEventListener('input', debounce(renderPasto, 120));
+    $('#pasto-sacco').addEventListener('change', e => { pastoAperto().sacco = e.target.checked; pastoCambiato(); });
+    $('#rif-cerca').addEventListener('input', debounce(e => { state.rifTesto = e.target.value; renderRifornisci(); }, 150));
+    $('#rif-righe').addEventListener('input', e => {
+        const t = e.target; if (!t.dataset.rif) return;
+        state.rifornisci[t.dataset.ref] = { ...(state.rifornisci[t.dataset.ref] || {}), [t.dataset.rif]: t.value };
+    });
+    $('#form-menu').addEventListener('submit', salvaFormMenu);
+    $('#form-ricetta').addEventListener('submit', salvaRicetta);
+    $('#form-usa').addEventListener('submit', confermaUsa);
+    $('#form-uso').addEventListener('submit', confermaUso);
+    $('#form-rifornisci').addEventListener('submit', confermaRifornisci);
+    $('#form-prodotto').addEventListener('submit', salvaProdotto);
+}
+
+function impostaAccount() {
+    const b = $('#btn-account');
+    if (auth.user) { b.innerHTML = icon('esci'); b.setAttribute('aria-label', 'Esci dall\'area admin'); b.onclick = async () => { if (await ui.chiedi({ titolo: 'Uscire dall\'area admin?', ok: 'Esci' })) auth.logout(); }; }
+    else { b.innerHTML = icon('lucchetto'); b.setAttribute('aria-label', 'Accesso admin'); b.onclick = () => auth.apriLogin(); }
+}
+function riempiIcone() {
+    $$('[data-ico]').forEach(el => { el.outerHTML = icon(el.dataset.ico, el.closest('.btn') && !el.closest('.btn-icona') ? 'ico-s' : ''); });
+    $$('[data-chiudi]').forEach(el => { if (!el.innerHTML.trim()) el.innerHTML = icon('chiudi'); });
+}
+function attivaTempoReale() {
+    try {
+        const ricarica = debounce(() => caricaDati(), 600);
+        sb.channel('cambusa')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cambusa' }, ricarica)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ricette' }, ricarica)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredienti_ricetta' }, ricarica)
             .subscribe();
-            
-        console.log("📡 Sincronizzazione attiva");
-    }
-};
-// --- ADMIN ---
-const admin = {
-    currentTab: 'approvals', // <--- 1. Aggiungiamo la memoria della tab corrente
+    } catch (e) { console.warn('tempo reale non attivo', e); }
+}
 
-    async render() {
-        if (!state.user) return;
-        // 2. Invece di forzare 'approvals', apriamo l'ultima tab visitata
-        this.tab(this.currentTab); 
-    },
-
-    tab(name) {
-        this.currentTab = name; // <--- 3. Salviamo la tab corrente ogni volta che cambia
-
-        document.querySelectorAll('.admin-tab').forEach(el => el.classList.add('hidden'));
-        const target = document.getElementById(`admin-tab-${name}`);
-        if(target) target.classList.remove('hidden');
-
-        if (name === 'recipes') this.renderRecipes();
-        if (name === 'approvals') this.renderRequests();
-        if (name === 'stock') this.renderStock();
-        if (name === 'movements') this.renderMovements();
-        if (name === 'restock-admin') this.renderRestock();
-    },
-    
-    // NUOVA FUNZIONE: Simile a restock.renderList ma per admin
-    renderRestock() {
-        const term = document.getElementById('admin-restock-search') ? document.getElementById('admin-restock-search').value.toLowerCase() : '';
-        const el = document.getElementById('admin-restock-list');
-        if(!el) return;
-
-        const filtered = state.pantry.filter(p => p.nome.toLowerCase().includes(term));
-        if(filtered.length === 0) { el.innerHTML = `<div class="text-center py-4 text-gray-400">Nessun prodotto.</div>`; return; }
-
-        el.innerHTML = filtered.map(p => `
-            <div class="bg-white rounded-xl p-3 border border-yellow-100 shadow-sm flex flex-col gap-2">
-                <div class="flex justify-between">
-                    <div class="font-bold text-gray-800">${p.nome}</div>
-                    <div class="text-xs text-gray-500">${p.quantita} ${p.unita}</div>
-                </div>
-                <div class="grid grid-cols-2 gap-2 bg-yellow-50 p-2 rounded">
-                    <div><label class="text-[9px] font-bold uppercase">Agg. Qtà</label><input type="number" placeholder="0" class="w-full p-1 text-center border rounded text-sm font-bold bg-white" onchange="restock.trackChange('${p.id}', 'addQty', this.value)"></div>
-                    <div><label class="text-[9px] font-bold uppercase">Nuova Scad.</label><input type="date" class="w-full p-1 border rounded text-xs bg-white" onchange="restock.trackChange('${p.id}', 'newExpiry', this.value)"></div>
-                </div>
-            </div>`).join('');
-    },
-    filterRestock() { this.renderRestock(); },
-    
-    async renderRequests() {
-        // Cerca direttamente in cambusa gli elementi in attesa
-        const { data } = await _sb.from('cambusa')
-                                  .select('*')
-                                  .eq('stato', 'pending')
-                                  .order('created_at', { ascending: false });
-                                  
-        const el = document.getElementById('admin-approval-list');
-        if(!el) return;
-        
-        if(!data || !data.length) { 
-            el.innerHTML = '<p class="text-gray-400 text-sm italic">Nessun prodotto in attesa di approvazione.</p>'; 
-            const badge = document.getElementById('badge-approvals');
-            if(badge) badge.classList.add('hidden');
-            return; 
-        }
-
-        // Mostra il badge
-        const badge = document.getElementById('badge-approvals');
-        if(badge) {
-            badge.innerText = data.length;
-            badge.classList.remove('hidden');
-        }
-
-        el.innerHTML = data.map(r => `
-            <div class="bg-white p-3 rounded border-l-4 border-yellow-400 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-                <div class="flex-grow">
-                    <div class="font-bold text-gray-800">${r.nome}</div>
-                    <div class="text-xs text-gray-500">Categoria: ${r.categoria}</div>
-                    <div class="text-xs font-mono bg-gray-100 inline-block px-1 rounded mt-1">Qt: ${r.quantita} ${r.unita}</div>
-                    ${r.scadenza ? `<div class="text-[10px] text-red-500">Scad: ${r.scadenza}</div>` : ''}
-                </div>
-                <div class="flex gap-2 self-end sm:self-center">
-                    <button onclick="admin.editItem('${r.id}')" class="bg-blue-100 text-blue-700 font-bold px-3 py-2 rounded text-xs hover:bg-blue-200 shadow-sm transition">✏️ MODIFICA</button>
-                    <button onclick="admin.processReq('${r.id}', false)" class="text-red-500 hover:bg-red-50 px-3 py-2 rounded text-xs border border-red-100 transition" title="Rifiuta ed Elimina">🗑 Rifiuta</button>
-                    <button onclick="admin.processReq('${r.id}', true)" class="bg-green-600 text-white font-bold px-3 py-2 rounded text-xs hover:bg-green-700 shadow-sm transition">✓ APPROVA</button>
-                </div>
-            </div>
-        `).join('');
-    },
-
-    async processReq(id, approved) {
-        loader.show();
-        if(approved) {
-            // Se approvato, cambia lo stato in 'approved' (o null, a seconda di come gestisci i pubblicati)
-            // Se nel tuo DB i pubblicati hanno stato 'approved', usa quello. Se hanno NULL, usa null.
-            // Dal tuo codice precedente usavi 'approved'.
-            const { error } = await _sb.from('cambusa').update({ stato: 'approved' }).eq('id', id);
-            if(error) ui.toast("Errore approvazione", "error");
-            else ui.toast("Prodotto Approvato e Pubblicato", "success");
-        } else {
-            // Se rifiutato, elimina la riga dalla cambusa
-            const { error } = await _sb.from('cambusa').delete().eq('id', id);
-            if(error) ui.toast("Errore eliminazione", "error");
-            else ui.toast("Richiesta Rifiutata ed Eliminata", "error");
-        }
-        
-        loader.hide();
-        this.renderRequests();
-        app.loadData(); // Ricarica la dispensa generale
-    },
-    renderStock() {
-        const term = document.getElementById('admin-search') ? document.getElementById('admin-search').value.toLowerCase() : '';
-        const el = document.getElementById('admin-list');
-        const countEl = document.getElementById('stock-count'); // Elemento contatore
-        
-        if(!el) return;
-
-        // Filtra solo quelli non pending (quelli approvati) per la gestione stock
-        const filtered = state.pantry.filter(p => 
-            p.nome.toLowerCase().includes(term) && 
-            p.stato !== 'pending'
-        );
-        
-        // Aggiorna il contatore
-        if(countEl) countEl.innerText = filtered.length;
-        
-        if(!filtered.length) { el.innerHTML = '<p class="text-gray-400 p-4">Nessun oggetto in dispensa.</p>'; return; }
-
-        el.innerHTML = filtered.map(p => {
-            // FORMATTAZIONE DATA SCADENZA
-            const scadenzaStr = p.scadenza ? new Date(p.scadenza).toLocaleDateString('it-IT') : 'Nessuna';
-            
-            // COLORE SCADENZA (Rosso se scaduto o vicino)
-            let dateClass = "text-gray-500";
-            if(p.scadenza && new Date(p.scadenza) < new Date()) dateClass = "text-red-600 font-bold";
-
-            return `
-            <div class="flex justify-between items-center py-3 px-3 bg-white mb-2 rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition">
-                <div>
-                    <div class="font-bold text-gray-800 text-lg">${p.nome}</div>
-                    <div class="text-xs text-gray-500 mb-1">${p.categoria}</div>
-                    <div class="text-xs flex items-center gap-2">
-                        <span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-bold">${p.quantita} ${p.unita}</span>
-                        <span class="${dateClass}">📅 ${scadenzaStr}</span>
-                    </div>
-                </div>
-                
-                <div class="flex gap-2">
-                    <button onclick="admin.editItem('${p.id}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 w-10 h-10 rounded-lg flex items-center justify-center transition" title="Modifica">
-                        ✏️
-                    </button>
-                    <button onclick="admin.deleteItem('${p.id}')" class="bg-red-100 hover:bg-red-200 text-red-600 w-10 h-10 rounded-lg flex items-center justify-center transition" title="Elimina">
-                        🗑
-                    </button>
-                </div>
-            </div>
-        `;
-        }).join('');
-    },
-    
-    // Funzione per filtrare (collegata all'input search admin)
-    filterStock() {
-        this.renderStock();
-    },
-
-    // Aggiungi queste funzioni per far funzionare i bottoni MOD ed ELIM
-    editItem(id) {
-        const item = state.pantry.find(x => x.id === id);
-        if(!item) return;
-        document.getElementById('modal-title').innerText = "Modifica Ingrediente";
-        document.getElementById('item-id').value = id;
-        document.getElementById('item-name').value = item.nome;
-        document.getElementById('item-cat').value = item.categoria;
-        document.getElementById('item-qty').value = item.quantita;
-        document.getElementById('item-unit').value = item.unita;
-        document.getElementById('item-expiry').value = item.scadenza || '';
-        document.getElementById('btn-del-item').classList.remove('hidden');
-        ui.modal('modal-item');
-    },
-
-    async saveItem() {
-        const id = document.getElementById('item-id').value;
-        const data = {
-            nome: document.getElementById('item-name').value,
-            categoria: document.getElementById('item-cat').value,
-            quantita: parseFloat(document.getElementById('item-qty').value),
-            unita: document.getElementById('item-unit').value,
-            scadenza: document.getElementById('item-expiry').value || null
-        };
-        
-        if(id) await _sb.from('cambusa').update(data).eq('id', id);
-        // else se volessi creare nuovo da admin...
-
-        ui.toast("Salvato!", "success");
-        ui.closeModals();
-        app.loadData();
-        this.renderStock();
-    },
-
-    async deleteItem(idIn) {
-        const id = idIn || document.getElementById('item-id').value;
-        if(!confirm("Eliminare definitivamente dalla dispensa?")) return;
-        await _sb.from('cambusa').delete().eq('id', id);
-        ui.closeModals();
-        app.loadData();
-        this.renderStock();
-    },
-    // --- NUOVA GESTIONE RICETTE ADMIN ---
-    renderRecipes() {
-        const el = document.getElementById('admin-recipes-list');
-        if(!el) return;
-        // AGGIORNAMENTO CONTATORE
-        const countEl = document.getElementById('admin-recipe-count');
-        if(countEl) countEl.innerText = state.recipes.length;
-
-        // Ordiniamo: prima le pending, poi le altre
-        const sorted = [...state.recipes].sort((a,b) => (a.status === 'approved' ? 1 : -1));
-
-        if(!sorted.length) { el.innerHTML = '<p class="text-gray-400 italic">Nessuna ricetta.</p>'; return; }
-
-        el.innerHTML = `
-        <table class="w-full text-left text-sm text-gray-600">
-            <thead class="text-xs text-red-200 uppercase bg-red-900/80 text-white rounded-t-lg">
-                <tr>
-                    <th class="p-3 rounded-tl-lg">Ricetta</th>
-                    <th class="p-3 text-center">Stato</th>
-                    <th class="p-3 text-right rounded-tr-lg">Azioni</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 bg-white border border-gray-100">
-                ${sorted.map(r => `
-                <tr class="hover:bg-red-50 transition">
-                    <td class="p-3 font-bold text-gray-800">
-                        ${r.nome}
-                        <div class="text-[10px] text-gray-400 font-normal">${r.porzioni} Persone</div>
-                    </td>
-                    <td class="p-3 text-center">
-                        ${r.status === 'approved' 
-                            ? '<span class="text-green-600 bg-green-100 px-2 py-1 rounded text-[10px] font-bold border border-green-200">PUBBLICA</span>' 
-                            : `<button onclick="admin.approveRecipe('${r.id}')" class="text-white bg-yellow-500 hover:bg-yellow-600 px-2 py-1 rounded text-[10px] font-bold shadow animate-pulse">APPROVA ORA</button>`}
-                    </td>
-                    <td class="p-3 text-right">
-                         <div class="flex justify-end gap-2">
-                            <button onclick="recipes.openModal('${r.id}')" class="text-blue-500 hover:text-white hover:bg-blue-500 p-1.5 rounded transition" title="Modifica">✏️</button>
-                            <button onclick="recipes.delete('${r.id}')" class="text-red-500 hover:text-white hover:bg-red-500 p-1.5 rounded transition" title="Elimina">🗑</button>
-                         </div>
-                    </td>
-                </tr>
-                `).join('')}
-            </tbody>
-        </table>`;
-    },
-
-    // Dentro l'oggetto admin...
-
-    async approveRecipe(id) {
-        if(!confirm("Confermi l'approvazione? La ricetta diventerà pubblica.")) return;
-        
-        loader.show();
-        // 1. Aggiorna il DB
-        const { error } = await _sb.from('ricette').update({ status: 'approved' }).eq('id', id);
-        
-        if(error) {
-            loader.hide();
-            ui.toast("Errore Approvazione", "error");
-        } else {
-            ui.toast("Ricetta Pubblicata!", "success");
-            
-            // 2. FORZA IL RICARICAMENTO DEI DATI
-            await recipes.load(); // Ricarica dal server
-            this.renderRecipes(); // Ridisegna la tabella Admin
-            
-            loader.hide();
-        }
-    },
-    // Dentro l'oggetto 'admin' in cambusa.js
-
-async renderMovements() {
-    const el = document.getElementById('movements-list');
-    if (!el) return;
-
-    el.innerHTML = '<div class="text-center py-10"><div class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-gray-400 rounded-full" role="status" aria-label="loading"></div></div>';
-
-    // 1. Scarica i dati da Supabase (Tabella: movimenti_cambusa)
-    const { data, error } = await _sb
-        .from('movimenti_cambusa')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50); // Mostra solo gli ultimi 50
-
-    if (error) {
-        console.error(error);
-        el.innerHTML = '<div class="text-center text-red-500 py-4">Errore caricamento movimenti.</div>';
+// =====================================================================
+// Avvio
+// =====================================================================
+(async function avvio() {
+    ui.montaFogliComuni();
+    riempiIcone();
+    await auth.init();
+    impostaAccount();
+    if (inManutenzione('cambusa')) {
+        mostraManutenzione($('#main'), 'Stiamo riordinando la cambusa, torna più tardi.');
+        $('.nav-basso').hidden = true;
         return;
     }
-
-    if (!data || data.length === 0) {
-        el.innerHTML = '<div class="text-center text-gray-400 italic py-10">Nessun movimento registrato di recente.</div>';
-        return;
-    }
-
-        // 2. Genera HTML
-        el.innerHTML = data.map(m => {
-            const date = new Date(m.created_at);
-            const dateStr = date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
-            const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-            
-            // Stile per carico (+) o scarico (-)
-            const isPositive = m.quantita > 0;
-            const bgClass = isPositive ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100';
-            const textClass = isPositive ? 'text-green-700' : 'text-red-700';
-            const sign = isPositive ? '+' : '';
-            const icon = isPositive ? '📥' : '📤';
-    
-            return `
-            <div class="flex justify-between items-center p-3 mb-2 rounded-lg border ${bgClass} shadow-sm">
-                <div class="flex items-center gap-3">
-                    <div class="text-xl">${icon}</div>
-                    <div>
-                        <div class="font-bold text-gray-800 leading-tight">${m.prodotto}</div>
-                        <div class="text-[10px] text-gray-500 font-mono uppercase mt-0.5">
-                            ${dateStr} ${timeStr} • <span class="font-semibold">${m.utente || 'Admin'}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <div class="font-bold text-lg ${textClass} font-mono tracking-tight">
-                        ${sign}${m.quantita} <span class="text-xs text-gray-400">${m.unita || ''}</span>
-                    </div>
-                    <div class="text-[9px] text-gray-400 uppercase tracking-widest">${m.azione || 'MOV'}</div>
-                </div>
-            </div>
-            `;
-        }).join('');
-    }
-};
-
-// --- AUTH ---
-const auth = {
-    async check() {
-        const { data: { user } } = await _sb.auth.getUser();
-        if (user) {
-            state.user = user;
-            // Mostra Admin
-            document.getElementById('nav-admin-mobile').classList.remove('hidden');
-            document.getElementById('nav-admin-mobile').classList.add('flex');
-            document.getElementById('btn-login-mobile').classList.add('hidden');
-            
-            // LOGICA VISIBILITÀ LINK PUBBLICI PER ADMIN
-            if (typeof MAINTENANCE_MODE !== 'undefined' && MAINTENANCE_MODE === true) {
-                // In manutenzione: Admin vede ANCHE i link pubblici per testare
-                document.getElementById('nav-public-links').classList.remove('hidden');
-            } else {
-                // Operativo normale: Admin vede SOLO Admin (i link pubblici sono nascosti per pulizia)
-                document.getElementById('nav-public-links').classList.add('hidden'); 
-            }
-
-            app.nav('admin');
-        }
-    },
-    async login() {
-        const { error } = await _sb.auth.signInWithPassword({
-            email: document.getElementById('log-mail').value,
-            password: document.getElementById('log-pass').value
-        });
-        if (!error) location.reload(); else ui.toast("Errore login", "error");
-    },
-    logout() { _sb.auth.signOut().then(() => location.reload()); }
-};
-
-const ui = {
-    modal(id) { document.getElementById(id).classList.remove('hidden'); },
-    closeModals() { document.querySelectorAll('[id^="modal"], #login-modal').forEach(m => m.classList.add('hidden')); },
-    toggleCart() { document.getElementById('cart-sidebar').classList.toggle('translate-x-full'); },
-    toggleMenu() {
-        const menu = document.getElementById('mobile-menu');
-        const panel = document.getElementById('mobile-menu-panel');
-        if (menu.classList.contains('hidden')) {
-            menu.classList.remove('hidden');
-            setTimeout(() => panel.classList.remove('translate-x-full'), 10);
-        } else {
-            panel.classList.add('translate-x-full');
-            setTimeout(() => menu.classList.add('hidden'), 300);
-        }
-    },
-    toast(msg, type) {
-        // Rimuove eventuali toast precedenti
-        const old = document.getElementById('toast-container');
-        if(old) old.remove();
-
-        // Contenitore Flex a larghezza piena per garantire la centratura
-        const container = document.createElement('div');
-        container.id = 'toast-container';
-        container.className = 'fixed bottom-10 inset-x-0 flex justify-center z-[300] pointer-events-none';
-        
-        const t = document.createElement('div');
-        // Il toast vero e proprio
-        t.className = `px-6 py-3 rounded-full shadow-2xl text-white text-sm font-bold animate-bounce pointer-events-auto ${type === 'error' ? 'bg-red-500' : 'bg-orange-800'}`;
-        t.innerText = msg;
-        
-        container.appendChild(t);
-        document.body.appendChild(container);
-        
-        setTimeout(() => container.remove(), 3000);
-    },
-};
-app.init();
+    $('#nav-admin').hidden = !auth.admin;
+    collegaEventi();
+    osservaBarraFiltri();
+    await caricaDati();
+    const daIndirizzo = () => {
+        const [v, id] = location.hash.slice(1).split('/');
+        if (v === 'menu' && id) nav('menu-dettaglio', id);
+        else if (v === 'spesa' && id) nav('spesa', id);
+        else nav(['ricette', 'dispensa', 'admin'].includes(v) ? v : 'menu');
+    };
+    daIndirizzo();
+    window.addEventListener('hashchange', daIndirizzo);
+    attivaTempoReale();
+})();
